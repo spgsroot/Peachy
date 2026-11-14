@@ -80,8 +80,8 @@ class PageBytes @Inject constructor(private val library: MangaLibraryRepository)
     override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
         val path = paths.getOrNull(page) ?: throw IllegalArgumentException("No page $page")
         val local = library.localPage(galleryId, path)?.takeIf { it.isFile }
-        val bytes = local?.readBytes() ?: download(path)
-        PageImage.encode(bytes)
+        val bytes = traced("fetch") { local?.readBytes() ?: download(path) }
+        traced("encode") { PageImage.encode(bytes) }
     }
 
     private fun download(path: String): ByteArray {

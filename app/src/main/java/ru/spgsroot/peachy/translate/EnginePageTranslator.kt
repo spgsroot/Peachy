@@ -9,14 +9,16 @@ class EnginePageTranslator @Inject constructor(
 ) : PageTranslator {
     override suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation =
         when (request.engine) {
-            TranslateEngine.Model -> client.translate(galleryId, jpeg, request)
+            TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, jpeg, request) }
             TranslateEngine.MlKit -> {
                 val blocks = ocr.recognize(jpeg, request.source)
                 val source = if (request.source == "auto") "" else request.source
                 if (blocks.isEmpty()) {
                     PageTranslation(source, emptyList())
                 } else {
-                    val translations = client.translateBlocks(galleryId, blocks, request.source, request.target)
+                    val translations = traced("translate.net") {
+                        client.translateBlocks(galleryId, blocks, request.source, request.target)
+                    }
                     val accepted = HashSet<Int>()
                     val lines = buildList {
                         for (translation in translations) {

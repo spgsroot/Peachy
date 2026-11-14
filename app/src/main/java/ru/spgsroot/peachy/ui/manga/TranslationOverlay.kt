@@ -78,7 +78,7 @@ internal fun fittedPage(width: Float, height: Float, aspect: Float): Rect {
     }
 }
 
-private class Plate(val rect: Rect, val fontSize: Float)
+internal class Plate(val rect: Rect, val fontSize: Float)
 
 private const val MIN_READABLE_SP = 13f
 private const val MAX_SP = 22f
@@ -92,7 +92,7 @@ private val GROWTH = arrayOf(1f to 1f, 1.4f to 1.15f, 1.9f to 1.3f, 2.6f to 1.5f
  * (inside the page, in both directions) until the text reaches a readable size, or until the
  * largest allowed plate, whichever comes first. The text always fits the plate it is given.
  */
-private fun plateFor(
+internal fun plateFor(
     line: TranslatedLine, page: Rect, measurer: TextMeasurer, density: Density, base: TextStyle
 ): Plate {
     val box: PageBox = line.box!!

@@ -27,8 +27,10 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
     private val korean by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
 
     override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> = withContext(Dispatchers.Default) {
-        val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-            ?: throw IOException("Cannot decode the page image")
+        val bitmap = traced("decode") {
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+                ?: throw IOException("Cannot decode the page image")
+        }
         val width = bitmap.width
         val height = bitmap.height
         val task = try {
@@ -45,7 +47,8 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
         }
         // ML Kit cannot cancel an in-flight process. Its completion listener owns the bitmap,
         // including after coroutine cancellation, so native recognition never reads recycled pixels.
-        val text = awaitOcrTask(task) { bitmap.recycle() }
+        val text = traced("recognize") { awaitOcrTask(task) { bitmap.recycle() } }
+        traced("group") {
         val blocks = text.textBlocks.mapNotNull { block ->
             val box = block.boundingBox ?: return@mapNotNull null
             RawOcrBlock(block.lines.mapNotNull { line ->
@@ -54,6 +57,7 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
             }, PixelRect(box.left, box.top, box.right, box.bottom))
         }
         groupOcrBlocks(blocks, width, height, source)
+        }
     }
 }
 
