@@ -2,7 +2,7 @@
 
 # Peachy
 
-Private player and gallery for adult content: videos, image galleries and hentai manga in one app. It syncs playback with devices through the Buttplug protocol (Intiface Central). Native Android, Jetpack Compose. Version in this tree: `3.3.0` (`versionCode` 8). [Русская версия](README_RU.md).
+Private player and gallery for adult content: videos, image galleries and hentai manga in one app. It syncs playback with devices through the Buttplug protocol (Intiface Central). Native Android, Jetpack Compose. Version in this tree: `3.4.0` (`versionCode` 9). [Русская версия](README_RU.md).
 
 Screenshots use sample clips. Catalog covers and titles are pixelated, and the reader shot shows its settings dialog over a pixelated page.
 
@@ -15,6 +15,7 @@ Screenshots use sample clips. Catalog covers and titles are pixelated, and the r
 | Browser | Tabs, bookmarks, history and an ad and tracker blocker. It lists the video files a page loads and saves a chosen one to the library; HLS and DASH streams cannot be saved. A page's audio can drive haptics. |
 | Manga | nhentai in a native app: a catalog with tag filters, a tag browser with favorites and collections, a For you tab computed on the device, history, saved galleries, and a native reader with zoom, a thumbnail strip and saved pages. Tag names are shown in Russian when the interface is Russian. |
 | Privacy and backup | A non-empty password of any length with a growing wait after failures; SQLCipher database and `FLAG_SECURE` windows. Rotation preserves an unlocked session; leaving the app locks it. Export/import the library as a password-protected `.peachy` file. |
+| Updates | Check GitHub Releases, download the verified APK inside the app, then confirm installation in Android. Optional daily checks are off by default. |
 | Languages | Russian and English, dark interface. |
 
 ## Screenshots
@@ -87,6 +88,7 @@ Screenshots use sample clips. Catalog covers and titles are pixelated, and the r
 - Recommends galleries in a For you tab, computed on the device. It learns from the galleries you open, read, save, and favorite, from your favorite tags and tag collections, and from "Not interested" taps, with older signals fading over time. Candidates come from nhentai searches by your top tags and from the related lists of galleries you liked; each pick shows the tags that earned it a place. Until there is some taste to go on, the tab shows what is popular. The upload date appears on a card only for galleries whose page the app has already opened, because search results do not carry it. History uses the same large cards as the catalog. A gallery page shows a grid of page previews under the tags, and a tap opens the reader at that page.
 - The native reader turns pages by tapping the left or right third of the screen (or the top and bottom third in vertical paged mode; the continuous strip keeps left and right); the middle shows the title bar, a strip of page thumbnails, and the settings sheet. Settings: reading direction (vertical or horizontal), image fit (whole page or full width), continuous scroll, tap navigation with a left/right swap for one-handed use, zoom buttons, and hiding the tap hints that show when the reader opens. Pinch, double tap and the zoom buttons enlarge a page up to 6x, and the next three pages load in advance. The reader resumes at the last page you read. The bookmark button in the title bar keeps a single page; the Saved pages tab lists those pages, opens the reader on one, and exports or deletes a selection. Exported pages go to a folder you choose, and the app gets access to that folder only.
 
+- Settings → Peachy updates shows the installed version and checks the latest stable [GitHub release](https://github.com/spgsroot/Peachy/releases/latest) without a GitHub token. Automatic checks are off by default and run at most once a day while the app is open and unlocked; they do not open a modal over playback. Download starts only when you press Download APK and continues through Android DownloadManager. Size, GitHub SHA-256, app identity, versionCode and minimum Android version are checked before installation. Android verifies the signature and asks for confirmation; allow installs from Peachy if prompted, return, unlock and press Install again. Closing the installer keeps the downloaded APK. You can cancel/reset a download or discard a ready APK. Version 3.3.0 and earlier need one manual APK installation to gain this updater; subsequent updates use these controls.
 - Support in Settings copies the Sol address `FB4B37LCd52dgVED5fR7Vj7CDttsa74CQyBc647agQP7`; the GitHub button opens [spgsroot/Peachy](https://github.com/spgsroot/Peachy). `repo/logo.svg` is the scalable logo source for launcher, splash and banner exports.
 - Verification and emulator limitations: [manual usability report](docs/reports/2026-11-14-usability.md).
 

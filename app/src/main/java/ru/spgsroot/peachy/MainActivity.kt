@@ -48,6 +48,13 @@ import ru.spgsroot.peachy.ui.player.PlayerScreen
 import ru.spgsroot.peachy.ui.player.PlayerViewModel
 import ru.spgsroot.peachy.ui.theme.PeachyTheme
 import ru.spgsroot.peachy.ui.share.ShareImportViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.awaitCancellation
+import ru.spgsroot.peachy.ui.settings.UpdateDialogHost
+import ru.spgsroot.peachy.ui.settings.UpdateViewModel
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -121,6 +128,21 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
     val route = entry?.destination?.route
     val canImport = route != null && route != "onboarding" && route != "auth"
     val context = androidx.compose.ui.platform.LocalContext.current
+    val updates: UpdateViewModel = hiltViewModel()
+    val updateOptions by updates.options.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var updateAccess by remember { mutableStateOf(false) }
+
+    LaunchedEffect(canImport, unlocked, updateOptions.autoCheckEnabled, lifecycleOwner) {
+        updateAccess = canImport && (!authManager.isPasswordSet() || unlocked)
+        if (updateAccess) {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                updates.checkAutomatically()
+                awaitCancellation()
+            }
+        }
+    }
+    if (updateAccess) UpdateDialogHost(updates)
 
     // Import only inside the unlocked app, not in the player destination. An onNewIntent share
     // therefore works while gallery/manga is already open, and photos never enter PlayerViewModel.

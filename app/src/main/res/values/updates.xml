@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_title">Обновления Peachy</string>
+    <string name="updates_installed">Установлена версия %1$s</string>
+    <string name="updates_automatic">Проверять автоматически</string>
+    <string name="updates_automatic_hint">Не чаще раза в сутки, только в открытом и разблокированном приложении. По умолчанию выключено. APK загружается только по вашей кнопке.</string>
+    <string name="updates_check">Проверить обновления</string>
+    <string name="updates_status">Открыть окно обновления</string>
+    <string name="updates_available">Доступна версия %1$s</string>
+    <string name="updates_checking">Проверяем последний релиз на GitHub…</string>
+    <string name="updates_current">Установлена последняя версия.</string>
+    <string name="updates_apk_size">Размер APK: %1$s</string>
+    <string name="updates_downloading">Загружаем APK…</string>
+    <string name="updates_download_progress">%1$s из %2$s</string>
+    <string name="updates_verifying">Проверяем целостность и совместимость APK…</string>
+    <string name="updates_ready">APK загружен и проверен. Можно установить.</string>
+    <string name="updates_install_hint">Установку подтверждает Android. Если потребуется, разрешите установку из этого источника. После возврата разблокируйте Peachy и снова нажмите «Установить». Библиотека и настройки сохранятся.</string>
+    <string name="updates_download">Скачать APK</string>
+    <string name="updates_cancel_download">Отменить обновление</string>
+    <string name="updates_install">Установить</string>
+    <string name="updates_close">Закрыть</string>
+    <string name="updates_discard">Удалить APK</string>
+    <string name="updates_reset_download">Сбросить загрузку</string>
+    <string name="updates_error_network">Не удалось связаться с GitHub. Проверьте подключение и повторите проверку.</string>
+    <string name="updates_error_rate_limit">GitHub временно ограничил запросы. Повторите проверку позже.</string>
+    <string name="updates_error_release">В последнем релизе нет корректного APK с контрольной суммой. Обновление недоступно.</string>
+    <string name="updates_error_http">GitHub не смог вернуть релиз. Повторите проверку позже.</string>
+    <string name="updates_error_download">Не удалось сохранить или загрузить APK. Проверьте подключение и свободное место, затем повторите.</string>
+    <string name="updates_error_integrity">Контрольная сумма или размер APK не совпали. Не устанавливайте этот файл; загрузите его заново.</string>
+    <string name="updates_error_apk">APK повреждён или не соответствует приложению и версии релиза. Установка запрещена.</string>
+    <string name="updates_error_incompatible">APK не новее установленной версии или несовместим с версией Android.</string>
+    <string name="updates_error_install">Не удалось открыть установщик или настройки разрешения. Проверьте разрешение на установку приложений для Peachy.</string>
+</resources>

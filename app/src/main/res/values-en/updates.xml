@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_title">Peachy updates</string>
+    <string name="updates_installed">Installed version: %1$s</string>
+    <string name="updates_automatic">Check automatically</string>
+    <string name="updates_automatic_hint">At most once a day, only while the app is open and unlocked. Off by default. APK downloads only start when you press Download.</string>
+    <string name="updates_check">Check for updates</string>
+    <string name="updates_status">Open update window</string>
+    <string name="updates_available">Version %1$s is available</string>
+    <string name="updates_checking">Checking the latest GitHub release…</string>
+    <string name="updates_current">The latest version is installed.</string>
+    <string name="updates_apk_size">APK size: %1$s</string>
+    <string name="updates_downloading">Downloading APK…</string>
+    <string name="updates_download_progress">%1$s of %2$s</string>
+    <string name="updates_verifying">Verifying APK integrity and compatibility…</string>
+    <string name="updates_ready">APK downloaded and verified. Ready to install.</string>
+    <string name="updates_install_hint">Android asks you to confirm installation. If prompted, allow installs from this source. After returning, unlock Peachy and press Install again. Your library and settings are kept.</string>
+    <string name="updates_download">Download APK</string>
+    <string name="updates_cancel_download">Cancel update</string>
+    <string name="updates_install">Install</string>
+    <string name="updates_close">Close</string>
+    <string name="updates_discard">Discard APK</string>
+    <string name="updates_reset_download">Dismiss download error</string>
+    <string name="updates_error_network">Could not connect to GitHub. Check your connection and try again.</string>
+    <string name="updates_error_rate_limit">GitHub temporarily limited requests. Try again later.</string>
+    <string name="updates_error_release">The latest release has no valid APK with a checksum. This update is unavailable.</string>
+    <string name="updates_error_http">GitHub could not return the release. Try again later.</string>
+    <string name="updates_error_download">Could not save or download the APK. Check your connection and free space, then try again.</string>
+    <string name="updates_error_integrity">The APK checksum or size does not match. Do not install this file; download it again.</string>
+    <string name="updates_error_apk">The APK is damaged or does not match this app and release version. Installation is blocked.</string>
+    <string name="updates_error_incompatible">The APK is not newer than the installed version or requires a newer Android version.</string>
+    <string name="updates_error_install">Could not open the installer or permission settings. Check whether Peachy is allowed to install apps.</string>
+</resources>

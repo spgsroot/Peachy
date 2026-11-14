@@ -1,6 +1,8 @@
 package ru.spgsroot.peachy.ui.settings
 
 import android.content.Context
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -44,6 +46,7 @@ import ru.spgsroot.peachy.ui.manga.TranslationViewModel
 fun SettingsDrawer(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val updates: UpdateViewModel = hiltViewModel(checkNotNull(LocalActivity.current as? ComponentActivity))
     val settings = viewModel.settings.collectAsStateWithLifecycle().value
     val isPasswordSet by viewModel.isPasswordSet.collectAsStateWithLifecycle()
     val deviceState by viewModel.deviceState.collectAsStateWithLifecycle()
@@ -242,6 +245,13 @@ fun SettingsDrawer(
                 ) {
                     Text(stringResource(R.string.settings_translation_row))
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+                UpdatesSection(updates)
             }
 
             // Backup section
