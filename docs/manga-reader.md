@@ -46,6 +46,11 @@ Translated lines can carry an optional `Box` around their original text. Stored 
 
 The database and vault continue to treat the `lang` field as an opaque cache key. `TranslationKey.of(engine, source, target)` returns exactly `target` for Model + `auto`, preserving existing caches and backups. Other choices use `target|engine.wire|source`, for example `de|mlkit|ja`. Changing translation choices switches the reader's displayed state and batch to that key; cached entries under other keys remain available.
 
+### Choosing a model
+
+In the provider dialog, **Models** loads the unsaved address/key's `/models` list; selecting a row fills the model field without saving, and manual entry always remains available. Filter for image readers (on by default for Model, off for MlKit; unknown capabilities remain visible), or sort by name, price (input + output at equal token counts; unknown prices last), or measured first-token time. OpenCode Go prices are USD per million tokens with the UTC multiplier at list refresh applied and labelled; OpenRouter's per-token prices are converted to the same unit. Other providers have unknown prices, not an embedded price table. **Measure speed** asks confirmation because its one streaming synthetic-image request costs tokens; no page is sent and no page consent is needed. First-content-token and total times are estimates, timestamped and cached only by host/model in the app cache directory, without keys or vault/database records. Real page time depends on output length and reasoning.
+
+
 
 ## Overlay on the page
 

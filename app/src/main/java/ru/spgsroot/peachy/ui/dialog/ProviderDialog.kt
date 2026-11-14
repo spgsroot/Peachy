@@ -38,6 +38,11 @@ import ru.spgsroot.peachy.translate.ProviderPresets
 import ru.spgsroot.peachy.translate.ProviderSettings
 import ru.spgsroot.peachy.translate.ProviderUrl
 import ru.spgsroot.peachy.translate.TranslationError
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.key
+import ru.spgsroot.peachy.translate.ProviderModel
+import ru.spgsroot.peachy.translate.ModelSpeed
+import ru.spgsroot.peachy.translate.TranslateEngine
 
 /**
  * Where page images are sent for translation. The key is typed here and goes straight to the encrypted
@@ -48,6 +53,10 @@ fun ProviderDialog(
     current: ProviderSettings,
     onSave: (baseUrl: String, model: String, apiKey: String) -> Unit,
     onTest: suspend (baseUrl: String, model: String, apiKey: String) -> TranslationError?,
+    engine: TranslateEngine,
+    onModels: suspend (ProviderSettings) -> List<ProviderModel>,
+    onMeasure: suspend (ProviderSettings) -> ModelSpeed,
+    onSpeeds: suspend (String, List<ProviderModel>) -> Map<String, ModelSpeed>,
     onDismiss: () -> Unit
 ) {
     var baseUrl by rememberSaveable { mutableStateOf(current.baseUrl) }
@@ -65,7 +74,7 @@ fun ProviderDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.provider_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.provider_hint), style = MaterialTheme.typography.bodyMedium)
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -102,6 +111,17 @@ fun ProviderDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                // Changing credentials disposes the picker and cancels requests from the old draft.
+                key(baseUrl, apiKey) {
+                    ProviderModelsPicker(
+                        draft = current.edited(baseUrl, model, apiKey),
+                        engine = engine,
+                        onModels = onModels,
+                        onMeasure = onMeasure,
+                        onSpeeds = onSpeeds,
+                        onPick = { model = it; result = null }
+                    )
+                }
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it; result = null },
@@ -168,7 +188,7 @@ fun ProviderDialog(
 private class Result(val error: TranslationError?)
 
 @Composable
-private fun errorName(error: TranslationError?): String = when (error) {
+internal fun errorName(error: TranslationError?): String = when (error) {
     null -> ""
     TranslationError.NotConfigured -> stringResource(R.string.translate_error_not_configured)
     TranslationError.Auth -> stringResource(R.string.translate_error_auth)

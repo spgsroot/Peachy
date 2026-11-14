@@ -40,6 +40,7 @@ import ru.spgsroot.peachy.ui.dialog.PasswordChangeDialog
 import ru.spgsroot.peachy.ui.dialog.PasswordSetupDialog
 import ru.spgsroot.peachy.ui.dialog.ProviderDialog
 import ru.spgsroot.peachy.ui.manga.TranslationViewModel
+import ru.spgsroot.peachy.manga.ReaderSettingsStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -370,6 +371,10 @@ fun SettingsDrawer(
             current = translationProvider,
             onSave = { url, model, key -> translation.saveProvider { it.edited(url, model, key) } },
             onTest = translation::testProvider,
+            engine = ReaderSettingsStore.load(context.getSharedPreferences("manga_reader", Context.MODE_PRIVATE)).engine,
+            onModels = translation::listModels,
+            onMeasure = translation::measureModel,
+            onSpeeds = translation::modelSpeeds,
             onDismiss = { showProviderDialog = false }
         )
     }

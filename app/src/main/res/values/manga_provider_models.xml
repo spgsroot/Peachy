@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="models_action">Модели</string>
+    <string name="models_loading">Загрузка моделей…</string>
+    <string name="models_refresh">Обновить список</string>
+    <string name="models_images_only">Только модели, читающие изображения</string>
+    <string name="models_sort_price">Цена</string>
+    <string name="models_sort_speed">Скорость</string>
+    <string name="models_sort_name">Имя</string>
+    <string name="models_price_ranking">По цене: вход + выход при равном числе токенов. USD за 1 млн токенов, не стоимость страницы.</string>
+    <string name="models_estimate">Скорость — оценка на маленькой синтетической картинке. Время реальной страницы зависит от длины ответа и рассуждений.</string>
+    <string name="models_empty">Нет моделей для этого фильтра.</string>
+    <string name="models_vision">Читает изображения</string>
+    <string name="models_text_only">Только текст</string>
+    <string name="models_vision_unknown">Поддержка изображений неизвестна</string>
+    <string name="models_unknown">неизвестно</string>
+    <string name="models_price">Вход: %1$s · Выход: %2$s USD / 1 млн</string>
+    <string name="models_peak">Есть пиковый тариф · текущий множитель UTC ×%1$s (при обновлении списка)</string>
+    <string name="models_unmeasured">Скорость не измерена</string>
+    <string name="models_speed">Первый токен: %1$d мс · Всего: %2$d мс (оценка)</string>
+    <string name="models_measure">Измерить скорость</string>
+    <string name="models_measuring">Измеряется %1$s…</string>
+    <string name="models_measure_confirm">Измерить %1$s? Маленькая сгенерированная картинка и короткий запрос отправятся провайдеру из несохранённых настроек. Это расходует токены. Страница манги не отправляется. Результат — только оценка: время реальной страницы зависит от длины ответа и рассуждений.</string>
+</resources>

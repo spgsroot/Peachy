@@ -33,6 +33,11 @@ import ru.spgsroot.peachy.translate.TranslationException
 import ru.spgsroot.peachy.translate.TranslationKey
 import ru.spgsroot.peachy.translate.TranslationRunner
 import ru.spgsroot.peachy.translate.TranslationStore
+import ru.spgsroot.peachy.translate.ProviderModel
+import ru.spgsroot.peachy.translate.ModelSpeed
+import ru.spgsroot.peachy.translate.ModelSpeedCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Translation for the gallery the reader has open. Nothing is sent before the user has agreed to
@@ -162,6 +167,19 @@ class TranslationViewModel @Inject constructor(
         null
     } catch (e: TranslationException) {
         e.error
+    }
+
+    suspend fun listModels(draft: ProviderSettings): List<ProviderModel> = client.models(draft)
+
+    suspend fun modelSpeeds(baseUrl: String, models: List<ProviderModel>): Map<String, ModelSpeed> = withContext(Dispatchers.IO) {
+        val cache = ModelSpeedCache(context.cacheDir)
+        models.mapNotNull { model -> cache.get(baseUrl, model.id)?.let { model.id to it } }.toMap()
+    }
+
+    suspend fun measureModel(draft: ProviderSettings): ModelSpeed {
+        val speed = client.measureModel(draft)
+        withContext(Dispatchers.IO) { ModelSpeedCache(context.cacheDir).put(draft.baseUrl, draft.model, speed) }
+        return speed
     }
 
     /**

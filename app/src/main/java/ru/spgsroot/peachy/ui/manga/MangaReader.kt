@@ -565,6 +565,10 @@ private fun NativeReader(
             current = provider,
             onSave = { url, model, key -> translation.saveProvider { it.edited(url, model, key) } },
             onTest = translation::testProvider,
+            engine = settings.engine,
+            onModels = translation::listModels,
+            onMeasure = translation::measureModel,
+            onSpeeds = translation::modelSpeeds,
             onDismiss = { providerDialog = false }
         )
     }

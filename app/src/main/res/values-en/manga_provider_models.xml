@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="models_action">Models</string>
+    <string name="models_loading">Loading models…</string>
+    <string name="models_refresh">Refresh list</string>
+    <string name="models_images_only">Only models that read images</string>
+    <string name="models_sort_price">Price</string>
+    <string name="models_sort_speed">Speed</string>
+    <string name="models_sort_name">Name</string>
+    <string name="models_price_ranking">Price sort: input + output at equal token counts. USD per 1M tokens, not a page quote.</string>
+    <string name="models_estimate">Speed is an estimate from a tiny synthetic image. Real page time depends on output length and reasoning.</string>
+    <string name="models_empty">No models match this filter.</string>
+    <string name="models_vision">Vision</string>
+    <string name="models_text_only">Text only</string>
+    <string name="models_vision_unknown">Image support unknown</string>
+    <string name="models_unknown">unknown</string>
+    <string name="models_price">Input: %1$s · Output: %2$s USD / 1M</string>
+    <string name="models_peak">Peak schedule exists · current UTC multiplier ×%1$s (at list refresh)</string>
+    <string name="models_unmeasured">Speed not measured</string>
+    <string name="models_speed">First token: %1$d ms · Total: %2$d ms (estimate)</string>
+    <string name="models_measure">Measure speed</string>
+    <string name="models_measuring">Measuring %1$s…</string>
+    <string name="models_measure_confirm">Measure %1$s? This sends a tiny generated image and a short prompt to the draft provider and costs tokens. No manga page is sent. The result is only an estimate; real page time depends on output length and reasoning.</string>
+</resources>
