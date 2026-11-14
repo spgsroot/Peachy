@@ -1,0 +1,30 @@
+# Provider model picker design
+
+## Intent and constraints
+
+Add a model dropdown to the existing editable provider draft, so readers can compare cost and measured responsiveness without guessing model identifiers. Kotlin/Compose, Hilt, OkHttp 4.12 and org.json only; minSdk 26. No page, key, vault, Room, or translation cache format changes. List and synthetic test requests need no page consent. Keys stay in memory/encrypted provider settings and are never logged or cached.
+
+## Verified provider contracts and units (2026-11-15)
+
+- Live `https://opencode.ai/inference/go/v1/models` works without authentication and returns `data`, identifiers, names, `modalities.input`, `cost.text.input.price`, `cost.text.output.price`, and UTC conditional `cost.multipliers`. [Go documentation](https://opencode.ai/docs/console/go/) says “Token prices are per 1M tokens” and gives dollar-denominated rates matching the catalog (e.g. DeepSeek V4.1 Flash 0.15/0.60 off-peak). Display USD per million input/output tokens. Apply supported UTC day/time multipliers at the picker snapshot instant and label the current multiplier; also mark scheduled peak pricing. Unsupported multiplier conditions leave price unknown rather than claim an inaccurate current price.
+- Live `https://openrouter.ai/api/v1/models` returns string `pricing.prompt`/`completion` and `architecture.input_modalities`. [Models documentation](https://openrouter.ai/docs/guides/overview/models) defines these as USD per input/output token. Multiply by 1,000,000 for the same displayed unit. No endpoint latency fetches: local streaming measurements cover every provider consistently.
+- OpenAI, Gemini's OpenAI-compatible API and Mistral expose model identifiers but no price contract here: prices unknown; modalities unknown unless explicitly supplied. Never infer vision from model names or maintain a price table.
+
+## UI and behavior
+
+The existing model text field remains editable. A Models action fetches the draft address/key, then opens a bounded scrollable dropdown with name/identifier, vision/unknown/text-only label, input/output price and cached speed. A nonempty draft key is attached; an empty key sends no Authorization header, letting public catalogs work and private providers return Auth. Network/auth/JSON failures use existing short translated errors and do not disable manual entry. Requests reject unsafe URLs and redirects, use the app User-Agent and provider-scoped session header, and never persist the draft.
+
+The dropdown includes image-only filtering (initially on for Model, off for MlKit), Price/Speed/Name sort controls and per-row Measure action. Unknown modalities survive the image filter and are labelled unknown. Price sorting compares input+output for equal token counts, then input/output and name/identifier for stable ties; incomplete prices sort last. Speed sorting uses time to first content token, unmeasured last. Name sorting is case-insensitive with identifier tie-break. Changing sort/filter or refreshing resets the list to its first result.
+
+Measure explicitly warns that it costs tokens and sends one streaming request after confirmation. It uses a code-generated tiny synthetic PNG and short prompt, a small completion budget, no real page and no automatic retries. Record first nonempty content delta (not role/reasoning/empty deltas), stream completion time and wall-clock timestamp. Missing content, malformed/truncated streams and HTTP failures are errors, never fast measurements. Explain that real page duration depends on output length and reasoning. Known text-only models cannot run the image probe. Measurements live only in app cache files keyed by `(lower-case host, model)` without credentials; cache eviction loses measurements harmlessly.
+
+## Approach and scope
+
+Reuse TranslationClient's configured transport and error policy for model listing and probes; add a focused pure catalog/parser file and a focused cache store. The probe's client clone shares transport resources and settings but disables automatic connection retries, preventing a paid POST from being replayed after a pooled connection disconnects. No shared Hilt OkHttp binding is added. A hard-coded catalog or bulk benchmark would stale quickly or spend tokens unexpectedly, so neither is included. OpenRouter latency statistics, throughput benchmarking, full-page estimates, background refresh, bulk measurement, token accounting and general translation streaming are out of scope.
+
+## Implementation plan (inline in this child worktree)
+
+1. Add `ProviderModelsTest` first: OpenCode/OpenRouter parsing, missing/invalid prices, per-token normalization, UTC weekday and inclusive/exclusive time boundaries, image/unknown filter, deterministic unknown-last price/speed/name sorting. Run targeted tests to observe missing implementation, add `ProviderModels.kt`, run green.
+2. Add MockWebServer cases in `ProviderModelsClientTest`: draft GET path and headers, no page consent, unsafe URL/key handling, redirects, 401/404/429/network/bad JSON, streaming role/reasoning/content deltas, terminal events, truncation and cancellation. Add listing/probe methods to `TranslationClient`, generated synthetic image helper and `ModelSpeedCache`; run targeted tests green. Cache tests cover distinct hosts/models and timestamp round trip without keys.
+3. Add picker Compose UI with bilingual `manga_provider_models.xml`; expose catalog/probe/cache through `TranslationViewModel`, pass engine and callbacks from both dialog callers. Preserve draft edit/key retention semantics and discard stale in-flight results after URL/key edits. Update reader docs and both READMEs because both describe provider configuration.
+4. Run `./gradlew :app:testDebugUnitTest` and `./gradlew :app:assembleDebug`; report counts/output. Check adb: install and inspect real dialog if available, otherwise exercise real catalog plus MockWebServer paths and report device absence. Self-review privacy, cancellation, draft races, unknown modalities and partial streams; no helper workers per task instruction. Commit logical changes with imperative unprefixed subjects; no push/PR/tag.
