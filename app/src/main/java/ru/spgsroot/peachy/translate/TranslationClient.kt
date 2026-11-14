@@ -50,6 +50,8 @@ class TranslationClient(
         .followRedirects(false)
         .followSslRedirects(false)
         .build()
+    // A paid speed probe must never be replayed by OkHttp's pooled-connection recovery.
+    private val probeHttp = this.http.newBuilder().retryOnConnectionFailure(false).build()
 
     override suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation =
         complete(galleryId, { pageBody(it, jpeg, request) }, PageTranslation::parse)
@@ -103,6 +105,58 @@ class TranslationClient(
         }
     }
 
+    /** Catalog request uses an unsaved draft, never a page and never the consent gate. */
+    suspend fun models(provider: ProviderSettings): List<ProviderModel> = withContext(Dispatchers.IO) {
+        mapped {
+            // Public catalogs need no key; private providers return the usual Auth error if it is missing.
+            val request = providerRequest(provider, "/models", sessionHeader(provider.baseUrl, CHECK_SESSION_ID), keyRequired = false).get().build()
+            val raw = execute(http.newCall(request))
+            when (ProviderPresets.find(provider.baseUrl)?.id) {
+                "opencode-go" -> ProviderModels.parseOpenCode(raw, java.time.Instant.now())
+                "openrouter" -> ProviderModels.parseOpenRouter(raw)
+                else -> ProviderModels.parseGeneric(raw)
+            }
+        }
+    }
+
+    /** Explicit single-model paid probe. Its generated image is unrelated to any gallery. */
+    suspend fun measureModel(provider: ProviderSettings): ModelSpeed = withContext(Dispatchers.IO) {
+        mapped {
+            if (!provider.isConfigured) throw TranslationException(TranslationError.NotConfigured)
+            val user = JSONArray()
+                .put(JSONObject().put("type", "text").put("text", "Reply OK."))
+                .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", ModelProbeImage.dataUri)))
+            val body = JSONObject().put("model", provider.model).put("stream", true).put("max_tokens", 64)
+                .put("messages", JSONArray().put(message("user", user)))
+            val request = providerRequest(provider, "/chat/completions", sessionHeader(provider.baseUrl, CHECK_SESSION_ID))
+                .header("Accept", "text/event-stream")
+                .post(adaptLimits(body, provider.baseUrl).toString().toRequestBody(JSON)).build()
+            val start = System.nanoTime()
+            executeResponse(probeHttp.newCall(request)) { response -> ModelSpeedStream.read(response, start) }
+        }
+    }
+
+    private fun providerRequest(provider: ProviderSettings, path: String, session: String?, keyRequired: Boolean = true): Request.Builder {
+        if (!ProviderUrl.isAllowed(provider.baseUrl) ||
+            (keyRequired || provider.apiKey.isNotEmpty()) && !ProviderKey.isValid(provider.apiKey)) {
+            throw TranslationException(TranslationError.NotConfigured)
+        }
+        return Request.Builder().url(ProviderUrl.normalized(provider.baseUrl) + path)
+            .header("User-Agent", userAgent)
+            .apply {
+                if (provider.apiKey.isNotEmpty()) header("Authorization", "Bearer ${provider.apiKey}")
+                session?.let { header("x-opencode-session", it) }
+            }
+    }
+
+    private suspend fun <T> mapped(action: suspend () -> T): T = try {
+        action()
+    } catch (e: CancellationException) { throw e
+    } catch (e: TranslationException) { throw e
+    } catch (e: IOException) { throw TranslationException(TranslationError.Network, e)
+    } catch (e: JSONException) { throw TranslationException(TranslationError.BadResponse, e)
+    } catch (e: IllegalArgumentException) { throw TranslationException(TranslationError.NotConfigured, e) }
+
     private fun message(role: String, content: Any) = JSONObject().put("role", role).put("content", content)
 
     private fun pageBody(provider: ProviderSettings, jpeg: ByteArray, request: TranslateRequest): JSONObject {
@@ -127,11 +181,7 @@ class TranslationClient(
     /** Posts [body] and returns `choices[0].message.content`. */
     private suspend fun send(provider: ProviderSettings, body: JSONObject, session: String?): String {
         val text = try {
-            val request = Request.Builder()
-                .url(ProviderUrl.normalized(provider.baseUrl) + "/chat/completions")
-                .header("Authorization", "Bearer ${provider.apiKey}")
-                .header("User-Agent", userAgent)
-                .apply { session?.let { header("x-opencode-session", it) } }
+            val request = providerRequest(provider, "/chat/completions", session)
                 .post(adaptLimits(body, provider.baseUrl).toString().toRequestBody(JSON))
                 .build()
             execute(http.newCall(request))
@@ -147,7 +197,9 @@ class TranslationClient(
         return contentOf(text)
     }
 
-    private suspend fun execute(call: Call): String = suspendCancellableCoroutine { cont ->
+    private suspend fun execute(call: Call): String = executeResponse(call) { it.body?.string().orEmpty() }
+
+    private suspend fun <T> executeResponse(call: Call, consume: (Response) -> T): T = suspendCancellableCoroutine { cont ->
         cont.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -163,9 +215,9 @@ class TranslationClient(
                                 TranslationException(TranslationError.RateLimit(retryAfterSeconds(it)))
                             )
                             !it.isSuccessful -> cont.resumeWithException(TranslationException(TranslationError.Server(it.code)))
-                            else -> cont.resume(it.body?.string().orEmpty())
+                            else -> cont.resume(consume(it))
                         }
-                    } catch (e: IOException) {
+                    } catch (e: Exception) {
                         cont.resumeWithException(e)
                     }
                 }
