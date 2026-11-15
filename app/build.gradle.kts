@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.mlkit.text.recognition.korean)
 
+    // Minimal arm64 on-device text detector runtime
+    implementation(files("libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar"))
+
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
