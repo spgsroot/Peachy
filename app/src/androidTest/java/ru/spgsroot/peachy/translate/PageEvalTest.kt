@@ -38,6 +38,7 @@ class PageEvalTest {
         var peakHeap = 0L
         var overlapTotal = 0
         var smallTotal = 0
+        var pagesWithOverlap = 0
         for (file in files) {
             val trace = PageTrace()
             val started = System.nanoTime()
@@ -53,6 +54,7 @@ class PageEvalTest {
                 val overlaps = overlappingPairs(plates.map { it.rect })
                 val small = plates.count { it.layout.paint.textSize / (density.density * density.fontScale) < 13f }
                 overlapTotal += overlaps
+                if (overlaps > 0) pagesWithOverlap++
                 smallTotal += small
                 trace.stageMs.forEach { (key, ms) -> samples.getOrPut(key) { mutableListOf() }.add(ms) }
                 peakHeap = maxOf(peakHeap, trace.heapAfterMb.values.maxOrNull() ?: 0L)
@@ -75,6 +77,7 @@ class PageEvalTest {
                     put(key, JSONObject().put("p50", percentile(values, .5)).put("p95", percentile(values, .95)))
                 } })
                 put("peakHeapMb", peakHeap); put("plateOverlappingPairs", overlapTotal); put("platesBelowReadable", smallTotal)
+                put("pagesWithOverlappingPlates", pagesWithOverlap)
             })
         }
         File(root.parentFile, "report.json").writeText(report.toString(2))

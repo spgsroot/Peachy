@@ -1,6 +1,6 @@
 # On-device bubble detection, text fit and pipeline performance: design
 
-Date: 2026-11-15. Status: draft for owner review; no code changed. Builds on `2026-11-13-manga-page-translation-design.md` and the overlay/OCR sections of `docs/manga-reader.md`.
+Date: 2026-11-15. Status: phase 0 baseline and phase 1 implementation measured; see `docs/reports/2026-11-15-phase1-results.md` for mixed results and owner decisions (no Korean auto extension; tall-strip tiling deferred). Detector/runtime spike is separate; phases 2–4 remain unimplemented. Builds on `2026-11-13-manga-page-translation-design.md` and `docs/manga-reader.md`.
 
 ## Intent
 

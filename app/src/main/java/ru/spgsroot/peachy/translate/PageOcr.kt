@@ -8,9 +8,9 @@ data class OcrBlock(val text: String, val box: Box)
 
 /**
  * Reads the text on a page on the device, without sending anything anywhere.
- * [source] is `auto` or an ISO 639-1 code (`ja`, `zh`, `ko`, `en`, ...). Blocks come back in reading
- * order for that language: right to left, then top to bottom for `ja` and `zh`; left to right, then
- * top to bottom otherwise. A page without text gives an empty list.
+ * [source] is `auto` or an ISO 639-1 code (`ja`, `zh`, `ko`, `en`, ...). Blocks use geometric
+ * reading order: ja/zh and mostly-vertical auto pages use right-to-left columns within rows;
+ * other pages read rows left-to-right. A page without text gives an empty list.
  */
 interface PageOcr {
     /** Throws [java.io.IOException] when the page cannot be decoded and [kotlinx.coroutines.CancellationException] when cancelled. */
