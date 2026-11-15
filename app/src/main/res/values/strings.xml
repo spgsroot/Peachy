@@ -153,7 +153,7 @@
     <!-- Password Dialog -->
     <string name="dialog_set_password">Задать пароль</string>
     <string name="dialog_change_password">Сменить пароль</string>
-    <string name="password_hint">Пароль любой длины: буквы, цифры и символы. Не забудьте его.</string>
+    <string name="password_hint">Пароль любой длины, только цифры. Не забудьте его.</string>
     <string name="label_current_password">Текущий пароль</string>
     <string name="label_password">Пароль</string>
     <string name="label_confirm_password">Повторите пароль</string>
@@ -215,6 +215,8 @@
     <string name="auth_enter_password">Введите пароль</string>
     <string name="auth_wrong_password">Неверный пароль</string>
     <string name="btn_login">Войти</string>
+    <string name="auth_delete_digit">Стереть цифру</string>
+    <string name="auth_toggle_password">Показать или скрыть пароль</string>
 
     <!-- Content Descriptions -->
     <string name="content_description_back">Назад</string>

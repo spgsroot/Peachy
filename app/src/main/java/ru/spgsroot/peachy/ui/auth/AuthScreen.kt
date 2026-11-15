@@ -1,22 +1,35 @@
 package ru.spgsroot.peachy.ui.auth
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.R
@@ -50,36 +63,60 @@ fun AuthScreen(
             } finally { verifying = false }
         }
     }
-    Box(
-        Modifier.fillMaxSize().safeDrawingPadding().imePadding()
-            .verticalScroll(rememberScrollState()).padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        ElevatedCard(Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-                Text(statusMessage ?: stringResource(R.string.auth_enter_password))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it; failed = false },
-                    enabled = enabled,
-                    label = { Text(stringResource(R.string.label_password)) },
-                    singleLine = true,
-                    isError = failed,
-                    supportingText = if (failed) {{ Text(stringResource(R.string.auth_wrong_password)) }} else null,
-                    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    trailingIcon = {
-                        IconButton(onClick = { visible = !visible }) {
-                            Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                stringResource(R.string.label_password))
+    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+        val keySize = if (maxHeight < 640.dp || maxWidth < 360.dp) 56.dp else 72.dp
+        Box(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ElevatedCard(Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
+                Column(
+                    Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        statusMessage ?: stringResource(R.string.auth_enter_password),
+                        textAlign = TextAlign.Center
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DigitReadout(
+                            value = password,
+                            revealed = visible,
+                            isError = failed,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { visible = !visible }, enabled = password.isNotEmpty()) {
+                            Icon(
+                                if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                stringResource(R.string.auth_toggle_password)
+                            )
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(onClick = { submit() }, enabled = enabled && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(if (verifying) R.string.verifying else R.string.btn_login))
+                    }
+                    if (failed) {
+                        Text(
+                            stringResource(R.string.auth_wrong_password),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    if (verifying) {
+                        Text(stringResource(R.string.verifying), style = MaterialTheme.typography.bodySmall)
+                    }
+                    NumericKeypad(
+                        enabled = enabled,
+                        onDigit = { digit -> password += digit; failed = false },
+                        onDelete = {
+                            if (password.isNotEmpty()) password = password.dropLast(1)
+                            failed = false
+                        },
+                        onConfirm = ::submit,
+                        confirmEnabled = password.isNotEmpty(),
+                        keySize = keySize,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             }
         }

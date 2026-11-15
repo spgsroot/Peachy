@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -64,6 +66,13 @@ fun ControlsOverlay(
         lastInteraction++
     }
 
+    fun toggleControls() {
+        if (controlsVisible) controlsVisible = false else showControls()
+    }
+
+    val keepPlayback = remember { MutableInteractionSource() }
+    val keepPanel = remember { MutableInteractionSource() }
+
     LaunchedEffect(lastInteraction, controlsVisible) {
         if (controlsVisible) {
             delay(3000)
@@ -77,7 +86,7 @@ fun ControlsOverlay(
             .playerGestures(exoPlayerWrapper, zoomScale, onZoomChange, onPanChange, onSwitchVideo, ::showControls) { feedback = it }
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { showControls() },
+                    onTap = { toggleControls() },
                     onDoubleTap = { point ->
                         showControls()
                         val duration = exoPlayerWrapper.getPlayer().duration.coerceAtLeast(0)
@@ -106,7 +115,8 @@ fun ControlsOverlay(
                 playerState = playerState,
                 onPlayPause = onPlayPause,
                 onNext = onNext,
-                onPrevious = onPrevious
+                onPrevious = onPrevious,
+                modifier = Modifier.clickable(keepPlayback, null) { showControls() }
             )
         }
 
@@ -121,6 +131,7 @@ fun ControlsOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .75f))))
+                    .clickable(keepPanel, null) { showControls() }
                     .padding(top = 24.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -239,9 +250,11 @@ private fun PlaybackControls(
     playerState: PlayerState,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onPrevious: () -> Unit
+    onPrevious: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -33,7 +33,6 @@ import ru.spgsroot.peachy.ui.dialog.WebViewUrlDialog
 import ru.spgsroot.peachy.ui.settings.SettingsDrawer
 import ru.spgsroot.peachy.ui.settings.SettingsViewModel
 import ru.spgsroot.peachy.ui.webview.WebViewActivity
-import ru.spgsroot.peachy.ui.HeaderSearch
 import ru.spgsroot.peachy.ui.gallery.MediaFilterButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +45,6 @@ fun PlayerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
-    val query by viewModel.query.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val currentId = when (val state = playerState) {
         is PlayerState.Playing -> state.video.id
@@ -110,7 +108,7 @@ fun PlayerScreen(
                 // Скрываем TopAppBar в полноэкранном режиме
                 if (!isFullscreen) {
                     TopAppBar(
-                        title = { HeaderSearch(query, { viewModel.query.value = it }, stringResource(R.string.gallery_search_title)) },
+                        title = { Text(stringResource(R.string.app_name)) },
                         navigationIcon = {
                             IconButton(onClick = {
                                 scope.launch { drawerState.open() }

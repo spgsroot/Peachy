@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
@@ -28,8 +29,8 @@ import coil.size.Size
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.domain.model.Video
 
-private val CardWidth = 168.dp
-private val ThumbnailHeight = 94.dp
+private val CardWidth = 112.dp
+private val ThumbnailHeight = 63.dp
 
 /** Thumbnails are decoded at twice the drawn size so they stay sharp on dense screens. */
 @OptIn(ExperimentalCoilApi::class)
@@ -85,14 +86,35 @@ fun QueueCarousel(
                     contentScale = ContentScale.Crop,
                     filterQuality = FilterQuality.High
                 )
-                Text(video.title, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-                Text(
-                    Formatter.formatShortFileSize(context, video.fileSize),
-                    Modifier.padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = .7f)
-                )
+                Text(video.title, Modifier.padding(horizontal = 6.dp, vertical = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatClipLength(video.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = .85f),
+                        maxLines = 1
+                    )
+                    Text(
+                        Formatter.formatShortFileSize(context, video.fileSize),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = .7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatClipLength(durationMs: Long): String {
+    val totalSeconds = durationMs.coerceAtLeast(0) / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
 }

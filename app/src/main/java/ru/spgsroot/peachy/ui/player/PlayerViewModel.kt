@@ -66,7 +66,6 @@ class PlayerViewModel @Inject constructor(
 
     val playerState: StateFlow<PlayerState> = exoPlayerWrapper.state
     val queue: StateFlow<List<Video>> = playlistManager.playlist
-    val query = MutableStateFlow("")
     val filter = MutableStateFlow(MediaFilter())
 
     init {
@@ -93,8 +92,8 @@ class PlayerViewModel @Inject constructor(
 
     private fun loadVideosToPlaylist() {
         viewModelScope.launch {
-            combine(videos, query, filter) { videos, query, filter ->
-                galleryItems(videos, emptyList(), query, filter)
+            combine(videos, filter) { videos, filter ->
+                galleryItems(videos, emptyList(), "", filter)
                     .filterIsInstance<GalleryItem.VideoItem>().map { it.video }
             }.flowOn(Dispatchers.Default).collectLatest { playlist ->
                 playlistManager.setPlaylist(playlist)
