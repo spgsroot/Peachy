@@ -1,12 +1,12 @@
 # On-device bubble detection, text fit and pipeline performance: design
 
-Date: 2026-11-15. Status: phase 0 baseline and phase 1 implementation measured; see `docs/reports/2026-11-15-phase1-results.md` for mixed results and owner decisions (no Korean auto extension; tall-strip tiling deferred). Detector/runtime spike is separate; phases 2–4 remain unimplemented. Builds on `2026-11-13-manga-page-translation-design.md` and `docs/manga-reader.md`.
+Date: 2026-11-15. Status: phases 0–2 implemented and measured; phases 3–4 remain unimplemented. Phase 2 uses YOLO26n 960 with ORT 1.32.0 minimal CPU-4, with C++ exceptions enabled; see `docs/reports/2026-11-15-phase2-results.md` for same-Xiaomi off/on results, worker-only visual review and open failures. Implementation completion is not release-quality or owner acceptance. Phase 1 measurements on A069P remain historical context in `docs/reports/2026-11-15-phase1-results.md`; `auto` still uses Japanese without a Korean extension. Builds on `2026-11-13-manga-page-translation-design.md` and `docs/manga-reader.md`.
 
 ## Intent
 
 The MlKit engine reads a page on the device and the overlay draws the translation over the original text. Three things limit it today: OCR sees a degraded copy of the page and does not know what a speech bubble is; the overlay fits text into a rectangle that grows around the original text, not into the bubble; and the pipeline decodes, re-encodes and measures more than it needs to. The owner wants all three improved together, with an on-device bubble detection model, with the MlKit engine as the main target and equal weight on quality and speed/memory.
 
-## Findings in the current code
+## Findings in the phase 0 baseline
 
 | # | Where | Problem |
 | --- | --- | --- |
@@ -61,19 +61,19 @@ The Model engine path keeps `PageImage.encode` because it uploads the JPEG. Only
 
 ### Detector
 
-`BubbleDetector` is an interface (`suspend fun detect(bitmap): List<Region>`), `Region(kind: bubble | textInBubble | textFree, box: Box, score: Float)`, with a fake for tests. The production class owns one lazily created session for the application lifetime and releases it on `onTrimMemory`.
+Implemented phase-2 contract: `BubbleDetector.detect(image: ByteArray): List<Region>?`, where `null` means unavailable/failed and an empty list is valid. YOLO26n has one text class, so `Region(box: Box, score: Float)` has no `kind`. The production singleton owns a lazy ORT session and reusable buffers; `onTrimMemory` releases them only when idle. OCR and detection decode separately; sharing a bitmap remains unimplemented.
 
 Pages with aspect above about 2 (webtoon strips) are tiled vertically with overlap before detection; models trained at a square input shrink a tall strip into noise. Detections are mapped back to page fractions, then de-duplicated across tile seams.
 
-Detector output is not trusted for recall. ML Kit stays the source of text, and detector regions only classify, group and shape it. A region with detector confidence above a threshold and no OCR text inside gets one targeted second-pass OCR on the padded crop, which is cheaper than a second full-page run.
+Detector output is not trusted for recall. ML Kit stays the source of text; detector regions group it, not classify it as speech versus Sfx. Up to eight regions scoring at least 0.5 and claiming no OCR block get second-pass OCR with 10% padding, grown to at least 32 original pixels per side. A crop still decodes a full-width band before horizontal cropping, so this is not guaranteed cheaper than a second full-page pass. One failed region is skipped. A non-cancellation failure of the whole second pass keeps the first-pass blocks and writes no cache. Cancellation still propagates.
 
 ### Merge rules (pure Kotlin, in `translate/`)
 
-- A block is assigned to the region that contains at least 60% of its area (threshold to be tuned on the set); ties go to the smaller region.
-- Blocks in one `bubble`/`textInBubble` region are joined into one line in reading order, so a split bubble is one translation unit. Reading order inside a region: vertical text when the region's text height/width ratio exceeds about 1.5 (replaces the `source == ja/zh` guess), otherwise horizontal.
-- Blocks in `textFree` regions become `LineKind.Sfx` candidates: shown in the panel, not drawn on the page, as today for Sfx. The LLM may still correct the kind.
-- Blocks in no region are kept as they are today.
-- Recognizer selection: `auto` picks by script of the first pass, not always Japanese (resolves F2). The exact rule is chosen in the spike.
+- A block is assigned to its greatest covered-share region, with at least 60% coverage; ties prefer the smaller region.
+- Regions with 2–6 assigned blocks and area at most 35% of the page join those blocks in reading order. Vertical text uses pixel height/width at least 1.5; other text reads horizontally. The unit's box is the union of its text boxes, not the detector rectangle.
+- The chosen one-class model cannot identify `textFree` or `bubble` kinds. Free-text/Sfx separation still comes from the LLM's `kind`; phase 3 geometry will supply bubble-aware usable areas. The phase-2 detector does not itself assign `LineKind.Sfx`.
+- Unassigned blocks, single-block regions and regions outside the merge caps keep their blocks unchanged.
+- Recognizer selection remains as decided in phase 1: `auto` uses the Japanese recognizer, with no second script-selection pass.
 
 ### Bubble geometry
 
@@ -121,7 +121,7 @@ All figures below are from the model cards and release pages as read on 2026-11-
 | `huyvux3005/manga109-segmentation-bubble` (YOLO11n-seg) | Ultralytics export | Gives masks. Its metadata says `cc-by-nc-4.0` while the card body says Apache-2.0; unusable until the author resolves it. |
 | `dmMaze/comic-text-detector` | Torch/ONNX | GPL-3.0. |
 
-Runtime: ONNX Runtime loads the ONNX directly with no conversion; its maintainers pointed to 1.23 for 16 KB page-size support (issue #26228), which has not been checked in the AAR. LiteRT 2.3.2 (Apache-2.0, minSdk 23, `CompiledModel`) needs a `.tflite` conversion but adds GPU acceleration. ML Kit already ships its own native stack, so a second runtime is real APK weight. The spike measures both.
+Chosen phase-2 runtime: ONNX Runtime 1.32.0 basic-minimal CPU-4, arm64-v8a, exceptions enabled and telemetry disabled, with the bundled ORT-format nano model at 960 px. Its native LOAD segments are 16 KB aligned, but execution on a 16 KB-page device remains unmeasured; see [runtime packaging](../detector-runtime.md) and the [same-phone evaluation](../reports/2026-11-15-phase2-results.md). The table above records the earlier candidate research, not the shipped model's input size or runtime measurements.
 
 ### Licence (decided by the owner, 2026-11-15)
 
@@ -142,13 +142,13 @@ A fixed set of about 30 pages chosen by the owner (Japanese vertical, English ho
 - Plate fit: share of plates whose area stays inside the bubble, and overlapping plate pairs per page.
 - Per-stage p50/p95 and peak heap on the owner's phone.
 
-A phase ships only if it improves its metric on this set; the Phase 0 numbers are the baseline. No target numbers are fixed here because there is no baseline yet.
+A phase ships only if it improves its metric on this set. Phase 2 compares detector off/on on the same Xiaomi in the same session; phase 0 and phase 1 A069P numbers are context, not its baseline. Owner-marked coverage and plate-fit metrics remain unmeasured, so implementation completion does not establish the release-quality gate.
 
 ## Phases
 
 0. Baseline and spike (go/no-go): instrument current stage timings; run the candidate models in Python on the page set; read the ONNX class lists; build a throwaway app module build with ONNX Runtime and with LiteRT and record APK delta per ABI and the 16 KB alignment result; record the chosen model's licence and dataset terms. Output: a short report in `docs/reports/`, and the chosen model/runtime.
 1. No new dependency: raw single decode for MlKit (F1), script detection for `auto` (F2), separate gates (F7), OCR cache (F8), shared HTTP client and Coil reuse (F9), overlay layout off the main thread with one layout for measure and draw, balanced breaking, plate overlap avoidance, font-size band (F4 partial, F6).
-2. Detector: runtime dependency, model delivery (APK asset or first-use download with a hash check; to be chosen after the size result), `BubbleDetector`, tiling, merge rules, second-pass OCR on empty regions.
+2. Detector — implemented and measured: bundled nano YOLO26n 960, exception-enabled ORT-min CPU-4 for arm64-v8a, tiled OCR/detection, pure merge, second-pass OCR and cache v2. The [phase-2 report](../reports/2026-11-15-phase2-results.md) records higher latency/heap, remaining fragmentation, detector-null cache loss and second-pass failure; geometry and owner acceptance are not part of this completion claim.
 3. Bubble geometry: flood-fill usable area and fill colour, JSON fields, overlay switch to `area`, colour handling (F4, F5).
 4. Optional, only if the numbers justify it: multi-page LLM requests in Whole mode, segmentation mask in place of the flood fill, detector input for the Model engine's boxes (F10).
 
@@ -157,7 +157,7 @@ Each phase is independently releasable; Phase 1 does not depend on the detector.
 ## Risks
 
 - Recall: the nano model misses about 14% of text regions in its own test; this is why OCR text is the source of truth and regions are only used to group and shape.
-- Class semantics: if the chosen model has a single text class, free-text/Sfx separation and bubble outline come only from the flood fill, which weakens the quality gain; the RT-DETR model would need compression to be usable.
+- Class semantics: the chosen YOLO26n model has a single text class. Free-text/Sfx separation remains the LLM `kind` plus phase 3 geometry; the detector does not prove a bubble outline.
 - Flood fill on gradient, textured or open-outline bubbles can leak; geometry is clamped to the detected region and falls back to the text box expanded by the detector region when the filled area is implausible.
 - Native runtime growth in a universal APK and the 16 KB requirement; measured in Phase 0.
 - Tall strips and very large pages: tiling and the work-resolution cap bound memory; measured in Phase 0/1.

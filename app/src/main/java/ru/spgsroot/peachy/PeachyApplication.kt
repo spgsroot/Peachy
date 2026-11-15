@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.data.repository.SettingsRepository
 import ru.spgsroot.peachy.locale.LocaleManager
+import ru.spgsroot.peachy.translate.OrtBubbleDetector
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -17,6 +18,9 @@ class PeachyApplication : Application() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var bubbleDetector: OrtBubbleDetector
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -29,6 +33,11 @@ class PeachyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initializeSettings()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_BACKGROUND) bubbleDetector.release()
     }
 
     private fun initializeSettings() {

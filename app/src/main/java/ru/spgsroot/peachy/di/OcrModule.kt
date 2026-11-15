@@ -4,6 +4,8 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import ru.spgsroot.peachy.translate.BubbleDetector
+import ru.spgsroot.peachy.translate.OrtBubbleDetector
 import ru.spgsroot.peachy.translate.MlKitPageOcr
 import ru.spgsroot.peachy.translate.PageOcr
 
@@ -12,4 +14,7 @@ import ru.spgsroot.peachy.translate.PageOcr
 abstract class OcrModule {
     @Binds
     abstract fun bindPageOcr(implementation: MlKitPageOcr): PageOcr
+
+    @Binds
+    abstract fun bindBubbleDetector(implementation: OrtBubbleDetector): BubbleDetector
 }

@@ -41,20 +41,7 @@ internal fun groupOcrBlocks(
         val vertical = lines.count { it.rect.bottom - it.rect.top >= 1.5f * (it.rect.right - it.rect.left) } * 2 > lines.size
         if (vertical) verticalBlocks++
         val ordered = if (vertical) columns(lines) { it.rect } else rows(lines) { it.rect }.flatten()
-        var letters = 0
-        var cjk = 0
-        for (line in lines) {
-            val points = line.text.codePoints().iterator()
-            while (points.hasNext()) {
-                val point = points.nextInt()
-                if (!Character.isLetter(point)) continue
-                letters++
-                val script = Character.UnicodeScript.of(point)
-                if (script == Character.UnicodeScript.HAN || script == Character.UnicodeScript.HIRAGANA || script == Character.UnicodeScript.KATAKANA) cjk++
-            }
-        }
-        val separator = if (cjk * 2 > letters) "" else " "
-        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(separator) { it.text }, rect)), rect)
+        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(joinSeparator(lines.map { it.text })) { it.text }, rect)), rect)
     }
     val vertical = source == "ja" || source == "zh" || (source == "auto" && verticalBlocks * 2 > cleaned.size)
     return rows(cleaned) { it.rect }.flatMap { row ->
@@ -68,20 +55,43 @@ internal fun groupOcrBlocks(
     }
 }
 
-private fun overlap(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int): Boolean {
-    val shorter = minOf(aEnd.toLong() - aStart, bEnd.toLong() - bStart)
-    return shorter > 0 && (minOf(aEnd, bEnd).toLong() - maxOf(aStart, bStart)) * 2 >= shorter
+internal fun joinSeparator(texts: List<String>): String {
+    var letters = 0
+    var cjk = 0
+    for (text in texts) {
+        val points = text.codePoints().iterator()
+        while (points.hasNext()) {
+            val point = points.nextInt()
+            if (!Character.isLetter(point)) continue
+            letters++
+            val script = Character.UnicodeScript.of(point)
+            if (script == Character.UnicodeScript.HAN || script == Character.UnicodeScript.HIRAGANA || script == Character.UnicodeScript.KATAKANA) cjk++
+        }
+    }
+    return if (cjk * 2 > letters) "" else " "
 }
 
-private fun <T> rows(items: List<T>, rect: (T) -> PixelRect): List<List<T>> =
-    bands(items.sortedWith(compareBy({ rect(it).top }, { rect(it).left }))) { a, b ->
-        overlap(rect(a).top, rect(a).bottom, rect(b).top, rect(b).bottom)
-    }.map { row -> row.sortedWith(compareBy({ rect(it).left }, { rect(it).top })) }
+private fun overlap(aStart: Double, aEnd: Double, bStart: Double, bEnd: Double): Boolean {
+    val shorter = minOf(aEnd - aStart, bEnd - bStart)
+    return shorter > 0 && (minOf(aEnd, bEnd) - maxOf(aStart, bStart)) * 2 >= shorter
+}
 
-private fun <T> columns(items: List<T>, rect: (T) -> PixelRect): List<T> =
-    bands(items.sortedWith(compareByDescending<T> { rect(it).right }.thenBy { rect(it).top })) { a, b ->
-        overlap(rect(a).left, rect(a).right, rect(b).left, rect(b).right)
-    }.flatMap { column -> column.sortedWith(compareBy({ rect(it).top }, { rect(it).left })) }
+internal fun <T> rows(items: List<T>, rect: (T) -> PixelRect): List<List<T>> =
+    rows(items, { rect(it).left.toDouble() }, { rect(it).top.toDouble() }, { rect(it).bottom.toDouble() })
+
+// Coordinate overloads also handle fractional page boxes without quantizing them to pixel rows.
+internal fun <T> rows(items: List<T>, left: (T) -> Double, top: (T) -> Double, bottom: (T) -> Double): List<List<T>> =
+    bands(items.sortedWith(compareBy(top, left))) { a, b ->
+        overlap(top(a), bottom(a), top(b), bottom(b))
+    }.map { row -> row.sortedWith(compareBy(left, top)) }
+
+internal fun <T> columns(items: List<T>, rect: (T) -> PixelRect): List<T> =
+    columns(items, { rect(it).left.toDouble() }, { rect(it).top.toDouble() }, { rect(it).right.toDouble() })
+
+internal fun <T> columns(items: List<T>, left: (T) -> Double, top: (T) -> Double, right: (T) -> Double): List<T> =
+    bands(items.sortedWith(compareByDescending(right).thenBy(top))) { a, b ->
+        overlap(left(a), right(a), left(b), right(b))
+    }.flatMap { column -> column.sortedWith(compareBy(top, left)) }
 
 private fun <T> bands(items: List<T>, overlaps: (T, T) -> Boolean): List<List<T>> {
     val groups = mutableListOf<MutableList<T>>()
