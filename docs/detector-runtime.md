@@ -1,24 +1,24 @@
 # Vendored text detector runtime
 
-Task 1 of phase 2, measured on 2026-11-15. The app bundles ONNX Runtime 1.32.0 basic-minimal CPU for `arm64-v8a` and the YOLO26n ORT-format model. The rebuilt AAR declares **minSdk 26**; the previous spike AAR declared 27 and is not used. No `tools:overrideLibrary`, app minSdk change, ABI filter or `noCompress` change is needed.
+Task 1 of phase 2, measured on 2026-11-15. The app bundles ONNX Runtime 1.32.0 basic-minimal CPU for `arm64-v8a` with C++ exceptions enabled and the YOLO26n ORT-format model. The rebuilt AAR declares **minSdk 26**; the previous spike AAR declared 27 and is not used. No `tools:overrideLibrary`, app minSdk change, ABI filter or `noCompress` change is needed.
 
 ## Artifacts and verification
 
 | Vendored file | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `app/libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar` | 1,764,511 | `5ae11aa0f2f4043baf380c122bfae7969a55a1d7a6222e0ff730e7fddaf589ac` |
+| `app/libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar` | 2,012,345 | `9056463442826ec41474891032c630c9bfac87f8604b12d4c5267ebd77d0ee56` |
 | `app/src/main/assets/detector/yolo26n.ort` | 10,513,152 | `dc6b6341319acc41f115a5c7239f888e9ef344eb492447600d21a46d691506c2` |
 
 Native members extracted from this AAR, also verified byte-for-byte by SHA-256 in the assembled debug APK:
 
 | Member under `jni/arm64-v8a/` | Bytes | SHA-256 | LOAD segments / alignment |
 | --- | ---: | --- | --- |
-| `libonnxruntime.so` | 3,200,248 | `bf527d331550988481d2008288f8cf5317f44abdc0e04144418b6427378b6e69` | 3 / all `0x4000` |
+| `libonnxruntime.so` | 3,967,632 | `cf70a3a77fdb625888b332dcbdee7b07ef757f60f48645de3d0d30a5ce2e74e9` | 3 / all `0x4000` |
 | `libonnxruntime4j_jni.so` | 120,616 | `dc7e2be8b6fb86277d13f1c56b184dea570e61ff44bc1d1df7448b5165ec4b7e` | 2 / all `0x4000` |
 
-The native pair totals 3,320,864 bytes. Static libc++ is used; the AAR has no `libc++_shared.so`. `classes.jar` contains `ai.onnxruntime.OrtEnvironment`, `OrtSession` and `OnnxTensor`.
+The native pair totals 4,088,248 bytes. Static libc++ is used; the AAR has no `libc++_shared.so`. `classes.jar` contains `ai.onnxruntime.OrtEnvironment`, `OrtSession` and `OnnxTensor`.
 
-The universal debug APK built from this worktree changed from **87,521,316** to **99,159,924 bytes**, a measured increase of **11,638,608 bytes**. This includes the compressed model, runtime, Java/dex and packaging effects; it is not a release APK or Play download-size estimate. ZIP inspection found exactly:
+The exception-support follow-up measured clean universal debug APKs with the old and new AARs, keeping the model and app source identical: **97,102,517 → 97,872,565 bytes**, an increase of **770,048 bytes**. Both measurements used `:app:clean :app:assembleDebug`; incremental APK layout is not a reliable measure of this change's cost. The original Task 1 incremental measurement was 87,521,316 bytes without the detector versus 99,159,924 bytes with its exception-disabled runtime (+11,638,608); those historical figures are not directly comparable to this clean-build pair. These are debug APK sizes, not release APK or Play download-size estimates. ZIP inspection of the final APK found exactly:
 
 ```text
 lib/arm64-v8a/libonnxruntime.so
@@ -32,6 +32,20 @@ No ONNX Runtime library is present under any other ABI. The model extracted from
 
 This task verifies building and packaging, not Android inference. No phone or emulator was used. ELF LOAD alignment is not proof of execution on a 16 KB-page device or a complete APK zipalign check.
 
+### Cost of enabling C++ exceptions
+
+Compared with the exception-disabled API 26 AAR from commit `9d15ee3`; telemetry is off in both final compared builds:
+
+| Artifact | Exceptions disabled (bytes) | Exceptions enabled (bytes) | Increase |
+| --- | ---: | ---: | ---: |
+| `libonnxruntime.so` | 3,200,248 | 3,967,632 | 767,384 |
+| `libonnxruntime4j_jni.so` | 120,616 | 120,616 | 0 |
+| Arm64 native pair | 3,320,864 | 4,088,248 | 767,384 |
+| Compressed AAR | 1,764,511 | 2,012,345 | 247,834 |
+| Clean universal debug APK | 97,102,517 | 97,872,565 | 770,048 |
+
+The final native increase is below the owner's 4 MB-per-ABI stop threshold. An intermediate exception-enabled build without `--no_telemetry` enabled ORT's default 1DS telemetry: its native pair was 5,975,296 bytes (+2,654,432), and its AAR was 2,892,109 bytes (+1,127,598). It was not vendored. The coordinator approved adding `--no_telemetry` to retain the previous runtime's privacy behavior; the final cost above isolates exception support with telemetry off.
+
 ## Build pins
 
 | Component | Pin |
@@ -39,7 +53,7 @@ This task verifies building and packaging, not Android inference. No phone or em
 | ONNX Runtime | tag `v1.32.0`, commit `fab30a46491a40f5e4c968b80e8a59acbbb91b53` |
 | Build host | Debian WSL2, native Linux source/build directories |
 | Source | `/home/spgs/ort-1.32.0` |
-| New build directory | `/home/spgs/ort-min-work/android-api26` |
+| New build directory | `/home/spgs/ort-min-work/android-api26-exceptions` |
 | Android SDK / NDK | `/home/spgs/Android`; NDK r28c `28.2.13676358`, Clang 19.0.1 |
 | Native ABI / API | `arm64-v8a` / 26 |
 | Java | Temurin OpenJDK `17.0.21+9`, `/home/spgs/jdk17` |
@@ -74,6 +88,7 @@ com.microsoft;1;FusedMatMul,QuickGelu
 Run inside Debian WSL (`wsl.exe -d Debian --cd /home/spgs/ort-1.32.0 -- bash` from Windows). On a fresh source checkout, clone the pinned tag recursively first; clear inherited Windows Git worktree variables before using Linux Git.
 
 ```sh
+set -o pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 # Fresh checkout only:
 # git clone --depth 1 --branch v1.32.0 --recurse-submodules --shallow-submodules \
@@ -84,24 +99,78 @@ export ANDROID_HOME=/home/spgs/Android ANDROID_SDK_ROOT=/home/spgs/Android
 export OUT=/mnt/c/Users/spgs/Desktop/manga-tests-out/spike/ort-min
 
 /home/spgs/ort-min-work/venv/bin/python tools/ci_build/build.py \
-  --config Release --build_dir /home/spgs/ort-min-work/android-api26 \
+  --config Release --build_dir /home/spgs/ort-min-work/android-api26-exceptions \
   --update --build --skip_tests --parallel 6 --cmake_generator Ninja \
   --cmake_path /usr/bin/cmake --build_shared_lib --minimal_build \
   --include_ops_by_config "$OUT/B.config" --enable_reduced_operator_type_support \
-  --disable_ml_ops --disable_exceptions --build_java --android \
+  --disable_ml_ops --no_telemetry --build_java --android \
   --android_sdk_path /home/spgs/Android \
   --android_ndk_path /home/spgs/Android/ndk/28.2.13676358 \
-  --android_abi arm64-v8a --android_api 26
+  --android_abi arm64-v8a --android_api 26 \
+  2>&1 | tee "$OUT/logs/android-api26-exceptions-no-telemetry-build.log"
 
 export APP=/mnt/c/Users/spgs/orca/workspaces/VibePlayer/bubble-detector-runtime
 mkdir -p "$APP/app/libs"
-cp /home/spgs/ort-min-work/android-api26/Release/java/build/android/outputs/aar/onnxruntime-release.aar \
+cp /home/spgs/ort-min-work/android-api26-exceptions/Release/java/build/android/outputs/aar/onnxruntime-release.aar \
   "$APP/app/libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar"
 ```
 
 `--android_api 26` sets CMake `ANDROID_MIN_SDK`, which the pinned Java packaging passes as Gradle `-DminSdkVer`; both native targeting and manifest therefore use 26. The build completed successfully. ORT's packaging target also builds its example/test APKs, but no connected-device target was run.
 
-This is basic minimal, CPU provider only, ORT format only: original `.onnx` models are not supported. No XNNPACK, NNAPI or GPU provider is enabled. `--disable_exceptions` matches the measured spike build; exceptional native paths can abort rather than become catchable Java exceptions. Build/package success does not establish graceful recovery from every native failure.
+This is basic minimal, CPU provider only, ORT format only: original `.onnx` models are not supported. No XNNPACK, NNAPI or GPU provider is enabled. C++ exceptions are enabled by omitting `--disable_exceptions`, so native exceptions can reach ORT's C-API status/JNI error-conversion boundaries instead of being compiled out. `--no_telemetry` explicitly preserves the previous runtime's telemetry-off behavior: this pinned source otherwise enables telemetry by default when exceptions are available. The owner requested exception support to preserve the detector's error-fallback contract; no native OOM injection or Android Java-exception propagation test was performed.
+
+### Telemetry-off evidence
+
+Final Android `CMakeCache.txt` at `/home/spgs/ort-min-work/android-api26-exceptions/Release/` records:
+
+```text
+ANDROID_MIN_SDK:UNINITIALIZED=26
+onnxruntime_DISABLE_EXCEPTIONS:BOOL=OFF
+onnxruntime_DISABLE_ML_OPS:BOOL=ON
+onnxruntime_MINIMAL_BUILD:BOOL=ON
+onnxruntime_USE_TELEMETRY:BOOL=OFF
+```
+
+Compared the old and final AAR-extracted `libonnxruntime.so` using NDK r28c `llvm-nm -D -C` and `llvm-strings`: **0 added network/telemetry dynamic symbols; 0 added network/1DS strings**. The case-insensitive filter covered `1DS`, `telemetry`, `OneCollector`, `vortex`, `matsdk`, `curl`, `WinHttp`, `HttpClient`, HTTP(S) URLs and socket/connect/sendto/recvfrom/getaddrinfo names.
+
+The full string comparison does add four generic API/exception-diagnostic strings: `EnableTelemetryEvents`, `DisableTelemetryEvents`, `Error during telemetry flush: ` and `Unknown error during telemetry flush`. The pinned source's `core/platform/telemetry.cc` implements disabled telemetry (`IsEnabled()` is false and enable/disable methods do nothing); `core/session/inference_session.cc` contains the flush exception diagnostics. These strings are not evidence of a linked 1DS/network transport. Raw matching sets are retained outside Git in `ort-min/exception-telemetry-comparison.json`; this is static inspection, not a network capture.
+
+The first Android attempt stopped before CMake configuration while the host build was running against the same source; its expired background output did not establish a cause. A coordinator-approved serial retry succeeded, followed by Android-first/host-second telemetry-off builds with no source changes. Full logs are retained in `ort-min/logs/android-api26-exceptions-build.log`, `android-api26-exceptions-no-telemetry-build.log` and `host-exceptions-no-telemetry-build.log`; the final host smoke output is `host-exceptions-no-telemetry-smoke.log`.
+
+### Host inference and corrupt-model recovery smoke
+
+A separate Linux/x86_64 basic-minimal runtime was rebuilt with the same pinned source, `B.config`, type reduction and `--disable_ml_ops --no_telemetry`, also omitting `--disable_exceptions`. Its final CMake cache confirms both `onnxruntime_DISABLE_EXCEPTIONS:BOOL=OFF` and `onnxruntime_USE_TELEMETRY:BOOL=OFF`. Host smoke sources remain outside Git at `C:/Users/spgs/Desktop/manga-tests-out/spike/ort-min/{host_smoke.cpp,host_exception_smoke.cpp}`.
+
+The existing C-API smoke loaded the unchanged `yolo26n.ort` and completed zero-image inference at 960x960, reporting `output0 [1,300,6]` and `Dummy inference passed`. A second smoke passed a 64-byte prefix of that model to `CreateSession`; it returned `OrtStatus` code 1 with `ORT model verification failed`, released that status, and then loaded the valid model in the same process. Both commands exited 0; no process abort occurred. This verifies the corrupt-model error/status path on the exception-enabled host runtime, not that the same input necessarily aborted the old build or that every native failure is recoverable.
+
+Commands run in Debian WSL, from `/home/spgs/ort-1.32.0` for the build:
+
+```sh
+set -o pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+export PATH="/home/spgs/ort-min-work/venv/bin:$PATH"
+export OUT=/mnt/c/Users/spgs/Desktop/manga-tests-out/spike/ort-min
+/home/spgs/ort-min-work/venv/bin/python tools/ci_build/build.py \
+  --config Release --build_dir /home/spgs/ort-min-work/host-exceptions \
+  --update --build --skip_tests --parallel 4 --cmake_generator Ninja \
+  --cmake_path /usr/bin/cmake --build_shared_lib --minimal_build --disable_ml_ops --no_telemetry \
+  --include_ops_by_config "$OUT/B.config" --enable_reduced_operator_type_support \
+  2>&1 | tee "$OUT/logs/host-exceptions-no-telemetry-build.log"
+g++ -std=c++17 -O2 "$OUT/host_smoke.cpp" \
+  -I/home/spgs/ort-1.32.0/include/onnxruntime/core/session \
+  -L/home/spgs/ort-min-work/host-exceptions/Release \
+  -Wl,-rpath,/home/spgs/ort-min-work/host-exceptions/Release \
+  -lonnxruntime -o /home/spgs/ort-min-work/host_smoke_exceptions
+g++ -std=c++17 -O2 "$OUT/host_exception_smoke.cpp" \
+  -I/home/spgs/ort-1.32.0/include/onnxruntime/core/session \
+  -L/home/spgs/ort-min-work/host-exceptions/Release \
+  -Wl,-rpath,/home/spgs/ort-min-work/host-exceptions/Release \
+  -lonnxruntime -o /home/spgs/ort-min-work/host_exception_smoke
+/home/spgs/ort-min-work/host_smoke_exceptions "$OUT/models/yolo26n.ort" 960
+/home/spgs/ort-min-work/host_exception_smoke \
+  "$OUT/yolo26n-truncated.ort" "$OUT/models/yolo26n.ort"
+```
+
 
 ### Model provenance and copy
 
@@ -138,7 +207,7 @@ C:/Users/spgs/Desktop/manga-tests-out/spike/llvm-readelf.exe -lW \
   C:/Users/spgs/Desktop/manga-tests-out/spike/ort-min/api26-verification/jni/arm64-v8a/libonnxruntime4j_jni.so
 sha256sum app/libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar \
   app/src/main/assets/detector/yolo26n.ort
-cmd.exe /c "set JAVA_HOME=C:\Users\spgs\.jdks\jbr-21.0.11&&set ANDROID_HOME=C:\Users\spgs\AppData\Local\Android\Sdk&&gradlew.bat :app:assembleDebug :app:testDebugUnitTest --console=plain"
+cmd.exe /c "set JAVA_HOME=C:\Users\spgs\.jdks\jbr-21.0.11&&set ANDROID_HOME=C:\Users\spgs\AppData\Local\Android\Sdk&&gradlew.bat :app:clean :app:assembleDebug :app:testDebugUnitTest --console=plain"
 unzip -l app/build/outputs/apk/debug/app-debug.apk
 stat -c '%n %s bytes' app/build/outputs/apk/debug/app-debug.apk
 ```
