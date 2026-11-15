@@ -17,19 +17,34 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+
+internal const val OCR_WORK_SIDE = 2000
 
 /** Bundled models stay alive for the application lifetime; each heavy recognizer is created once. */
 @Singleton
 class MlKitPageOcr @Inject constructor() : PageOcr {
+    private val recognitionLock = Mutex()
     private val latin by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val japanese by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
     private val chinese by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
     private val korean by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
 
-    override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> = withContext(Dispatchers.Default) {
-        val bitmap = traced("decode") {
-            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-                ?: throw IOException("Cannot decode the page image")
+    override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> = withContext(Dispatchers.Default) {
+        recognitionLock.lock()
+        val bitmap = try {
+            traced("decode") {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(image, 0, image.size, bounds)
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = PageImage.sampleSize(bounds.outWidth, bounds.outHeight, OCR_WORK_SIDE)
+                }
+                BitmapFactory.decodeByteArray(image, 0, image.size, options)
+                    ?: throw IOException("Cannot decode the page image")
+            }
+        } catch (failure: Throwable) {
+            recognitionLock.unlock()
+            throw failure
         }
         val width = bitmap.width
         val height = bitmap.height
@@ -43,20 +58,26 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
         } catch (failure: Throwable) {
             bitmap.recycle()
+            recognitionLock.unlock()
             throw failure
         }
-        // ML Kit cannot cancel an in-flight process. Its completion listener owns the bitmap,
-        // including after coroutine cancellation, so native recognition never reads recycled pixels.
-        val text = traced("recognize") { awaitOcrTask(task) { bitmap.recycle() } }
-        traced("group") {
-        val blocks = text.textBlocks.mapNotNull { block ->
-            val box = block.boundingBox ?: return@mapNotNull null
-            RawOcrBlock(block.lines.mapNotNull { line ->
-                val lineBox = line.boundingBox ?: return@mapNotNull null
-                RawOcrLine(line.text, PixelRect(lineBox.left, lineBox.top, lineBox.right, lineBox.bottom), line.confidence)
-            }, PixelRect(box.left, box.top, box.right, box.bottom))
+        // Ownership passes to the task listener, including when the waiter is already cancelled.
+        // Never unlock in coroutine finally: the native task can still be reading this bitmap.
+        val text = traced("recognize") {
+            awaitOcrTask(task) {
+                bitmap.recycle()
+                recognitionLock.unlock()
+            }
         }
-        groupOcrBlocks(blocks, width, height, source)
+        traced("group") {
+            val blocks = text.textBlocks.mapNotNull { block ->
+                val box = block.boundingBox ?: return@mapNotNull null
+                RawOcrBlock(block.lines.mapNotNull { line ->
+                    val lineBox = line.boundingBox ?: return@mapNotNull null
+                    RawOcrLine(line.text, PixelRect(lineBox.left, lineBox.top, lineBox.right, lineBox.bottom), line.confidence)
+                }, PixelRect(box.left, box.top, box.right, box.bottom))
+            }
+            groupOcrBlocks(blocks, width, height, source)
         }
     }
 }

@@ -14,5 +14,5 @@ data class OcrBlock(val text: String, val box: Box)
  */
 interface PageOcr {
     /** Throws [java.io.IOException] when the page cannot be decoded and [kotlinx.coroutines.CancellationException] when cancelled. */
-    suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock>
+    suspend fun recognize(image: ByteArray, source: String): List<OcrBlock>
 }

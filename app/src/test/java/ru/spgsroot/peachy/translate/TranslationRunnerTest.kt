@@ -25,8 +25,18 @@ class TranslationRunnerTest {
     /** Page number travels in the first byte of the "image". */
     private class FakeSource : PageSource {
         val requested = mutableListOf<Int>()
+        val rawCalls = mutableListOf<Int>()
+        val jpegCalls = mutableListOf<Int>()
+        override suspend fun raw(galleryId: Int, page: Int): ByteArray {
+            rawCalls += page
+            return read(page)
+        }
         var failure: Exception? = null
         override suspend fun jpeg(galleryId: Int, page: Int): ByteArray {
+            jpegCalls += page
+            return read(page)
+        }
+        private fun read(page: Int): ByteArray {
             requested += page
             failure?.let { throw it }
             return byteArrayOf(page.toByte())
@@ -79,6 +89,14 @@ class TranslationRunnerTest {
     private fun TestScope.rig() = Rig(this)
 
     private fun failWith(error: TranslationError): suspend (Int) -> PageTranslation = { throw TranslationException(error) }
+    @Test fun mlKitEngineGetsRawBytesAndModelEngineGetsJpeg() = runTest {
+        val r = rig()
+        r.runner.translate(1, 0, "ru|mlkit|ja", TranslateRequest(TranslateEngine.MlKit, "ja", "ru"))
+        r.runner.translate(1, 1, "ru", russian)
+        assertEquals(listOf(0), r.source.rawCalls)
+        assertEquals(listOf(1), r.source.jpegCalls)
+    }
+
 
     @Test
     fun cacheHitSkipsTheTranslator() = runTest {

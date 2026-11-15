@@ -50,9 +50,7 @@ class PageEvalTest {
                 val bytes = traced("fetch") { file.readBytes() }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                // Baseline follows PageBytes.jpeg: same sampled encode and second OCR decode.
-                val image = traced("encode") { PageImage.encode(bytes) }
-                val blocks = ocr.recognize(image, source)
+                val blocks = ocr.recognize(bytes, source)
                 val page = fittedPage(1080f, 1920f, bounds.outWidth.toFloat() / bounds.outHeight)
                 val plates = traced("layout") {
                     blocks.map { plateFor(TranslatedLine(LineKind.Speech, it.text, it.text, it.box), page, measurer, density, TextStyle.Default) }

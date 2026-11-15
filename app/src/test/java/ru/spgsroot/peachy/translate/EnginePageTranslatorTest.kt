@@ -52,10 +52,10 @@ class EnginePageTranslatorTest {
         var source: String? = null
         var image: ByteArray? = null
 
-        override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> {
+        override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
             calls++
             this.source = source
-            image = jpeg
+            this.image = image
             return result
         }
     }
@@ -166,7 +166,7 @@ class EnginePageTranslatorTest {
     @Test
     fun ocrFailurePropagatesWithoutSendingAnImageToTheProvider() {
         val ocr = object : PageOcr {
-            override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> {
+            override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
                 throw IOException("cannot decode")
             }
         }

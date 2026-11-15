@@ -15,9 +15,10 @@ import okhttp3.Request
 import ru.spgsroot.peachy.data.manga.MangaLibraryRepository
 import ru.spgsroot.peachy.manga.NhentaiCdn
 
-/** Where the translator gets a page as a ready-to-send JPEG. */
+/** Where the translator gets original page bytes or an upload-ready JPEG. */
 interface PageSource {
     /** Throws [IOException] when the page cannot be fetched and [IllegalArgumentException] when it is not an image. */
+    suspend fun raw(galleryId: Int, page: Int): ByteArray
     suspend fun jpeg(galleryId: Int, page: Int): ByteArray
 }
 
@@ -77,10 +78,14 @@ class PageBytes @Inject constructor(private val library: MangaLibraryRepository)
         paths = pagePaths
     }
 
-    override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
+    override suspend fun raw(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
         val path = paths.getOrNull(page) ?: throw IllegalArgumentException("No page $page")
         val local = library.localPage(galleryId, path)?.takeIf { it.isFile }
-        val bytes = traced("fetch") { local?.readBytes() ?: download(path) }
+        traced("fetch") { local?.readBytes() ?: download(path) }
+    }
+
+    override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
+        val bytes = raw(galleryId, page)
         traced("encode") { PageImage.encode(bytes) }
     }
 
