@@ -84,6 +84,8 @@ class EnginePageTranslatorTest {
             this.image = image
             return result
         }
+
+        override suspend fun recognizeRegions(image: ByteArray, source: String, regions: List<Box>): List<OcrBlock> = emptyList()
     }
 
     @Test
@@ -184,6 +186,8 @@ class EnginePageTranslatorTest {
             override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
                 throw IOException("cannot decode")
             }
+
+            override suspend fun recognizeRegions(image: ByteArray, source: String, regions: List<Box>): List<OcrBlock> = emptyList()
         }
         try {
             runBlocking { translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "auto", "en")) { jpeg } }
