@@ -1,6 +1,5 @@
 package ru.spgsroot.peachy.translate
 
-import android.graphics.BitmapFactory
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -34,13 +33,7 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
         recognitionLock.lock()
         val bitmap = try {
             traced("decode") {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(image, 0, image.size, bounds)
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = PageImage.sampleSize(bounds.outWidth, bounds.outHeight, OCR_WORK_SIDE)
-                }
-                BitmapFactory.decodeByteArray(image, 0, image.size, options)
-                    ?: throw IOException("Cannot decode the page image")
+                PageDecode.decode(image, OCR_WORK_SIDE)
             }
         } catch (failure: Throwable) {
             recognitionLock.unlock()
