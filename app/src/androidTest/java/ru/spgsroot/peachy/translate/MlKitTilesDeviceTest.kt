@@ -40,6 +40,36 @@ class MlKitTilesDeviceTest {
         assertEquals(emptyList<OcrBlock>(), MlKitPageOcr().recognizeRegions(byteArrayOf(1, 2, 3), "en", emptyList()))
     }
 
+    @Test fun narrowRegionOnTallPageDoesNotLoseTheNextRegion() = runBlocking {
+        val image = page(800, 6000, listOf("ALPHA" to 300))
+        val blocks = MlKitPageOcr().recognizeRegions(image, "en", listOf(
+            Box(0.5f, 0.7f, 0.51625f, 0.72f),
+            Box(0.08f, 0.025f, 0.75f, 0.06f)
+        ))
+        assertEquals(listOf("ALPHA"), blocks.map { it.text })
+    }
+
+    @Test fun regionFullyOutsideTextIsEmpty() = runBlocking {
+        val image = page(800, 6000, listOf("ALPHA" to 300))
+        assertEquals(emptyList<OcrBlock>(), MlKitPageOcr().recognizeRegions(image, "en",
+            listOf(Box(0.1f, 0.5f, 0.8f, 0.6f))))
+    }
+
+    @Test fun pageTooNarrowForRegionOcrIsSkipped() = runBlocking {
+        val image = page(20, 200, emptyList())
+        assertEquals(emptyList<OcrBlock>(), MlKitPageOcr().recognizeRegions(image, "en",
+            listOf(Box(0f, 0f, 1f, 1f))))
+    }
+
+    @Test fun sampledNarrowCropKeepsTheOcrMinimum() = runBlocking {
+        val image = page(5000, 800, listOf("ALPHA" to 300))
+        val blocks = MlKitPageOcr().recognizeRegions(image, "en", listOf(
+            Box(0.8f, 0.2f, 0.8064f, 0.6f),
+            Box(0.01f, 0.15f, 0.16f, 0.5f)
+        ))
+        assertEquals(listOf("ALPHA"), blocks.map { it.text })
+    }
+
     @Test fun cancellingStripOcrReleasesTheLock() = runBlocking {
         val ocr = MlKitPageOcr()
         val strip = page(800, 6000, listOf("ALPHA" to 300, "ECHO" to 5700))

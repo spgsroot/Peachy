@@ -69,12 +69,19 @@ class EnginePageTranslator internal constructor(
         val silent = regions.filter { region ->
             region.score >= SECOND_PASS_SCORE && blocks.none { blockShare(it.box, region.box) >= ASSIGN_SHARE }
         }.sortedByDescending { it.score }.take(SECOND_PASS_LIMIT).map { it.box }
-        val extra = if (silent.isEmpty()) emptyList() else traced("ocr2") {
-            PageTiles.dedupeSeams(ocr.recognizeRegions(image, source, silent), { it.box }) { a, b ->
-                val aArea = (a.box.right - a.box.left) * (a.box.bottom - a.box.top)
-                val bArea = (b.box.right - b.box.left) * (b.box.bottom - b.box.top)
-                if (aArea >= bArea) a else b
+        val extra = try {
+            if (silent.isEmpty()) emptyList() else traced("ocr2") {
+                PageTiles.dedupeSeams(ocr.recognizeRegions(image, source, silent), { it.box }) { a, b ->
+                    val aArea = (a.box.right - a.box.left) * (a.box.bottom - a.box.top)
+                    val bArea = (b.box.right - b.box.left) * (b.box.bottom - b.box.top)
+                    if (aArea >= bArea) a else b
+                }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            // Do not cache an incomplete scan: a retry must be able to recover the second pass.
+            return@coroutineScope PageScan(blocks, emptyList(), aspect)
         }
         val combined = if (extra.isEmpty()) blocks else orderPage(blocks + extra, aspect)
         PageScan(combined, regions, aspect).also { ocrCache.put(galleryId, page, source, it) }

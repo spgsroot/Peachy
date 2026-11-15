@@ -18,6 +18,7 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -58,31 +59,45 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
         if (regions.isEmpty()) return emptyList()
         return withContext(Dispatchers.Default) {
             val (width, height) = PageDecode.size(image)
+            if (width < MIN_OCR_SIDE || height < MIN_OCR_SIDE) return@withContext emptyList()
             val blocks = mutableListOf<RawOcrBlock>()
             for (region in regions) {
-                val padX = (region.right - region.left) * 0.1f
-                val padY = (region.bottom - region.top) * 0.1f
-                val rect = PixelRect(
-                    floor((region.left - padX) * width).toInt().coerceIn(0, width),
-                    floor((region.top - padY) * height).toInt().coerceIn(0, height),
-                    ceil((region.right + padX) * width).toInt().coerceIn(0, width),
-                    ceil((region.bottom + padY) * height).toInt().coerceIn(0, height)
-                )
-                if (rect.left >= rect.right || rect.top >= rect.bottom) continue
-                val read = readBitmap(source) {
-                    val tile = PageDecode.decodeTile(image, PageTile(rect.top, rect.bottom), OCR_WORK_SIDE)
-                    try {
-                        val left = (rect.left.toLong() * tile.width / width).toInt()
-                        val right = ((rect.right.toLong() * tile.width + width - 1) / width).toInt()
-                        Bitmap.createBitmap(tile, left, 0, right - left, tile.height).also { crop ->
-                            if (crop !== tile) tile.recycle()
+                coroutineContext.ensureActive()
+                try {
+                    val padX = (region.right - region.left) * 0.1f
+                    val padY = (region.bottom - region.top) * 0.1f
+                    val left = floor((region.left - padX) * width).toInt().coerceIn(0, width)
+                    val top = floor((region.top - padY) * height).toInt().coerceIn(0, height)
+                    val right = ceil((region.right + padX) * width).toInt().coerceIn(0, width)
+                    val bottom = ceil((region.bottom + padY) * height).toInt().coerceIn(0, height)
+                    if (left >= right || top >= bottom) continue
+                    val cropWidth = maxOf(MIN_OCR_SIDE, right - left)
+                    val cropHeight = maxOf(MIN_OCR_SIDE, bottom - top)
+                    val cropLeft = (left - (cropWidth - (right - left)) / 2).coerceIn(0, width - cropWidth)
+                    val cropTop = (top - (cropHeight - (bottom - top)) / 2).coerceIn(0, height - cropHeight)
+                    val rect = PixelRect(cropLeft, cropTop, cropLeft + cropWidth, cropTop + cropHeight)
+                    var sample = PageImage.sampleSize(width, cropHeight, OCR_WORK_SIDE)
+                    while (sample > 1 && (cropWidth / sample < MIN_OCR_SIDE || cropHeight / sample < MIN_OCR_SIDE)) sample /= 2
+                    val maxSide = maxOf(OCR_WORK_SIDE, maxOf(width, cropHeight) / sample)
+                    val read = readBitmap(source) {
+                        val tile = PageDecode.decodeTile(image, PageTile(rect.top, rect.bottom), maxSide)
+                        try {
+                            val x = (rect.left.toLong() * tile.width / width).toInt()
+                            val end = ((rect.right.toLong() * tile.width + width - 1) / width).toInt()
+                            Bitmap.createBitmap(tile, x, 0, end - x, tile.height).also { crop ->
+                                if (crop !== tile) tile.recycle()
+                            }
+                        } catch (failure: Throwable) {
+                            tile.recycle()
+                            throw failure
                         }
-                    } catch (failure: Throwable) {
-                        tile.recycle()
-                        throw failure
                     }
+                    blocks += read.onPage(rect)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    // One unreadable region must not discard other regions or first-pass text.
                 }
-                blocks += read.onPage(rect)
             }
             traced("group") { groupOcrBlocks(blocks, width, height, source) }
         }
@@ -99,6 +114,11 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
         }
         val width = bitmap.width
         val height = bitmap.height
+        if (width < MIN_OCR_SIDE || height < MIN_OCR_SIDE) {
+            bitmap.recycle()
+            recognitionLock.unlock()
+            throw IOException("OCR region is smaller than $MIN_OCR_SIDE pixels")
+        }
         val task = try {
             coroutineContext.ensureActive()
             val recognizer = when (source) {
@@ -132,6 +152,8 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
         return BitmapRead(blocks, width, height)
     }
 }
+
+private const val MIN_OCR_SIDE = 32
 
 private data class BitmapRead(val blocks: List<RawOcrBlock>, val width: Int, val height: Int) {
     fun onPage(rect: PixelRect): List<RawOcrBlock> {

@@ -86,6 +86,7 @@ class EnginePageTranslatorTest {
         var requestedRegions = emptyList<Box>()
         var regionCalls = 0
         var beforeRecognize: suspend () -> Unit = {}
+        var beforeRegions: suspend () -> Unit = {}
 
         override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
             beforeRecognize()
@@ -96,6 +97,7 @@ class EnginePageTranslatorTest {
         }
 
         override suspend fun recognizeRegions(image: ByteArray, source: String, regions: List<Box>): List<OcrBlock> {
+            beforeRegions()
             regionCalls++
             requestedRegions = regions
             return extra
@@ -288,6 +290,35 @@ class EnginePageTranslatorTest {
         assertEquals(1, ocr.regionCalls)
         assertEquals("FOUND", result.lines.single().text)
         assertEquals(listOf(extra), cache.scan!!.blocks)
+    }
+
+    @Test fun secondPassFailureKeepsFirstPassBlocksAndWritesNoCache() = runBlocking {
+        for (failure in listOf(IOException("decode failed"), AssertionError("native failure"))) {
+            val ocr = FakeOcr(blocks).apply { beforeRegions = { throw failure } }
+            val cache = MemoryCache()
+            val regions = listOf(
+                Region(Box(0f, 0f, 1f, 0.05f), 0.9f),
+                Region(Box(0f, 0.1f, 0.9f, 0.95f), 0.9f)
+            )
+            replyUnits(2)
+            val result = scan(translator(ocr, FakeDetector(regions), cache))
+            assertEquals(blocks.map { it.text }, result.lines.map { it.text })
+            assertEquals(blocks.map { it.box }, result.lines.map { it.box })
+            assertEquals(0, cache.writes)
+        }
+    }
+
+    @Test fun secondPassCancellationPropagates() = runBlocking {
+        val ocr = FakeOcr(blocks).apply { beforeRegions = { throw CancellationException("region cancelled") } }
+        val cache = MemoryCache()
+        try {
+            scan(translator(ocr, FakeDetector(listOf(Region(Box(0f, 0f, 1f, 0.05f), 0.9f))), cache))
+            org.junit.Assert.fail("Second-pass cancellation swallowed")
+        } catch (cancelled: CancellationException) {
+            assertEquals("region cancelled", cancelled.message)
+        }
+        assertEquals(0, cache.writes)
+        assertEquals(0, server.requestCount)
     }
 
     @Test fun lowScoreRegionDoesNotTriggerSecondPass() = runBlocking {

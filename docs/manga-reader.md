@@ -84,9 +84,9 @@ its columns read right-to-left, top-to-bottom; other blocks use rows top-to-bott
 Mostly kana/Han text joins without spaces; other scripts join with spaces. Page rows use columns
 right-to-left for `ja`/`zh` and for `auto` when most retained blocks are vertical, otherwise left-to-right.
 Boxes are clipped and expressed as page fractions. Interval rules remain in `OcrGrouping.kt`.
-The synthetic eight-height 800 × 12000 strip is read at all eight heights. The older stacked-page
-strip recovers 95 first-pass blocks instead of zero on the same Xiaomi, but its second pass fails
-on an undersized crop; this is not a successful end-to-end strip translation.
+The synthetic eight-height 800 × 12000 strip is read at all eight heights. After the Task 10
+minimum-crop/failure-isolation fix, the older stacked-page strip completes with 95 first-pass
+blocks and three second-pass blocks on the same Xiaomi; provider translation remains untested.
 
 ### On-device text detector and merge
 
@@ -107,17 +107,22 @@ geometric reading order, with the union of their text boxes. Other blocks remain
 This groups text, not bubble outlines; provider `kind` still separates speech and sound effects.
 
 Up to eight regions scoring at least 0.5 and claiming no first-pass block get a second OCR
-pass with 10% padding clipped to the page. Duplicate second-pass blocks are removed, and
-the resulting blocks are reordered on the original page before merge. A region crop currently
-decodes a full-width band before cropping horizontally.
+pass with 10% padding clipped to the page. Each padded rectangle grows symmetrically to at
+least 32 original pixels per side, shifting inside page edges as necessary; a page smaller than
+32 pixels in either dimension skips region OCR. Sampling preserves that minimum on the
+decoded crop, and an undersized decoder result is rejected before ML Kit sees it.
+Duplicate second-pass blocks are removed, and the resulting blocks are reordered before merge.
+A region crop currently decodes a full-width band before cropping horizontally.
 
 Unavailable ABI/model/runtime or a non-cancellation detector failure falls back to the first
 OCR pass without detector grouping or a second pass. `null` means unavailable/failed;
-an empty region list is a valid result. Cancellation propagates and nothing is cached on
-OCR/second-pass failure. A detector-null scan is also not cached, including on non-arm64
-devices; this loses the earlier OCR-cache benefit on that path. Second-pass failures currently
-fail the whole page rather than keeping first-pass text; crops below ML Kit's 32 px minimum
-demonstrated this on the stacked strip. These limitations remain open.
+an empty region list is a valid result. Cancellation always propagates. Failure to decode or
+recognize one second-pass region skips only that region, retaining other successful regions
+and first-pass text; native bitmap/lock ownership still ends only when the task finishes.
+If the entire second-pass call fails for another non-cancellation reason, translation uses the
+first-pass blocks without detector grouping and does not cache that incomplete scan.
+A detector-null scan is also not cached, including on non-arm64 devices; this still loses the
+earlier OCR-cache benefit on that path. First-pass OCR failure remains a page failure.
 
 
 ### OCR cache
