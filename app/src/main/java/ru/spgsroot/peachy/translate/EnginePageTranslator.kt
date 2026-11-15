@@ -5,13 +5,16 @@ import javax.inject.Inject
 /** Selects image recognition by the provider or on-device OCR followed by text-only translation. */
 class EnginePageTranslator @Inject constructor(
     private val client: TranslationClient,
-    private val ocr: PageOcr
+    private val ocr: PageOcr,
+    private val ocrCache: OcrCache
 ) : PageTranslator {
-    override suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation =
+    override suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation =
         when (request.engine) {
-            TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, jpeg, request) }
+            TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, page, request, image) }
             TranslateEngine.MlKit -> {
-                val blocks = ocr.recognize(jpeg, request.source)
+                val blocks = ocrCache.get(galleryId, page, request.source) ?: ocr.recognize(image(), request.source).also {
+                    ocrCache.put(galleryId, page, request.source, it)
+                }
                 val source = if (request.source == "auto") "" else request.source
                 if (blocks.isEmpty()) {
                     PageTranslation(source, emptyList())

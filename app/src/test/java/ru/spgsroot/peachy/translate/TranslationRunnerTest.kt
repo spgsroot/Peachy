@@ -53,8 +53,8 @@ class TranslationRunnerTest {
             PageTranslation("ja", listOf(TranslatedLine(LineKind.Speech, "ハ", "p$page")))
         }
 
-        override suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation {
-            val page = jpeg[0].toInt()
+        override suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation {
+            image()
             requested += page
             options += request
             maxInFlight = maxOf(maxInFlight, inFlight.incrementAndGet())

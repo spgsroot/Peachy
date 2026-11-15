@@ -22,7 +22,7 @@ import org.json.JSONObject
 
 interface PageTranslator {
     /** Reads one page using [request] and returns translated text; throws [TranslationException]. */
-    suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation
+    suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation
 }
 
 /** A translated OCR block, identified by its zero-based position in the input. */
@@ -51,8 +51,10 @@ class TranslationClient(
         .followSslRedirects(false)
         .build()
 
-    override suspend fun translate(galleryId: Int, jpeg: ByteArray, request: TranslateRequest): PageTranslation =
-        complete(galleryId, { pageBody(it, jpeg, request) }, PageTranslation::parse)
+    override suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation {
+        val jpeg = image()
+        return complete(galleryId, { pageBody(it, jpeg, request) }, PageTranslation::parse)
+    }
 
     suspend fun translateBlocks(
         galleryId: Int,

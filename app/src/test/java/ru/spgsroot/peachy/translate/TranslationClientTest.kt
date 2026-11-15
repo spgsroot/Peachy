@@ -55,7 +55,7 @@ class TranslationClientTest {
     private fun reply(content: String) = server.enqueue(MockResponse().setBody(envelope(content)))
 
     private fun translate() = runBlocking {
-        client().translate(7, byteArrayOf(1, 2, 3), TranslateRequest(TranslateEngine.Model, "auto", "ru"))
+        client().translate(7, 0, TranslateRequest(TranslateEngine.Model, "auto", "ru")) { byteArrayOf(1, 2, 3) }
     }
 
     private fun translateBlocks() = runBlocking { client().translateBlocks(7, blocks, "ja", "ru") }
