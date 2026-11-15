@@ -27,7 +27,26 @@ object ShareIntents {
         intent.clipData?.let { clip ->
             for (index in 0 until clip.itemCount) clip.getItemAt(index).uri?.let(uris::add)
         }
-        return uris.distinct()
+        // A web address is a download request, not a shared file: links() handles it.
+        return uris.filterNot { ShareUriPolicy.isLink(it.toString()) }.distinct()
+    }
+
+    /**
+     * The links another app asked Peachy to download: the address of a VIEW intent, or the links in
+     * the text of a SEND. An intent that also carries files is a file share, so its text is ignored.
+     */
+    fun links(intent: Intent?): List<String> = try {
+        when {
+            intent == null -> emptyList()
+            intent.action == Intent.ACTION_VIEW -> ShareLinks.extract(intent.dataString)
+            intent.action == Intent.ACTION_SEND && candidates(intent).isEmpty() ->
+                ShareLinks.extract(intent.getCharSequenceExtra(Intent.EXTRA_TEXT))
+            else -> emptyList()
+        }
+    } catch (_: BadParcelableException) {
+        emptyList()
+    } catch (_: ClassCastException) {
+        emptyList()
     }
 
     fun streams(intent: Intent?): List<Uri> = try {
@@ -49,7 +68,16 @@ object ShareIntents {
 
     fun forward(context: Context, source: Intent?): Intent? {
         val uris = streams(source)
-        if (uris.isEmpty()) return null
+        if (uris.isEmpty()) {
+            val links = links(source)
+            if (links.isEmpty()) return null
+            return Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_SEND
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, links.joinToString("\n"))
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        }
         return Intent(context, MainActivity::class.java).apply {
             action = if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE
             type = source?.type

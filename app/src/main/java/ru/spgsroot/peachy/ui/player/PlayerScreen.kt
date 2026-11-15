@@ -174,10 +174,12 @@ fun PlayerScreen(
                         },
                         deviceState = deviceState,
                         devices = devices,
-                        activeDeviceIndex = activeDeviceIndex
+                        activeDeviceIndex = activeDeviceIndex,
+                        queue = queue,
+                        currentId = currentId,
+                        onSelectVideo = viewModel::playVideo,
+                        onSwitchVideo = { direction -> if (direction > 0) viewModel.onNext() else viewModel.onPrevious() }
                     )
-
-                    if (!isFullscreen) QueueCarousel(queue, currentId, viewModel::playVideo)
                 }
             }
         }

@@ -19,13 +19,16 @@ import ru.spgsroot.peachy.playback.player.ExoPlayerWrapper
 import androidx.compose.ui.res.stringResource
 import ru.spgsroot.peachy.R
 
-private enum class Drag { None, Seek, Brightness, Volume, Pan, Pinch }
+private enum class Drag { None, Switch, Brightness, Volume, Pan, Pinch }
+
+/** A horizontal swipe longer than this share of the width switches the video. */
+private const val SWITCH_FRACTION = .2f
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun Modifier.playerGestures(
     player: ExoPlayerWrapper, zoom: Float, onZoom: (Float) -> Unit, onPan: (Offset) -> Unit,
-    onSeek: (Long) -> Unit, onInteraction: () -> Unit, onFeedback: (String) -> Unit
+    onSwitch: (Int) -> Unit, onInteraction: () -> Unit, onFeedback: (String) -> Unit
 ): Modifier {
     val activity = LocalActivity.current
     val audio = LocalContext.current.getSystemService(AudioManager::class.java)
@@ -34,7 +37,7 @@ fun Modifier.playerGestures(
     val latestZoom by rememberUpdatedState(zoom)
     val latestPan by rememberUpdatedState(onPan)
     val latestScale by rememberUpdatedState(onZoom)
-    val latestSeek by rememberUpdatedState(onSeek)
+    val latestSwitch by rememberUpdatedState(onSwitch)
     DisposableEffect(activity) {
         val original = activity?.window?.attributes?.screenBrightness
         onDispose { if (original != null && activity != null) activity.window.attributes = activity.window.attributes.apply { screenBrightness = original } }
@@ -44,9 +47,6 @@ fun Modifier.playerGestures(
             val down = awaitFirstDown(requireUnconsumed = false)
             var drag = Drag.None
             var total = Offset.Zero
-            val startPosition = player.getCurrentPosition().coerceAtLeast(0)
-            val duration = player.getPlayer().duration.coerceAtLeast(0)
-            var seek = startPosition
             val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val startVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             val startBrightness = activity?.window?.attributes?.screenBrightness?.takeIf { it >= 0 } ?: 0.5f
@@ -67,17 +67,14 @@ fun Modifier.playerGestures(
                 if (drag == Drag.None && total.getDistance() > viewConfiguration.touchSlop) {
                     drag = when {
                         latestZoom > 1.01f -> Drag.Pan
-                        abs(total.x) > abs(total.y) -> Drag.Seek
+                        abs(total.x) > abs(total.y) -> Drag.Switch
                         down.position.x < size.width * .35f -> Drag.Brightness
                         down.position.x > size.width * .65f -> Drag.Volume
                         else -> Drag.None
                     }
                 }
                 when (drag) {
-                    Drag.Seek -> {
-                        seek = (startPosition + total.x / size.width * duration).toLong().coerceIn(0, duration)
-                        onFeedback("${seek / 60000}:${(seek / 1000 % 60).toString().padStart(2, '0')}")
-                    }
+                    Drag.Switch -> Unit
                     Drag.Brightness -> {
                         val value = (startBrightness - total.y / size.height).coerceIn(.01f, 1f)
                         activity?.window?.let { window -> window.attributes = window.attributes.apply { screenBrightness = value } }
@@ -93,7 +90,7 @@ fun Modifier.playerGestures(
                 }
                 if (drag != Drag.None) { change.consume(); onInteraction() }
             } while (event.changes.any { it.pressed })
-            if (drag == Drag.Seek) latestSeek(seek)
+            if (drag == Drag.Switch && abs(total.x) > size.width * SWITCH_FRACTION) latestSwitch(if (total.x < 0) 1 else -1)
         }
     }
 }

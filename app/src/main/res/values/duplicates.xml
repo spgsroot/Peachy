@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="duplicate_video_message">Дубль: это видео уже есть в галерее как «%1$s», файл не добавлен</string>
+    <string name="duplicate_dialog_title">Такое видео уже есть</string>
+    <string name="duplicate_dialog_text">«%1$s» полностью совпадает с видео «%2$s» из галереи. Файл пока не добавлен.</string>
+    <string name="duplicate_add_anyway">Добавить всё равно</string>
+    <string name="duplicate_skip">Пропустить</string>
+    <string name="share_import_result_duplicates">Импортировано: %1$d, ошибок: %2$d, дублей: %3$d</string>
+    <string name="share_no_link">В полученном тексте нет ссылки на видео</string>
+    <string name="share_download_started">Скачивание началось: %1$d. Видео появится в галерее, когда загрузится</string>
+    <string name="browser_video_duplicate">Такое видео уже есть в галерее</string>
+</resources>

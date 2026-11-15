@@ -16,6 +16,7 @@ import ru.spgsroot.peachy.device.buttplug.ButtplugDevice
 import ru.spgsroot.peachy.device.buttplug.DeviceState
 import ru.spgsroot.peachy.playback.player.ExoPlayerWrapper
 import ru.spgsroot.peachy.playback.player.PlayerState
+import ru.spgsroot.peachy.domain.model.Video
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -37,7 +38,11 @@ fun PlayerContent(
     onResetZoom: () -> Unit,
     deviceState: DeviceState,
     devices: List<ButtplugDevice>,
-    activeDeviceIndex: Int?
+    activeDeviceIndex: Int?,
+    queue: List<Video>,
+    currentId: Long?,
+    onSelectVideo: (Video) -> Unit,
+    onSwitchVideo: (Int) -> Unit
 ) {
     Box(
         modifier = modifier
@@ -93,7 +98,11 @@ fun PlayerContent(
             onResetZoom = onResetZoom,
             deviceState = deviceState,
             devices = devices,
-            activeDeviceIndex = activeDeviceIndex
+            activeDeviceIndex = activeDeviceIndex,
+            queue = queue,
+            currentId = currentId,
+            onSelectVideo = onSelectVideo,
+            onSwitchVideo = onSwitchVideo
         )
     }
 }

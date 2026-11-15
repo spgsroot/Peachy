@@ -9,5 +9,6 @@ data class Video(
     val addedAt: Long,
     val fileSize: Long,
     val isCorrupted: Boolean = false,
-    val albumId: Long? = null
+    val albumId: Long? = null,
+    val contentHash: String? = null
 )

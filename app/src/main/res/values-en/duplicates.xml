@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="duplicate_video_message">Duplicate: this video is already in the gallery as “%1$s”, file not added</string>
+    <string name="duplicate_dialog_title">This video is already here</string>
+    <string name="duplicate_dialog_text">“%1$s” is identical to “%2$s” in the gallery. It has not been added yet.</string>
+    <string name="duplicate_add_anyway">Add anyway</string>
+    <string name="duplicate_skip">Skip</string>
+    <string name="share_import_result_duplicates">%1$d imported, %2$d failed, %3$d duplicates</string>
+    <string name="share_no_link">The received text has no link to a video</string>
+    <string name="share_download_started">Download started: %1$d. The video will appear in the gallery when it finishes</string>
+    <string name="browser_video_duplicate">This video is already in the gallery</string>
+</resources>

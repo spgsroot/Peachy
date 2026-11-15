@@ -7,7 +7,7 @@ import androidx.room.Index
 
 @Entity(tableName = "videos",
     foreignKeys = [ForeignKey(entity = AlbumEntity::class, parentColumns = ["id"], childColumns = ["albumId"], onDelete = ForeignKey.SET_NULL)],
-    indices = [Index("albumId")])
+    indices = [Index("albumId"), Index("contentHash")])
 data class VideoEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -18,5 +18,7 @@ data class VideoEntity(
     val addedAt: Long,
     val fileSize: Long,
     val isCorrupted: Boolean = false,
-    val albumId: Long? = null
+    val albumId: Long? = null,
+    /** SHA-256 of the file as lowercase hex; null until it has been computed. */
+    val contentHash: String? = null
 )

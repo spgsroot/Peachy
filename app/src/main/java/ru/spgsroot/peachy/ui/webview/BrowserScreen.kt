@@ -83,6 +83,8 @@ import ru.spgsroot.peachy.browser.BrowserUrls
 import ru.spgsroot.peachy.browser.FoundVideo
 import ru.spgsroot.peachy.browser.MediaKind
 import ru.spgsroot.peachy.data.browser.BrowserStore
+import ru.spgsroot.peachy.data.storage.DuplicateVideoException
+import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
 import ru.spgsroot.peachy.ui.dialog.NoteDialog
 
 private enum class Sheet { TABS, BOOKMARKS, HISTORY, VIDEOS }
@@ -126,6 +128,7 @@ fun BrowserScreen(
 
     val msgSaved = stringResource(R.string.browser_video_saved)
     val msgFailed = stringResource(R.string.browser_video_failed)
+    val msgDuplicate = stringResource(R.string.browser_video_duplicate)
     val msgStream = stringResource(R.string.browser_video_stream)
     val msgUpdating = stringResource(R.string.browser_filters_updating)
     val msgUpdateFailed = stringResource(R.string.browser_filters_failed)
@@ -336,7 +339,13 @@ fun BrowserScreen(
                             say(
                                 result.fold(
                                     onSuccess = { msgSaved },
-                                    onFailure = { if (video.kind == MediaKind.STREAM) msgStream else msgFailed }
+                                    onFailure = {
+                                        when {
+                                            it is DuplicateVideoException -> msgDuplicate
+                                            video.kind == MediaKind.STREAM -> msgStream
+                                            else -> msgFailed
+                                        }
+                                    }
                                 )
                             )
                         }
@@ -346,6 +355,8 @@ fun BrowserScreen(
             }
         }
     }
+
+    DuplicateVideoHost()
 }
 
 @Composable

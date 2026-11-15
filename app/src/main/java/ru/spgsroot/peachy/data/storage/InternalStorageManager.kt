@@ -96,6 +96,16 @@ class InternalStorageManager @Inject constructor(
         return file.delete()
     }
 
+    /** Moves a file that lives elsewhere into the video directory under a fresh name. */
+    fun adopt(file: File): File {
+        val target = File(videosDir, "${java.util.UUID.randomUUID()}.${file.extension.ifEmpty { "mp4" }}")
+        if (!file.renameTo(target)) {
+            file.copyTo(target)
+            file.delete()
+        }
+        return target
+    }
+
     fun deleteThumbnail(thumbnailPath: String): Boolean {
         val file = VideoFileDeletion.resolve(thumbnailsDir, thumbnailPath) ?: return false
         return file.delete()

@@ -1,9 +1,12 @@
 package ru.spgsroot.peachy.ui.share
 
-enum class SharedMediaKind { PHOTO, VIDEO }
+enum class SharedMediaKind { PHOTO, VIDEO, LINK }
 
 object ShareUriPolicy {
     fun isImportable(scheme: String?): Boolean = scheme == "content"
+
+    /** A web address another app asked Peachy to download, as opposed to a file it handed over. */
+    fun isLink(uri: String): Boolean = uri.startsWith("http://", ignoreCase = true) || uri.startsWith("https://", ignoreCase = true)
 
     /** A provider's concrete MIME type wins over the batch type, including mixed image/video shares. */
     fun mediaKind(providerType: String?, intentType: String?): SharedMediaKind? {

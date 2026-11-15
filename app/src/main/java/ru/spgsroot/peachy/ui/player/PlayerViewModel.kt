@@ -23,10 +23,7 @@ import ru.spgsroot.peachy.ui.gallery.galleryItems
 import ru.spgsroot.peachy.ui.gallery.filterGalleryItems
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.spgsroot.peachy.data.downloader.ExternalDownloader
-import ru.spgsroot.peachy.data.downloader.completeDownloadedVideo
-import ru.spgsroot.peachy.data.hosts.HostEntry
-import ru.spgsroot.peachy.data.hosts.HostImporter
+import ru.spgsroot.peachy.data.storage.UrlImporter
 import ru.spgsroot.peachy.data.repository.SettingsRepository
 import ru.spgsroot.peachy.data.repository.VideoRepository
 import ru.spgsroot.peachy.data.storage.InternalStorageManager
@@ -54,9 +51,8 @@ class PlayerViewModel @Inject constructor(
     private val timerController: TimerController,
     private val videoRepository: VideoRepository,
     private val storageManager: InternalStorageManager,
-    private val externalDownloader: ExternalDownloader,
     private val videoImporter: VideoImporter,
-    private val hostImporter: HostImporter,
+    private val urlImporter: UrlImporter,
     private val videoExporter: VideoExporter
 ) : ViewModel() {
 
@@ -193,7 +189,12 @@ class PlayerViewModel @Inject constructor(
 
     fun getVideoById(id: Long): Video? = videos.value.find { it.id == id }
 
+    /** A video that came back paused keeps the timer off until the user resumes it. */
     private fun startTimer() {
+        if (playerState.value !is PlayerState.Playing) {
+            timerController.stop()
+            return
+        }
         currentSettings?.let {
             timerController.start(viewModelScope, it.timerMs)
         }
@@ -244,7 +245,7 @@ class PlayerViewModel @Inject constructor(
                     if (exported.failed.isNotEmpty()) throw IOException("Folder copy failed")
                 }
             }
-            val results = importItemsFor(normalizedUrl, copy).map { it.run() }
+            val results = urlImporter.itemsFor(normalizedUrl, copy).map { it.run() }
             val result = results.firstOrNull { it.isSuccess } ?: results.first()
             result.map { results.sumOf { it.getOrDefault(0) } }
         }
@@ -265,7 +266,7 @@ class PlayerViewModel @Inject constructor(
             .distinct()
 
         // Album links expand to one item per video, so the totals count videos, not links.
-        val items = normalizedUrls.flatMap { importItemsFor(it) }
+        val items = normalizedUrls.flatMap { urlImporter.itemsFor(it) }
 
         val failedUrls = mutableListOf<String>()
         var succeeded = 0
@@ -308,42 +309,6 @@ class PlayerViewModel @Inject constructor(
             succeeded = succeeded,
             failed = failed,
             failedUrls = failedUrls
-        )
-    }
-
-    private class ImportItem(val label: String, val run: suspend () -> Result<Int>)
-
-    /** Never throws: a host link that cannot be read becomes one failing item, so batches carry on. */
-    private fun importItemsFor(url: String, copy: ((File) -> Unit)? = null): List<ImportItem> {
-        if (!hostImporter.recognizes(url)) {
-            return listOf(ImportItem(url) { videoImporter.importUrlWithCopy(url, copy = copy) })
-        }
-        val entries = try {
-            hostImporter.expand(url)
-        } catch (e: Exception) {
-            return listOf(ImportItem(url) { Result.failure(e) })
-        }
-        return entries.map { entry -> ImportItem(entry.label) { importHostEntry(entry, copy) } }
-    }
-
-
-    private suspend fun importHostEntry(entry: HostEntry, copy: ((File) -> Unit)?): Result<Int> {
-        val link = try {
-            hostImporter.resolve(entry)
-        } catch (e: Exception) {
-            return Result.failure(e)
-        }
-        return externalDownloader.download(
-            url = link.url,
-            fileName = "${System.currentTimeMillis()}.${link.name.substringAfterLast('.', "mp4").lowercase()}",
-            headers = link.headers
-        ).fold(
-            onSuccess = { file ->
-                completeDownloadedVideo(file,
-                    save = { videoImporter.persist(file, title = link.name.substringBeforeLast('.')) },
-                    copy = copy)
-            },
-            onFailure = { Result.failure(it) }
         )
     }
 

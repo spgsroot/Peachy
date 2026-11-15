@@ -181,7 +181,7 @@ class CompressionManager @Inject constructor(
         }
         return try {
             videoRepository.update(
-                current.copy(filePath = target.absolutePath, fileSize = result.sizeBytes, duration = result.durationMs, isCorrupted = false)
+                current.copy(filePath = target.absolutePath, fileSize = result.sizeBytes, duration = result.durationMs, isCorrupted = false, contentHash = null)
             )
             if (target != original) original.delete()
             true
