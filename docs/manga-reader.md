@@ -65,37 +65,81 @@ Japanese, Chinese and Korean text-recognition models (16.0.1); recognition needs
 and does not send page images to a server. `ja` and `auto` select Japanese (also reads Latin),
 `zh` selects Chinese, `ko` selects Korean, and other source codes select Latin. Each recognizer
 is created lazily and retained for the application's lifetime. `auto` does not run a second recognizer.
-The MlKit path fetches original bytes and performs one sampled pixel decode on `Dispatchers.Default`,
-after a bounds-only pass. `OCR_WORK_SIDE = 2000` chooses the largest power-of-two sample retaining
-at least that long side, without upscaling or a JPEG round trip; the decoded long side can approach
-4000 pixels. The Model engine retains the 1600 px upload JPEG encoding. Invalid OCR bytes throw
-`IOException`. A per-instance mutex is acquired before decoding; only one recognition bitmap/task
-is active at once. Cancellation stops waiting immediately, but ML Kit's completion listener retains
-and recycles the bitmap and releases the mutex only when native recognition has finished.
+The MlKit path fetches original bytes on `Dispatchers.Default`, with no JPEG round trip.
+For ordinary pages, `OCR_WORK_SIDE = 2000` chooses the largest power-of-two sample retaining
+at least that long side without upscaling; the decoded long side can approach 4000 pixels.
+Pages taller than twice their width use full-width tiles, 1.5 page-widths high with 20% overlap.
+`PageDecode` uses `BitmapRegionDecoder` with a bounded whole-page fallback; seam duplicates
+overlapping at least half the smaller block keep the larger box. All boxes map back to the
+original page, and reading order is computed there. The Model engine retains its 1600 px
+upload JPEG encoding. Invalid OCR bytes throw `IOException`.
+A per-instance mutex is acquired before each tile/crop decode; only one recognition bitmap/task
+is active at once. Other pages can interleave between tiles. Cancellation stops waiting
+immediately, but ML Kit's completion listener retains and recycles the current bitmap and
+releases the mutex only when native recognition has finished; the next tile is not started.
 
-Each ML Kit text block remains one output block. Lines below 0.3 confidence, blank lines and
+Before detector merge, each ML Kit text block remains one output block. Lines below 0.3 confidence, blank lines and
 symbol-only noise are removed. Most lines with height at least 1.5 times width make a block vertical:
 its columns read right-to-left, top-to-bottom; other blocks use rows top-to-bottom, left-to-right.
 Mostly kana/Han text joins without spaces; other scripts join with spaces. Page rows use columns
 right-to-left for `ja`/`zh` and for `auto` when most retained blocks are vertical, otherwise left-to-right.
 Boxes are clipped and expressed as page fractions. Interval rules remain in `OcrGrouping.kt`.
-Very tall strips still lose small text under long-side sampling: the 800 × 12000 evaluation strip
-returned zero blocks both before and after this change. Tiling is deferred to phase 2.
+The synthetic eight-height 800 × 12000 strip is read at all eight heights. The older stacked-page
+strip recovers 95 first-pass blocks instead of zero on the same Xiaomi, but its second pass fails
+on an undersized crop; this is not a successful end-to-end strip translation.
+
+### On-device text detector and merge
+
+`BubbleDetector` is bound to the singleton `OrtBubbleDetector`: bundled YOLO26n at 960 px,
+ONNX Runtime 1.32.0 basic-minimal CPU, four intra-op threads and one inter-op thread.
+The native runtime supports arm64-v8a only. OCR and detection run as concurrent coroutine
+children over the same page bytes, each owning its decode; they do not share a bitmap.
+Detection uses the same overlapping tile plan, maps boxes to page fractions and unions
+seam duplicates. Scores below 0.25 are discarded. One mutex protects the lazy ORT session,
+tensor and reusable buffers through synchronous inference. Cancellation cannot interrupt
+`run()`; cleanup and lock release wait for it to return. `onTrimMemory` releases idle resources.
+
+The model has one text class: `Region` contains only `box` and `score`, not a speech/Sfx kind.
+ML Kit remains the only source of text. `mergeBlocks` assigns each block to its greatest
+covered-share region (at least `ASSIGN_SHARE = 0.6`; ties prefer the smaller region).
+Regions containing 2–6 blocks and occupying at most 35% of the page join those blocks in
+geometric reading order, with the union of their text boxes. Other blocks remain unchanged.
+This groups text, not bubble outlines; provider `kind` still separates speech and sound effects.
+
+Up to eight regions scoring at least 0.5 and claiming no first-pass block get a second OCR
+pass with 10% padding clipped to the page. Duplicate second-pass blocks are removed, and
+the resulting blocks are reordered on the original page before merge. A region crop currently
+decodes a full-width band before cropping horizontally.
+
+Unavailable ABI/model/runtime or a non-cancellation detector failure falls back to the first
+OCR pass without detector grouping or a second pass. `null` means unavailable/failed;
+an empty region list is a valid result. Cancellation propagates and nothing is cached on
+OCR/second-pass failure. A detector-null scan is also not cached, including on non-arm64
+devices; this loses the earlier OCR-cache benefit on that path. Second-pass failures currently
+fail the whole page rather than keeping first-pass text; crops below ML Kit's 32 px minimum
+demonstrated this on the stacked strip. These limitations remain open.
+
 
 ### OCR cache
 
-`FileOcrCache` stores derived blocks under `cacheDir/ocr/{galleryId}/{page}-{source}-v1.json`
-(`OCR_PIPELINE_VERSION = 1`). Target language is not part of this key. An empty block list is a hit;
-a missing, unreadable or malformed file is a miss. Writes use a unique same-directory temporary file
-and atomic replacement; write failure does not prevent translation. Cache hits avoid fetching,
-decoding and recognition. This cache is disposable, never exported to the vault, and changes neither
-Room nor the translation key/JSON format. The runner passes a lazy image supplier so cache hits
-do not read page bytes. Uncached fetch order is saved file, the reader's Coil disk snapshot, then CDN
-with shared OkHttp connection resources; traces distinguish `fetch.local`, `fetch.coil`, `fetch.net`.
+`FileOcrCache` stores `PageScan(blocks, regions, aspect)` under
+`cacheDir/ocr/{galleryId}/{page}-{source}-v2-dc6b6341.json`
+(`OCR_PIPELINE_VERSION = 2`, detector-model hash prefix `dc6b6341`).
+The blocks include successful second-pass text, before merge; merge runs again on every read,
+so changing grouping thresholds does not invalidate OCR. Target language is not part of the key.
+Empty blocks/regions are valid hits; missing, malformed, invalid-geometry or old-version files
+are misses. A successful same-directory atomic replacement removes obsolete generations
+for that page/source, not unrelated entries. Write failure does not prevent translation.
+Cache hits skip fetching, OCR, detection and the second pass. The cache is disposable and
+never exported; Room, translation JSON and the vault format are unchanged.
+The lazy image supplier avoids reading page bytes on hits. Uncached fetch order remains
+saved file, reader Coil disk snapshot, then CDN with shared OkHttp resources.
 
-Phone measurements and limitations: [baseline](reports/2026-11-15-baseline.md) and
-[phase 1 results](reports/2026-11-15-phase1-results.md). Heap and overlap outcomes are mixed;
-the report is not a claim that every page improved.
+Phone measurements and limits: [phase 1](reports/2026-11-15-phase1-results.md) is historical
+A069P context; [phase 2](reports/2026-11-15-phase2-results.md) compares both modes on one
+Xiaomi. Grouping reduces unit fragmentation, but time and sampled heap rise; the worker's
+overlay review is not owner acceptance. Runtime packaging and APK-size provenance are in
+[detector-runtime.md](detector-runtime.md).
 
 Dependency references: [Android setup](https://developers.google.com/ml-kit/vision/text-recognition/v2/android)
 and [release notes](https://developers.google.com/ml-kit/release-notes). ML Kit requires API 23;
