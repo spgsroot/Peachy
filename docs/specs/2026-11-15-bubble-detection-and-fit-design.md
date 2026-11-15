@@ -65,7 +65,7 @@ Implemented phase-2 contract: `BubbleDetector.detect(image: ByteArray): List<Reg
 
 Pages with aspect above about 2 (webtoon strips) are tiled vertically with overlap before detection; models trained at a square input shrink a tall strip into noise. Detections are mapped back to page fractions, then de-duplicated across tile seams.
 
-Detector output is not trusted for recall. ML Kit stays the source of text; detector regions group it, not classify it as speech versus Sfx. Up to eight regions scoring at least 0.5 and claiming no OCR block get second-pass OCR with 10% padding. A crop currently decodes a full-width band before horizontal cropping, so this is not guaranteed cheaper than a second full-page pass. A second-pass exception currently fails the whole page, as measured on the historical stacked strip.
+Detector output is not trusted for recall. ML Kit stays the source of text; detector regions group it, not classify it as speech versus Sfx. Up to eight regions scoring at least 0.5 and claiming no OCR block get second-pass OCR with 10% padding, grown to at least 32 original pixels per side. A crop still decodes a full-width band before horizontal cropping, so this is not guaranteed cheaper than a second full-page pass. One failed region is skipped. A non-cancellation failure of the whole second pass keeps the first-pass blocks and writes no cache. Cancellation still propagates.
 
 ### Merge rules (pure Kotlin, in `translate/`)
 

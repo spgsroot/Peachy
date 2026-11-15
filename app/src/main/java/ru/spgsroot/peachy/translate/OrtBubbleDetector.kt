@@ -97,6 +97,7 @@ class OrtBubbleDetector @Inject constructor(@ApplicationContext private val cont
         val session = OrtSession.SessionOptions().use { options ->
             options.setIntraOpNumThreads(4)
             options.setInterOpNumThreads(1)
+            options.setMemoryPatternOptimization(false)
             environment.createSession(model.absolutePath, options)
         }
         var preprocess: DetectorPreprocess? = null

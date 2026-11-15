@@ -8,6 +8,8 @@ On the same 30 pages, detector-on produced **328 translation units instead of 42
 
 The cost is material: pooled OCR+detect wall p50/p95 rose from **247/424 ms to 547/1266 ms**, and maximum sampled heap rose from **202 to 510 MiB**. The eight-height synthetic strip completed with all eight words, but the historical stacked-page strip still fails end-to-end: tiling recovers 95 first-pass blocks, then an undersized second-pass crop throws. Implementation/report completion is not release-quality sign-off.
 
+Those strip and heap sentences describe the pre-Task-10 build. The follow-up below keeps the page on that failure and measures a smaller detector heap; it does not replace the tables in this section.
+
 ## Runtime and Step 0
 
 - AAR: `app/libs/onnxruntime-1.32.0-minimal-arm64-v8a.aar`, 2,012,345 bytes, SHA-256 `9056463442826ec41474891032c630c9bfac87f8604b12d4c5267ebd77d0ee56` (recomputed for this report).
@@ -181,10 +183,9 @@ The worker also inspected trial sheets for `jp/3.webp`, `jp/4.webp`, `jp/6.webp`
 ## Open issues and unmeasured work
 
 1. **Detector-null cache loss:** `EnginePageTranslator.scanPage` returns a first-pass scan without writing the OCR cache when detection returns `null`. Non-arm64 devices and detector-failed pages therefore lose the phase 1 cache benefit and repeat OCR on a target change/retry. First-pass text still reaches translation; this is not full performance equivalence to phase 1.
-2. **Second-pass failure loses the page:** a failure inside `recognizeRegions` propagates and fails the whole page instead of retaining first-pass blocks. The historical strip demonstrates the below-32-pixel-crop case above; no cache is written. Fixing this production behavior is outside Task 9's allowed harness/docs/constants scope.
-3. **USB installation prompts:** Xiaomi/HyperOS can prompt “Install via USB” on every install; prior work required per-install approval. The continuation used the verified-suffix install helper, which returned prompt-free `Success` for its app and test updates; it never selected “Remember my choice.” Do not assume unattended installs work consistently.
-4. **Grouping is not bubble geometry:** one detector rectangle can contain several lobes, and an OCR block can already cross dialogue areas. The rejected cap trial does not fix these cases; dense captions above the join cap remain fragmented. No owner-labeled coverage/precision/recall score exists.
-5. **Latency and heap regressions:** the pooled wall and sampled-heap increases above remain; no speed/memory win is claimed. Region OCR currently decodes a full-width band before horizontal cropping.
+2. **USB installation prompts:** Xiaomi/HyperOS can prompt “Install via USB” on every install; prior work required per-install approval. The continuation used the verified-suffix install helper, which returned prompt-free `Success` for its app and test updates; it never selected “Remember my choice.” Do not assume unattended installs work consistently.
+3. **Grouping is not bubble geometry:** one detector rectangle can contain several lobes, and an OCR block can already cross dialogue areas. The rejected cap trial does not fix these cases; dense captions above the join cap remain fragmented. No owner-labeled coverage/precision/recall score exists.
+4. **Latency remains; heap is lower but still a regression:** Task 10 removed the page-loss failure and cut maximum sampled heap on detector-on repeats, as recorded in the follow-up. Detector-on wall is not improved, and sampled heap remains far above detector-off. Region OCR still decodes a full-width band before horizontal cropping; the rect-decode trial did not earn a keep.
 
 Not measured: execution on 16 KB-page devices (alignment checks alone do not prove it); a shared OCR/detector bitmap (each decodes separately); battery energy or sustained thermal throttling (battery temperature was only a pre-series guard); other phones/chipsets or non-arm64 fallback execution; native OOM injection; real provider translation quality/latency, verified transcription/second-pass text realness, owner-marked bubble coverage, plate containment/overlap or pinch/pan/render performance. Phase 3 geometry, `area`/`fill` and the overlay switch are not implemented here. Room, translation JSON and vault formats are unchanged.
 
@@ -211,3 +212,61 @@ Cleanup verified: `adb -s EM4HJR5PJNCYB6PR uninstall ru.spgsroot.peachy.pd2.test
 - Review the original and tuning overlay sheets, especially `jp/3`, `jp/4`, `jp/6`, the pre-existing crossing block on `eng/4`, and dense captions on `eng/2`; decide how connected balloon lobes should group.
 - Translate five representative pages through a real configured provider and assess source transcription, second-pass text, speech/Sfx kinds and translation quality.
 - Pinch/pan a joined page in the actual reader and check plate placement, clipping, overlap and responsiveness. This harness does not exercise that UI surface.
+
+## Follow-up (Task 10)
+
+Date: 2026-11-15. Starts from `df8b41e` plus the page-loss fix `8c904b0`. Same Xiaomi `22071212AG`, serial `EM4HJR5PJNCYB6PR`, `source=auto`, suffixed `ru.spgsroot.peachy.pd2` only. Raw rows are outside Git under `C:/Users/spgs/Desktop/manga-tests-out/phase2/task10/`. Percentiles are pooled nearest-rank across page visits, with a missing stage counted as zero, matching the tables above.
+
+**Maximum sampled heap** is the maximum, across the pages in the compared runs, of each page's peak `(Runtime totalMemory − freeMemory) + Debug.getNativeHeapAllocatedSize()`, sampled after traced stages and divided by 1024². It is not a continuous high-water mark, RSS, or PSS. The Java/native split is the pair at the sample where that sum peaked. `dumpsys meminfo` PSS below is a separate end-of-run snapshot, taken while the detector session was still loaded.
+
+### A. Second-pass failure no longer drops the page
+
+`recognizeRegions` grows each padded crop to at least 32 original pixels on both sides before decode, and refuses a decoded side below 32. One region's decode or recognition failure is skipped; cancellation still propagates. If the whole second pass throws a non-cancellation error, `scanPage` returns the first-pass blocks and writes no cache.
+
+The historical 800×12000 strip was rerun in detector-on mode on the fix, before any session-option trial (`A-strip`, instrumentation `OK (1 test)`, 6.402 s). It completed: 95 first-pass blocks, 98 final blocks, 3 second-pass blocks, cache written, no exception. OCR+detect wall **6117 ms**. Maximum sampled heap **390 MiB** (integer samples from `defaultHeapMb`; this run has no byte split). A later strip on a pattern-disabled build (`C-final-strip`, wall 5958 ms, heap 258 MiB) is not this result.
+
+Device check for the crop rule: `MlKitTilesDeviceTest` **8 tests, 0 failures**.
+
+### B. Rect decode dropped
+
+`PageDecode.decodeRect` with one `BitmapRegionDecoder` per `recognizeRegions` call was measured against the fix-A full-width band and then not committed. Same session, interleaved, three runs × 30 pages, detector on. Battery 28.5–29.5 °C.
+
+| | ocr2 p50/p95 ms | decode p50/p95 ms | wall p50/p95 ms | max sampled heap MiB |
+| --- | ---: | ---: | ---: | ---: |
+| A, full-width band | 224/886 | 135/475 | 544/1265 | 479 |
+| B, region decoder | 215/873 | 128/450 | 535/1252 | 490 |
+
+A's own per-run `ocr2` p50 was 204, 209, 226 ms. The 9 ms pooled drop is inside that spread. Non-zero `ocr2` p50 moved 580 → 563 ms. Block counts were not equal, and the difference was stable across all three B runs: `eng/15` lost a second-pass block (3 → 2) and `jp/15` lost its only second-pass block (1 → 0). Five other pages gained blocks; `eng/1`, `eng/11` and `eng/12` kept the count but not the text. Dropped. Region OCR still decodes a full-width band.
+
+### C. Heap split and the option that was kept
+
+Detector-off in the same earlier session: maximum sampled heap **163 MiB** (Java 23.0 + native 140.4 at the peak sample). End-of-run PSS: Java Heap 23,500 KiB, Native Heap 95,644 KiB, Code 179,904 KiB, Stack 2,096 KiB, Graphics 0, TOTAL PSS 315,219 KiB.
+
+One-at-a-time session options, not interleaved with a fresh baseline (baseline for this pass was the A runs above: heap 479 MiB, Java 41.5 + native 438.1, `detect.infer` p50 266 ms):
+
+| Option | Max sampled heap MiB | Java + native at that sample | infer p50 ms | Kept |
+| --- | ---: | --- | ---: | --- |
+| Disable CPU arena | 271 | 45.0 + 226.6 | 292 (+9.8%) | No. One run, infer on the +10% line, not repeated interleaved |
+| Disable memory pattern | 351, then 341, 342 | 41.5 + 309.7 on the 351 MiB run | 267 pooled | Direction only; the keep decision is the interleaved session below |
+| `intra_op.allow_spinning=0` | 481 | 39.8 + 441.7 | 254 | No. No heap drop |
+
+Calling `release()` after the page batch and waiting 1.5 s dropped a one-shot sample to about 167 MiB in both pattern settings (native about 135 MiB). That does not lower the in-run maximum the bar uses. No idle-release product change; `onTrimMemory` still releases only in the background.
+
+Keep bar: maximum sampled heap down by at least 100 MiB, and `detect.infer` p50 not worse than +10%, on repeated interleaved runs. One APK, instrumentation argument, alternating pattern on/off, three each, 17:27:28–17:30:03 +03, battery 28.0–28.5 °C. Each run `OK (1 test)`. Block text matched between the first pair. `detect.infer` pooled p50 **263 → 266 ms (+1.1%)**.
+
+| Order | Pattern | infer p50 ms | wall p50/p95 ms | Max sampled heap MiB | Java + native MiB |
+| --- | --- | ---: | ---: | ---: | --- |
+| I1-base | on | 270 | 519/1252 | 475 | 39.9 + 435.2 |
+| I1-nopat | off | 267 | 531/1234 | 342 | 39.8 + 302.7 |
+| I2-base | on | 260 | 532/1288 | 473 | 39.8 + 433.6 |
+| I2-nopat | off | 265 | 524/1236 | 345 | 36.3 + 309.3 |
+| I3-base | on | 263 | 528/1275 | 474 | 39.8 + 434.7 |
+| I3-nopat | off | 260 | 531/1224 | 344 | 35.0 + 309.3 |
+
+Pooled maximum is **475 → 345 MiB** (drop 130). The 475 MiB sample is `jp/5.webp` in I1-base: Java 41,862,016 bytes + native 456,368,448 bytes. The 345 MiB sample is `jp/9.webp` in I2-nopat: Java 38,036,272 + native 324,327,136. The drop is native. End-of-run PSS while the session was still loaded: pattern-on high was I1-base, Java Heap 51,588 KiB, Native Heap 280,976 KiB, Code 183,640 KiB, Stack 2,540 KiB, Graphics 0, Private Other 5,944 KiB, System 10,036 KiB, TOTAL PSS 534,724 KiB. Pattern-off high was I3-nopat, Java Heap 51,404 KiB, Native Heap 198,136 KiB, Code 183,712 KiB, Stack 2,456 KiB, Graphics 0, Private Other 5,772 KiB, System 8,655 KiB, TOTAL PSS 450,135 KiB. Native Heap PSS on the three off runs was 198,076 / 198,236 / 198,136 KiB. PSS fell about 83 MiB, mostly Native Heap; the keep bar is the sampled-heap definition above, not PSS.
+
+`setMemoryPatternOptimization(false)` is kept. Arena and spinning defaults stay. Model, input size and thread count were not changed. Open issue 2 is removed. Former issue 5 is the adjusted item 4 above.
+
+Deviations: the first sequential pattern-off claim (479 → 351 MiB, infer 266 → 267 ms) was recomputed from raw rows and then not used as the keep basis, because those runs were not interleaved with baseline. The rejected rect-decode patch is not in Git. The measurement flag and `applicationId` suffix were removed before the final build.
+
+Final check after the suffix and measurement flag were removed: `:app:cleanTestDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest` **BUILD SUCCESSFUL**, **618 JVM tests, 0 failures, 0 errors, 0 skipped in 75 suites**. Assembled packages are `ru.spgsroot.peachy` and `ru.spgsroot.peachy.test`; those unsuffixed APKs were not installed. The two new unit tests are the second-pass failure and cancellation cases added in `8c904b0`.

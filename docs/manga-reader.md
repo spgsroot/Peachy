@@ -85,13 +85,18 @@ Mostly kana/Han text joins without spaces; other scripts join with spaces. Page 
 right-to-left for `ja`/`zh` and for `auto` when most retained blocks are vertical, otherwise left-to-right.
 Boxes are clipped and expressed as page fractions. Interval rules remain in `OcrGrouping.kt`.
 The synthetic eight-height 800 × 12000 strip is read at all eight heights. After the Task 10
-minimum-crop/failure-isolation fix, the older stacked-page strip completes with 95 first-pass
-blocks and three second-pass blocks on the same Xiaomi; provider translation remains untested.
+minimum-crop/failure-isolation fix, the older stacked-page strip completes on the same Xiaomi
+with 95 first-pass blocks, three second-pass blocks, 6117 ms OCR+detect wall and 390 MiB
+sampled heap; provider translation remains untested.
 
 ### On-device text detector and merge
 
 `BubbleDetector` is bound to the singleton `OrtBubbleDetector`: bundled YOLO26n at 960 px,
 ONNX Runtime 1.32.0 basic-minimal CPU, four intra-op threads and one inter-op thread.
+Memory-pattern optimization is disabled. Three interleaved detector-on repeats on the
+evaluation phone lowered maximum sampled heap from 475 to 345 MiB; inference p50 changed
+from 263 to 266 ms. The CPU arena and thread-spinning defaults remain enabled. This is a
+measured tradeoff on that phone, not a universal memory bound.
 The native runtime supports arm64-v8a only. OCR and detection run as concurrent coroutine
 children over the same page bytes, each owning its decode; they do not share a bitmap.
 Detection uses the same overlapping tile plan, maps boxes to page fractions and unions
