@@ -2,6 +2,9 @@ package ru.spgsroot.peachy.translate
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.content.Context
+import coil.imageLoader
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -64,9 +67,13 @@ object PageImage {
     }
 }
 
-/** Reads a page from the saved copy when there is one, otherwise from the CDN. Bind it to a gallery's page paths first. */
-class PageBytes @Inject constructor(private val library: MangaLibraryRepository) : PageSource {
-    private val http = OkHttpClient.Builder()
+/** Reads saved bytes, then the reader's Coil cache, then the CDN. Bind to a gallery's paths first. */
+class PageBytes @Inject constructor(
+    private val library: MangaLibraryRepository,
+    http: OkHttpClient,
+    @ApplicationContext private val context: Context
+) : PageSource {
+    private val http = http.newBuilder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -81,7 +88,12 @@ class PageBytes @Inject constructor(private val library: MangaLibraryRepository)
     override suspend fun raw(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
         val path = paths.getOrNull(page) ?: throw IllegalArgumentException("No page $page")
         val local = library.localPage(galleryId, path)?.takeIf { it.isFile }
-        traced("fetch") { local?.readBytes() ?: download(path) }
+        if (local != null) return@withContext traced("fetch.local") { local.readBytes() }
+        val url = NhentaiCdn.page(path) ?: throw IllegalArgumentException("Bad page path")
+        context.imageLoader.diskCache?.openSnapshot(url)?.use { snapshot ->
+            return@withContext traced("fetch.coil") { snapshot.data.toFile().readBytes() }
+        }
+        traced("fetch.net") { download(url) }
     }
 
     override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
@@ -89,8 +101,7 @@ class PageBytes @Inject constructor(private val library: MangaLibraryRepository)
         traced("encode") { PageImage.encode(bytes) }
     }
 
-    private fun download(path: String): ByteArray {
-        val url = NhentaiCdn.page(path) ?: throw IllegalArgumentException("Bad page path")
+    private fun download(url: String): ByteArray {
         http.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             return response.body?.bytes() ?: throw IOException("Empty body")
