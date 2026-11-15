@@ -12,8 +12,8 @@ class EnginePageTranslator @Inject constructor(
         when (request.engine) {
             TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, page, request, image) }
             TranslateEngine.MlKit -> {
-                val blocks = ocrCache.get(galleryId, page, request.source) ?: ocr.recognize(image(), request.source).also {
-                    ocrCache.put(galleryId, page, request.source, it)
+                val blocks = ocrCache.get(galleryId, page, request.source)?.blocks ?: ocr.recognize(image(), request.source).also {
+                    ocrCache.put(galleryId, page, request.source, PageScan(it, emptyList(), 1f))
                 }
                 val source = if (request.source == "auto") "" else request.source
                 if (blocks.isEmpty()) {

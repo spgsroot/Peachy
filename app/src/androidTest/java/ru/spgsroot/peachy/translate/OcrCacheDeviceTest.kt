@@ -32,7 +32,7 @@ class OcrCacheDeviceTest {
                     } catch (e:TranslationException) { assertEquals(TranslationError.NotConfigured,e.error) }
                 }
             }
-            assertTrue(cache.get(1,0,"ja")!!.isNotEmpty())
+            assertTrue(cache.get(1,0,"ja")!!.blocks.isNotEmpty())
             listOf("fetch","decode","recognize").forEach { stage ->
                 assertTrue(traces[0].stageMs.containsKey(stage))
                 assertFalse(traces[1].stageMs.containsKey(stage))

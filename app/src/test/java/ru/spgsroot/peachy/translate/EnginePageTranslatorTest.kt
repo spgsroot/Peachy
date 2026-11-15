@@ -34,7 +34,7 @@ class EnginePageTranslatorTest {
     }
     @Test fun ocrCacheHitDoesNotLoadTheImage() = runBlocking {
         val cache = FileOcrCache(folder.root)
-        cache.put(7,0,"ja",blocks)
+        cache.put(7,0,"ja",PageScan(blocks, emptyList(), 1f))
         val ocr = FakeOcr(emptyList())
         val engine = EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "test"), ocr, cache)
         reply("""{"lines":[{"i":0,"translation":"cached"}]}""")
