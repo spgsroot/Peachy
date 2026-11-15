@@ -107,4 +107,4 @@
 ./gradlew :app:assembleDebug
 ```
 
-`assembleRelease` даёт неподписанный APK. Подпись делает GitHub Actions в `.github/workflows/release.yml`, из секретов репозитория. Запуск — по тегу `v*` или вручную. Файла `LICENSE` в этом дереве нет.
+`assembleRelease` даёт неподписанный APK. Подпись делает GitHub Actions в `.github/workflows/release.yml`, из секретов репозитория. Запуск — по тегу `v*` или вручную. Проект распространяется по лицензии GNU Affero General Public License v3.0 (см. `LICENSE`).

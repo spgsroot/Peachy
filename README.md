@@ -107,4 +107,4 @@ The nhentai key is compiled into the client and sent only in the `Authorization`
 ./gradlew :app:assembleDebug
 ```
 
-`assembleRelease` produces an unsigned APK. The GitHub Actions workflow `.github/workflows/release.yml` signs the release with repository secrets. It runs on a `v*` tag or when started by hand. This checkout has no `LICENSE` file.
+`assembleRelease` produces an unsigned APK. The GitHub Actions workflow `.github/workflows/release.yml` signs the release with repository secrets. It runs on a `v*` tag or when started by hand. The project is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
