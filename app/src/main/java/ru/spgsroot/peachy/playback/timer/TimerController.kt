@@ -80,7 +80,7 @@ class TimerController @OptIn(UnstableApi::class)
     private fun playNext() {
         val nextVideo = playlistManager.next()
         if (nextVideo != null) {
-            exoPlayerWrapper.play(nextVideo)
+            exoPlayerWrapper.play(nextVideo, restorePause = false)
         }
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import ru.spgsroot.peachy.domain.model.Video
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.device.buttplug.ButtplugDevice
 import ru.spgsroot.peachy.device.buttplug.DeviceState
@@ -46,7 +48,11 @@ fun ControlsOverlay(
     onResetZoom: () -> Unit,
     deviceState: DeviceState,
     devices: List<ButtplugDevice>,
-    activeDeviceIndex: Int?
+    activeDeviceIndex: Int?,
+    queue: List<Video>,
+    currentId: Long?,
+    onSelectVideo: (Video) -> Unit,
+    onSwitchVideo: (Int) -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(0L) }
@@ -68,7 +74,7 @@ fun ControlsOverlay(
     // Обработчик жестов (тапы для отображения меню и масштабирование)
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
-            .playerGestures(exoPlayerWrapper, zoomScale, onZoomChange, onPanChange, onSeek, ::showControls) { feedback = it }
+            .playerGestures(exoPlayerWrapper, zoomScale, onZoomChange, onPanChange, onSwitchVideo, ::showControls) { feedback = it }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { showControls() },
@@ -104,35 +110,43 @@ fun ControlsOverlay(
             )
         }
 
-        // Bottom area: SeekBar, Fullscreen, and Device status bar
+        // Bottom area: queue, SeekBar, Fullscreen, and Device status bar over a scrim
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .75f))))
+                    .padding(top = 24.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SeekBar(
-                    exoPlayerWrapper = exoPlayerWrapper,
-                    onSeek = onSeek,
-                    onInteraction = { showControls() },
-                    isFullscreen = isFullscreen,
-                    onFullscreenToggle = {
-                        onFullscreenToggle()
-                        showControls()
-                    }
-                )
-                if (!compact) DeviceStatusBar(
-                    deviceState = deviceState,
-                    devices = devices,
-                    activeDeviceIndex = activeDeviceIndex
-                )
+                if (!isFullscreen && !compact) {
+                    QueueCarousel(queue, currentId, onSelectVideo, onInteraction = { showControls() })
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SeekBar(
+                        exoPlayerWrapper = exoPlayerWrapper,
+                        onSeek = onSeek,
+                        onInteraction = { showControls() },
+                        isFullscreen = isFullscreen,
+                        onFullscreenToggle = {
+                            onFullscreenToggle()
+                            showControls()
+                        }
+                    )
+                    if (!compact) DeviceStatusBar(
+                        deviceState = deviceState,
+                        devices = devices,
+                        activeDeviceIndex = activeDeviceIndex
+                    )
+                }
             }
         }
     }

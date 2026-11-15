@@ -21,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import ru.spgsroot.peachy.data.storage.InternalStorageManager
 import ru.spgsroot.peachy.data.storage.PhotoImporter
+import ru.spgsroot.peachy.data.storage.LinkDownloader
 import ru.spgsroot.peachy.data.storage.VideoImporter
 
 /** Activity-scoped: shares are handled after authentication, regardless of the visible destination. */
@@ -30,7 +31,8 @@ class ShareImportViewModel @Inject constructor(
     private val savedState: SavedStateHandle,
     private val photoImporter: PhotoImporter,
     private val videoImporter: VideoImporter,
-    private val videoStorage: InternalStorageManager
+    private val videoStorage: InternalStorageManager,
+    private val linkDownloader: LinkDownloader
 ) : ViewModel() {
     private val queue = ShareImportQueue(
         initial = savedState.get<ArrayList<String>>("shareUris").orEmpty().mapIndexed { index, uri ->
@@ -44,14 +46,22 @@ class ShareImportViewModel @Inject constructor(
     }
     val hasPending = queue.hasPending
     val results = queue.results
+    val linkResults = linkDownloader.results
 
     fun enqueue(intent: Intent?) {
-        val streams = ShareIntents.streams(intent)
-        queue.enqueue(streams.map { SharedStream(it.toString(), intent?.type) }, ShareIntents.rejected(intent))
+        val streams = ShareIntents.streams(intent).map { SharedStream(it.toString(), intent?.type) }
+        val links = ShareIntents.links(intent).map { SharedStream(it, null) }
+        queue.enqueue(streams + links, ShareIntents.rejected(intent))
     }
 
     /** The caller must remain authenticated; cancelling this call keeps the unprocessed queue. */
     suspend fun importPending() = queue.drain { stream ->
+        // A link is handed to the app-scoped downloader and leaves the queue at once, so locking
+        // the app or leaving it neither cancels the download nor repeats it on the next unlock.
+        if (ShareUriPolicy.isLink(stream.uri)) {
+            linkDownloader.start(stream.uri)
+            return@drain SharedMediaKind.LINK
+        }
         val uri = Uri.parse(stream.uri)
         val kind = withContext(Dispatchers.IO) {
             val providerType = try { context.contentResolver.getType(uri) }

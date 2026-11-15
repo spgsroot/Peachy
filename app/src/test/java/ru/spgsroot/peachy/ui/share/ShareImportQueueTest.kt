@@ -79,4 +79,21 @@ class ShareImportQueueTest {
         assertEquals(ShareImportSummary(1, 3, true, false), queue.results.first())
         assertFalse(queue.hasPending.value)
     }
+
+    @Test fun duplicatesAndStartedLinksAreReportedApartFromFailures() = runTest {
+        val queue = ShareImportQueue(emptyList(), 0) { _, _ -> }
+        queue.enqueue(listOf(
+            SharedStream("content://new", "video/mp4"), SharedStream("content://same", "video/mp4"),
+            SharedStream("https://example.com/v.mp4", null), SharedStream("content://broken", "video/mp4")
+        ))
+        queue.drain {
+            when {
+                it.uri.endsWith("same") -> throw ru.spgsroot.peachy.data.storage.DuplicateVideoException("dup", "old")
+                it.uri.endsWith("broken") -> throw java.io.IOException("unreadable")
+                ShareUriPolicy.isLink(it.uri) -> SharedMediaKind.LINK
+                else -> SharedMediaKind.VIDEO
+            }
+        }
+        assertEquals(ShareImportSummary(imported = 1, failed = 1, includesPhotos = false, includesVideos = true, duplicates = 1, started = 1), queue.results.first())
+    }
 }

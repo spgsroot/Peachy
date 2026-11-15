@@ -54,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.awaitCancellation
 import ru.spgsroot.peachy.ui.settings.UpdateDialogHost
+import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
+import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.ui.settings.UpdateViewModel
 import javax.inject.Inject
 
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = installSplashScreen()
+        installSplashScreen().popPeachOnExit()
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (savedInstanceState == null) shareImportViewModel.enqueue(intent)
@@ -142,7 +144,10 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
             }
         }
     }
-    if (updateAccess) UpdateDialogHost(updates)
+    if (updateAccess) {
+        UpdateDialogHost(updates)
+        DuplicateVideoHost()
+    }
 
     // Import only inside the unlocked app, not in the player destination. An onNewIntent share
     // therefore works while gallery/manga is already open, and photos never enter PlayerViewModel.
@@ -154,9 +159,14 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
     LaunchedEffect(canImport, unlocked) {
         if (!canImport || (authManager.isPasswordSet() && !unlocked)) return@LaunchedEffect
         shareImports.results.collect { result ->
+            val onlyLinks = result.started > 0 && result.imported + result.failed + result.duplicates == 0
             Toast.makeText(
                 context,
-                context.getString(R.string.share_import_result, result.imported, result.failed),
+                when {
+                    onlyLinks -> context.getString(R.string.share_download_started, result.started)
+                    result.duplicates > 0 -> context.getString(R.string.share_import_result_duplicates, result.imported, result.failed, result.duplicates)
+                    else -> context.getString(R.string.share_import_result, result.imported, result.failed)
+                },
                 Toast.LENGTH_LONG
             ).show()
             val destination = when {
@@ -167,6 +177,17 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
             if (destination != null && navController.currentDestination?.route != destination) {
                 navController.navigate(destination) { launchSingleTop = true }
             }
+        }
+    }
+    // A link handed over by another app keeps downloading in the background; say how each ended.
+    LaunchedEffect(Unit) {
+        shareImports.linkResults.collect { result ->
+            val error = result.exceptionOrNull()
+            when {
+                error == null -> context.getString(R.string.download_success)
+                error is DuplicateVideoException -> null // the duplicate dialog explains it
+                else -> context.getString(R.string.error_download_failed)
+            }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
         }
     }
 

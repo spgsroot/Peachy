@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 
 /** One shared item: the content URI as text and the intent's MIME type, if it had one. */
 data class SharedStream(val uri: String, val type: String?)
@@ -17,7 +18,11 @@ data class ShareImportSummary(
     val imported: Int,
     val failed: Int,
     val includesPhotos: Boolean,
-    val includesVideos: Boolean
+    val includesVideos: Boolean,
+    /** Videos that were already in the gallery; these are not counted in [failed]. */
+    val duplicates: Int = 0,
+    /** Links handed to the background downloader; their outcome is reported when each one finishes. */
+    val started: Int = 0
 )
 
 /** Runs exactly the importer for [kind]; a type no importer handles is an error, never a guess. */
@@ -29,7 +34,7 @@ suspend fun dispatchSharedImport(
     when (kind) {
         SharedMediaKind.PHOTO -> photo()
         SharedMediaKind.VIDEO -> video()
-        null -> throw IllegalArgumentException("Unsupported shared media type")
+        SharedMediaKind.LINK, null -> throw IllegalArgumentException("Unsupported shared media type")
     }
     return kind
 }
@@ -68,6 +73,8 @@ class ShareImportQueue(
     suspend fun drain(import: suspend (SharedStream) -> SharedMediaKind) = drainMutex.withLock {
         var imported = 0
         var failed = 0
+        var duplicates = 0
+        var started = 0
         var photos = false
         var videos = false
         try {
@@ -75,11 +82,17 @@ class ShareImportQueue(
                 val stream = synchronized(lock) { items.firstOrNull() } ?: break
                 try {
                     val kind = import(stream)
-                    imported++
-                    photos = photos || kind == SharedMediaKind.PHOTO
-                    videos = videos || kind == SharedMediaKind.VIDEO
+                    if (kind == SharedMediaKind.LINK) {
+                        started++
+                    } else {
+                        imported++
+                        photos = photos || kind == SharedMediaKind.PHOTO
+                        videos = videos || kind == SharedMediaKind.VIDEO
+                    }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (_: DuplicateVideoException) {
+                    duplicates++
                 } catch (_: Exception) {
                     failed++
                 }
@@ -91,8 +104,8 @@ class ShareImportQueue(
         } finally {
             // A cancelled run still reports what it finished; its unfinished item stays queued.
             val refused = synchronized(lock) { rejected.also { rejected = 0; save() } }
-            if (imported + failed + refused > 0) {
-                summaries.trySend(ShareImportSummary(imported, failed + refused, photos, videos))
+            if (imported + failed + duplicates + started + refused > 0) {
+                summaries.trySend(ShareImportSummary(imported, failed + refused, photos, videos, duplicates, started))
             }
         }
     }

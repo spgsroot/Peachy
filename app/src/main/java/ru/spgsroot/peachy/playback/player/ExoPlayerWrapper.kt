@@ -31,6 +31,7 @@ class ExoPlayerWrapper @Inject constructor(
     private var currentVideoId: Long? = null
 
     private val dspAudioProcessor = DspAudioProcessor(audioAnalyzer, hapticInputRouter)
+    private val memory = PlaybackMemory()
 
     private val player: ExoPlayer by lazy {
         ExoPlayer.Builder(context)
@@ -48,16 +49,31 @@ class ExoPlayerWrapper @Inject constructor(
             }
     }
 
-    fun play(video: Video) {
+    /**
+     * Starts [video], resuming from where it was left. The video that was playing is remembered
+     * first. A video left paused comes back paused when [restorePause] is set; otherwise it plays.
+     */
+    fun play(video: Video, restorePause: Boolean = true) {
+        val leaving = currentVideoId
+        if (leaving != null && leaving != video.id) {
+            if (player.playbackState == Player.STATE_ENDED) memory.forget(leaving)
+            else memory.remember(leaving, player.currentPosition, player.duration, player.playWhenReady)
+        }
         currentVideoId = video.id
-        hapticInputRouter.acquire(HapticSource.PLAYER)
-        val mediaItem = MediaItem.fromUri(video.filePath)
+        val snapshot = memory.recall(video.id)
+        val playing = snapshot?.playing != false || !restorePause
 
-        player.seekTo(0)
-        player.setMediaItem(mediaItem)
+        player.setMediaItem(MediaItem.fromUri(video.filePath), snapshot?.positionMs ?: 0L)
         player.prepare()
-        player.play()
-        _state.value = PlayerState.Playing(video)
+        if (playing) {
+            hapticInputRouter.acquire(HapticSource.PLAYER)
+            player.play()
+            _state.value = PlayerState.Playing(video)
+        } else {
+            hapticInputRouter.release(HapticSource.PLAYER)
+            player.pause()
+            _state.value = PlayerState.Paused(video, snapshot?.positionMs ?: 0L)
+        }
     }
 
     fun pause() {

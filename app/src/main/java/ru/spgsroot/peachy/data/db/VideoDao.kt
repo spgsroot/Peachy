@@ -20,8 +20,17 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
-    @Query("UPDATE videos SET title = :title, filePath = :filePath, duration = :duration, thumbnailPath = :thumbnailPath, addedAt = :addedAt, fileSize = :fileSize, isCorrupted = :isCorrupted WHERE id = :id")
-    suspend fun updateContent(id: Long, title: String, filePath: String, duration: Long, thumbnailPath: String?, addedAt: Long, fileSize: Long, isCorrupted: Boolean)
+    @Query("UPDATE videos SET title = :title, filePath = :filePath, duration = :duration, thumbnailPath = :thumbnailPath, addedAt = :addedAt, fileSize = :fileSize, isCorrupted = :isCorrupted, contentHash = :contentHash WHERE id = :id")
+    suspend fun updateContent(id: Long, title: String, filePath: String, duration: Long, thumbnailPath: String?, addedAt: Long, fileSize: Long, isCorrupted: Boolean, contentHash: String?)
+
+    @Query("SELECT * FROM videos WHERE contentHash = :hash LIMIT 1")
+    suspend fun findByHash(hash: String): VideoEntity?
+
+    @Query("SELECT * FROM videos WHERE fileSize = :size AND contentHash IS NULL")
+    suspend fun unhashedWithSize(size: Long): List<VideoEntity>
+
+    @Query("UPDATE videos SET contentHash = :hash WHERE id = :id")
+    suspend fun setContentHash(id: Long, hash: String)
 
     @Delete
     suspend fun delete(video: VideoEntity)

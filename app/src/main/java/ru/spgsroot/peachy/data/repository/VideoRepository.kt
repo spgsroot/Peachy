@@ -20,7 +20,7 @@ class VideoRepository @Inject constructor(
 
     suspend fun update(video: Video) = videoDao.updateContent(
         video.id, video.title, video.filePath, video.duration, video.thumbnailPath,
-        video.addedAt, video.fileSize, video.isCorrupted
+        video.addedAt, video.fileSize, video.isCorrupted, video.contentHash
     )
 
     suspend fun delete(video: Video) = videoDao.delete(video.toEntity())
@@ -28,6 +28,12 @@ class VideoRepository @Inject constructor(
     suspend fun deleteById(id: Long) = videoDao.deleteById(id)
 
     suspend fun markAsCorrupted(id: Long) = videoDao.markAsCorrupted(id)
+
+    suspend fun findByHash(hash: String): Video? = videoDao.findByHash(hash)?.toDomain()
+
+    suspend fun unhashedWithSize(size: Long): List<Video> = videoDao.unhashedWithSize(size).map { it.toDomain() }
+
+    suspend fun setContentHash(id: Long, hash: String) = videoDao.setContentHash(id, hash)
 
     private fun VideoEntity.toDomain() = Video(
         id = id,
@@ -38,7 +44,8 @@ class VideoRepository @Inject constructor(
         addedAt = addedAt,
         fileSize = fileSize,
         isCorrupted = isCorrupted,
-        albumId = albumId
+        albumId = albumId,
+        contentHash = contentHash
     )
 
     private fun Video.toEntity() = VideoEntity(
@@ -50,6 +57,7 @@ class VideoRepository @Inject constructor(
         addedAt = addedAt,
         fileSize = fileSize,
         isCorrupted = isCorrupted,
-        albumId = albumId
+        albumId = albumId,
+        contentHash = contentHash
     )
 }
