@@ -54,7 +54,9 @@ In the provider dialog, **Models** loads the unsaved address/key's `/models` lis
 
 ## Overlay on the page
 
-With `overlay` on, a page with a finished translation draws each line that has a `Box` as a white plate over its original text, inside the same transformed box as the image, so zoom and pan carry the plates with the page. `fittedPage` maps the box fractions onto the part of the view the image really fills (bars at the sides or top are excluded). Font size is found by binary search so the text fits its plate. Lines without a box stay in the panel only. Settings (`TranslationSettingRows`) holds the engine, source language, target language and overlay rows.
+With `overlay` on, a page with a finished translation draws each boxed, non-Sfx line as a white plate over its original text. `fittedPage` excludes letterboxing; the overlay shares the image's transform, so zoom and pan carry the plates with the page. Lines without boxes and Sfx stay in the panel. Settings (`TranslationSettingRows`) holds engine, source, target and overlay controls.
+
+`layoutPlates` runs on `Dispatchers.Default`, keyed by lines, fitted page and density rather than zoom/pan. It grows each original text box through the existing five steps until 13 sp fits or growth is exhausted, searches 6–22 sp, and caps large sizes at 1.25 times the page's positive-size median. Later plates are trimmed against earlier plates on the smaller-overlap axis, but a trim losing more than half the original width/height is skipped; overlaps can remain. Each trimmed plate is re-fitted without exceeding its cap. One balanced-breaking `StaticLayout`, without hyphenation, is shared by fitting and drawing; CJK text can wrap by character. Text that still overflows at 6 sp is clipped to the plate. These are rectangle heuristics, not detected bubble outlines.
 
 ## On-device page text recognition
 
@@ -62,19 +64,38 @@ With `overlay` on, a page with a finished translation draws each line that has a
 Japanese, Chinese and Korean text-recognition models (16.0.1); recognition needs no model download
 and does not send page images to a server. `ja` and `auto` select Japanese (also reads Latin),
 `zh` selects Chinese, `ko` selects Korean, and other source codes select Latin. Each recognizer
-is created lazily and retained for the application's lifetime. Decoding and result processing run
-on `Dispatchers.Default`; invalid image bytes throw `IOException`.
-`auto` uses the contract's default left-to-right ordering and space-separated lines; selecting the
-Japanese recognizer does not change the requested source language's ordering.
+is created lazily and retained for the application's lifetime. `auto` does not run a second recognizer.
+The MlKit path fetches original bytes and performs one sampled pixel decode on `Dispatchers.Default`,
+after a bounds-only pass. `OCR_WORK_SIDE = 2000` chooses the largest power-of-two sample retaining
+at least that long side, without upscaling or a JPEG round trip; the decoded long side can approach
+4000 pixels. The Model engine retains the 1600 px upload JPEG encoding. Invalid OCR bytes throw
+`IOException`. A per-instance mutex is acquired before decoding; only one recognition bitmap/task
+is active at once. Cancellation stops waiting immediately, but ML Kit's completion listener retains
+and recycles the bitmap and releases the mutex only when native recognition has finished.
 
 Each ML Kit text block remains one output block. Lines below 0.3 confidence, blank lines and
-symbol-only noise are removed. Japanese/Chinese lines join without spaces; Latin/Korean lines
-join with spaces. Boxes are clipped to the page and expressed as fractions of its dimensions.
-Reading order uses overlapping vertical extents to form rows, top-to-bottom; Japanese/Chinese
-rows read columns right-to-left and each column top-to-bottom, while Latin/Korean rows read
-left-to-right. The exact overlap rule and its limitations are documented in `OcrGrouping.kt`.
-Cancellation stops waiting immediately; because ML Kit cannot cancel its task, the task retains
-the decoded bitmap until recognition completes and then recycles it.
+symbol-only noise are removed. Most lines with height at least 1.5 times width make a block vertical:
+its columns read right-to-left, top-to-bottom; other blocks use rows top-to-bottom, left-to-right.
+Mostly kana/Han text joins without spaces; other scripts join with spaces. Page rows use columns
+right-to-left for `ja`/`zh` and for `auto` when most retained blocks are vertical, otherwise left-to-right.
+Boxes are clipped and expressed as page fractions. Interval rules remain in `OcrGrouping.kt`.
+Very tall strips still lose small text under long-side sampling: the 800 × 12000 evaluation strip
+returned zero blocks both before and after this change. Tiling is deferred to phase 2.
+
+### OCR cache
+
+`FileOcrCache` stores derived blocks under `cacheDir/ocr/{galleryId}/{page}-{source}-v1.json`
+(`OCR_PIPELINE_VERSION = 1`). Target language is not part of this key. An empty block list is a hit;
+a missing, unreadable or malformed file is a miss. Writes use a unique same-directory temporary file
+and atomic replacement; write failure does not prevent translation. Cache hits avoid fetching,
+decoding and recognition. This cache is disposable, never exported to the vault, and changes neither
+Room nor the translation key/JSON format. The runner passes a lazy image supplier so cache hits
+do not read page bytes. Uncached fetch order is saved file, the reader's Coil disk snapshot, then CDN
+with shared OkHttp connection resources; traces distinguish `fetch.local`, `fetch.coil`, `fetch.net`.
+
+Phone measurements and limitations: [baseline](reports/2026-11-15-baseline.md) and
+[phase 1 results](reports/2026-11-15-phase1-results.md). Heap and overlap outcomes are mixed;
+the report is not a claim that every page improved.
 
 Dependency references: [Android setup](https://developers.google.com/ml-kit/vision/text-recognition/v2/android)
 and [release notes](https://developers.google.com/ml-kit/release-notes). ML Kit requires API 23;

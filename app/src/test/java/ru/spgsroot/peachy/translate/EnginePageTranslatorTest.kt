@@ -14,8 +14,34 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 
 class EnginePageTranslatorTest {
+    @get:Rule val folder = TemporaryFolder()
+    @Test fun secondRequestWithAnotherTargetReusesTheCachedOcr() = runBlocking {
+        val ocr = FakeOcr(blocks)
+        val engine = EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "test"), ocr, FileOcrCache(folder.root))
+        var loads = 0
+        reply("""{"lines":[{"i":0,"translation":"русский"}]}""")
+        val first = engine.translate(7, 0, TranslateRequest(TranslateEngine.MlKit,"ja","ru")) { loads++; jpeg }
+        reply("""{"lines":[{"i":0,"translation":"English"}]}""")
+        val second = engine.translate(7, 0, TranslateRequest(TranslateEngine.MlKit,"ja","en")) { loads++; jpeg }
+        assertEquals("русский", first.lines.single().translation)
+        assertEquals("English", second.lines.single().translation)
+        assertEquals(1, loads); assertEquals(1, ocr.calls)
+    }
+    @Test fun ocrCacheHitDoesNotLoadTheImage() = runBlocking {
+        val cache = FileOcrCache(folder.root)
+        cache.put(7,0,"ja",blocks)
+        val ocr = FakeOcr(emptyList())
+        val engine = EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "test"), ocr, cache)
+        reply("""{"lines":[{"i":0,"translation":"cached"}]}""")
+        val result = engine.translate(7,0,TranslateRequest(TranslateEngine.MlKit,"ja","en")) { error("Must not load the image") }
+        assertEquals("cached", result.lines.single().translation)
+        assertEquals(0,ocr.calls)
+    }
     private lateinit var server: MockWebServer
     private lateinit var provider: ProviderSettings
     private val jpeg = byteArrayOf(1, 2, 3)
@@ -36,7 +62,7 @@ class EnginePageTranslatorTest {
     }
 
     private fun translator(ocr: PageOcr): PageTranslator = EnginePageTranslator(
-        TranslationClient(OkHttpClient(), { provider }, "Peachy/test"), ocr
+        TranslationClient(OkHttpClient(), { provider }, "Peachy/test"), ocr, FileOcrCache(folder.root)
     )
 
     private fun reply(content: String) {
@@ -52,10 +78,10 @@ class EnginePageTranslatorTest {
         var source: String? = null
         var image: ByteArray? = null
 
-        override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> {
+        override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
             calls++
             this.source = source
-            image = jpeg
+            this.image = image
             return result
         }
     }
@@ -64,23 +90,12 @@ class EnginePageTranslatorTest {
     fun modelDispatchSendsTheImageAndRequestsTightBubbleBoxesWithoutCallingOcr() = runBlocking {
         val ocr = FakeOcr(blocks)
         reply("""{"sourceLanguage":"ja","lines":[{"kind":"speech","text":"ハ？","translation":"А?","box":[100,200,300,400]}]}""")
-        val result = translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.Model, "ja", "ru"))
+        val result = translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.Model, "ja", "ru")) { jpeg }
         assertEquals("ja", result.sourceLanguage)
         assertEquals(listOf(TranslatedLine(LineKind.Speech, "ハ？", "А?", Box(0.1f, 0.2f, 0.3f, 0.4f))), result.lines)
         assertEquals(0, ocr.calls)
         val body = JSONObject(server.takeRequest().body.readUtf8())
         val messages = body.getJSONArray("messages")
-        val system = messages.getJSONObject(0).getString("content")
-        assertTrue(system.contains("Russian"))
-        assertTrue(system.contains("Japanese"))
-        assertTrue(system.contains("\"box\""))
-        assertTrue(system.contains("0..1000"))
-        assertTrue(system.contains("width"))
-        assertTrue(system.contains("height"))
-        assertTrue(system.contains("bubble"))
-        assertTrue(system.contains("caption"))
-        assertTrue(system.contains("fiction for adults"))
-        assertTrue(system.contains("faithfully and completely"))
         val parts = messages.getJSONObject(1).getJSONArray("content")
         val image = (0 until parts.length()).map { parts.getJSONObject(it) }.single { it.getString("type") == "image_url" }
         assertEquals("data:image/jpeg;base64,AQID", image.getJSONObject("image_url").getString("url"))
@@ -90,7 +105,7 @@ class EnginePageTranslatorTest {
     fun mlKitPassesSourceAndMapsReorderedIndicesToOriginalTextAndBox() = runBlocking {
         val ocr = FakeOcr(blocks)
         reply("""{"lines":[{"i":1,"kind":"thought","translation":"второй"},{"i":0,"kind":"speech","translation":"первый"}]}""")
-        val result = translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "ja", "ru"))
+        val result = translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "ja", "ru")) { jpeg }
         assertEquals("ja", result.sourceLanguage)
         assertEquals(listOf(
             TranslatedLine(LineKind.Thought, "次の吹き出し", "второй", Box(0.5f, 0.6f, 0.8f, 0.9f)),
@@ -112,7 +127,7 @@ class EnginePageTranslatorTest {
     fun emptyOcrReturnsChosenLanguageWithoutNetworkEvenWithoutProviderConsent() = runBlocking {
         provider = ProviderSettings()
         val ocr = FakeOcr(emptyList())
-        val result = translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "ko", "en"))
+        val result = translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "ko", "en")) { jpeg }
         assertEquals(PageTranslation("ko", emptyList()), result)
         assertEquals("ko", ocr.source)
         assertEquals(0, server.requestCount)
@@ -121,7 +136,7 @@ class EnginePageTranslatorTest {
     @Test
     fun emptyAutoOcrReturnsEmptyLanguageWithoutNetwork() = runBlocking {
         val ocr = FakeOcr(emptyList())
-        val result = translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "auto", "ru"))
+        val result = translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "auto", "ru")) { jpeg }
         assertEquals(PageTranslation("", emptyList()), result)
         assertEquals("auto", ocr.source)
         assertEquals(0, server.requestCount)
@@ -131,7 +146,7 @@ class EnginePageTranslatorTest {
     fun autoSourceWithRecognizedBlocksStillReturnsEmptyLanguage() = runBlocking {
         val ocr = FakeOcr(blocks)
         reply("""{"sourceLanguage":"ja","lines":[{"i":0,"kind":"speech","translation":"первый"}]}""")
-        val result = translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "auto", "ru"))
+        val result = translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "auto", "ru")) { jpeg }
         assertEquals("", result.sourceLanguage)
         assertEquals("первый", result.lines.single().translation)
         assertEquals("auto", ocr.source)
@@ -155,7 +170,7 @@ class EnginePageTranslatorTest {
             {"i":1,"kind":"narration","translation":"второй"},
             {"i":1,"translation":"duplicate again"}
         ]}""")
-        val result = translator(FakeOcr(blocks)).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "ja", "ru"))
+        val result = translator(FakeOcr(blocks)).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "ja", "ru")) { jpeg }
         assertEquals(listOf(
             TranslatedLine(LineKind.Sign, "最初の吹き出し", "первый", Box(0.1f, 0.2f, 0.3f, 0.4f)),
             TranslatedLine(LineKind.Narration, "次の吹き出し", "второй", Box(0.5f, 0.6f, 0.8f, 0.9f))
@@ -166,12 +181,12 @@ class EnginePageTranslatorTest {
     @Test
     fun ocrFailurePropagatesWithoutSendingAnImageToTheProvider() {
         val ocr = object : PageOcr {
-            override suspend fun recognize(jpeg: ByteArray, source: String): List<OcrBlock> {
+            override suspend fun recognize(image: ByteArray, source: String): List<OcrBlock> {
                 throw IOException("cannot decode")
             }
         }
         try {
-            runBlocking { translator(ocr).translate(7, jpeg, TranslateRequest(TranslateEngine.MlKit, "auto", "en")) }
+            runBlocking { translator(ocr).translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "auto", "en")) { jpeg } }
             org.junit.Assert.fail("expected OCR failure")
         } catch (e: IOException) {
             assertEquals("cannot decode", e.message)

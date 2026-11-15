@@ -14,9 +14,9 @@ internal data class RawOcrBlock(val lines: List<RawOcrLine>, val rect: PixelRect
  * must overlap every existing member of a row, so a tall bridging box cannot chain unrelated rows.
  * Rows read top-to-bottom. Within a ja/zh row, form columns by the same rule on horizontal
  * intervals, read columns right-to-left and their members top-to-bottom. Other languages read each
- * row left-to-right. Japanese/Chinese lines within a block read in columns with no joining space;
- * Latin/Korean lines read in rows with a joining space. This simple rectangle heuristic cannot
- * infer panel borders or distinguish horizontal Chinese prose from vertical manga.
+ * row left-to-right. Each block chooses columns when most retained lines are tall (height >=
+ * 1.5 × width), otherwise rows. Joining omits spaces only for mostly kana/Han text. Auto chooses
+ * page columns when most retained blocks are vertical; geometry cannot infer panel borders.
  */
 internal fun groupOcrBlocks(
     blocks: List<RawOcrBlock>,
@@ -25,7 +25,7 @@ internal fun groupOcrBlocks(
     source: String
 ): List<OcrBlock> {
     require(imageWidth > 0 && imageHeight > 0)
-    val vertical = source == "ja" || source == "zh"
+    var verticalBlocks = 0
     val cleaned = blocks.mapNotNull { block ->
         val rect = PixelRect(
             block.rect.left.coerceIn(0, imageWidth), block.rect.top.coerceIn(0, imageHeight),
@@ -38,9 +38,25 @@ internal fun groupOcrBlocks(
             else line.copy(text = text)
         }
         if (lines.isEmpty()) return@mapNotNull null
+        val vertical = lines.count { it.rect.bottom - it.rect.top >= 1.5f * (it.rect.right - it.rect.left) } * 2 > lines.size
+        if (vertical) verticalBlocks++
         val ordered = if (vertical) columns(lines) { it.rect } else rows(lines) { it.rect }.flatten()
-        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(if (vertical) "" else " ") { it.text }, rect)), rect)
+        var letters = 0
+        var cjk = 0
+        for (line in lines) {
+            val points = line.text.codePoints().iterator()
+            while (points.hasNext()) {
+                val point = points.nextInt()
+                if (!Character.isLetter(point)) continue
+                letters++
+                val script = Character.UnicodeScript.of(point)
+                if (script == Character.UnicodeScript.HAN || script == Character.UnicodeScript.HIRAGANA || script == Character.UnicodeScript.KATAKANA) cjk++
+            }
+        }
+        val separator = if (cjk * 2 > letters) "" else " "
+        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(separator) { it.text }, rect)), rect)
     }
+    val vertical = source == "ja" || source == "zh" || (source == "auto" && verticalBlocks * 2 > cleaned.size)
     return rows(cleaned) { it.rect }.flatMap { row ->
         if (vertical) columns(row) { it.rect } else row.sortedWith(compareBy({ it.rect.left }, { it.rect.top }))
     }.map { block ->

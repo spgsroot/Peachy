@@ -2,6 +2,9 @@ package ru.spgsroot.peachy.translate
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.content.Context
+import coil.imageLoader
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -15,9 +18,10 @@ import okhttp3.Request
 import ru.spgsroot.peachy.data.manga.MangaLibraryRepository
 import ru.spgsroot.peachy.manga.NhentaiCdn
 
-/** Where the translator gets a page as a ready-to-send JPEG. */
+/** Where the translator gets original page bytes or an upload-ready JPEG. */
 interface PageSource {
     /** Throws [IOException] when the page cannot be fetched and [IllegalArgumentException] when it is not an image. */
+    suspend fun raw(galleryId: Int, page: Int): ByteArray
     suspend fun jpeg(galleryId: Int, page: Int): ByteArray
 }
 
@@ -63,9 +67,13 @@ object PageImage {
     }
 }
 
-/** Reads a page from the saved copy when there is one, otherwise from the CDN. Bind it to a gallery's page paths first. */
-class PageBytes @Inject constructor(private val library: MangaLibraryRepository) : PageSource {
-    private val http = OkHttpClient.Builder()
+/** Reads saved bytes, then the reader's Coil cache, then the CDN. Bind to a gallery's paths first. */
+class PageBytes @Inject constructor(
+    private val library: MangaLibraryRepository,
+    http: OkHttpClient,
+    @ApplicationContext private val context: Context
+) : PageSource {
+    private val http = http.newBuilder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -77,15 +85,23 @@ class PageBytes @Inject constructor(private val library: MangaLibraryRepository)
         paths = pagePaths
     }
 
-    override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
+    override suspend fun raw(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
         val path = paths.getOrNull(page) ?: throw IllegalArgumentException("No page $page")
         val local = library.localPage(galleryId, path)?.takeIf { it.isFile }
-        val bytes = local?.readBytes() ?: download(path)
-        PageImage.encode(bytes)
+        if (local != null) return@withContext traced("fetch.local") { local.readBytes() }
+        val url = NhentaiCdn.page(path) ?: throw IllegalArgumentException("Bad page path")
+        context.imageLoader.diskCache?.openSnapshot(url)?.use { snapshot ->
+            return@withContext traced("fetch.coil") { snapshot.data.toFile().readBytes() }
+        }
+        traced("fetch.net") { download(url) }
     }
 
-    private fun download(path: String): ByteArray {
-        val url = NhentaiCdn.page(path) ?: throw IllegalArgumentException("Bad page path")
+    override suspend fun jpeg(galleryId: Int, page: Int): ByteArray = withContext(Dispatchers.IO) {
+        val bytes = raw(galleryId, page)
+        traced("encode") { PageImage.encode(bytes) }
+    }
+
+    private fun download(url: String): ByteArray {
         http.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             return response.body?.bytes() ?: throw IOException("Empty body")

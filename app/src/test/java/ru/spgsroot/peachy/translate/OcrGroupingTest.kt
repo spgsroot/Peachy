@@ -5,6 +5,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OcrGroupingTest {
+    @Test fun autoWithTallLinesReadsColumnsRightToLeftWithoutSpaces() {
+        val input = RawOcrBlock(listOf(
+            RawOcrLine("左", PixelRect(10, 10, 30, 90)),
+            RawOcrLine("右", PixelRect(60, 10, 80, 90))
+        ), PixelRect(10, 10, 80, 90))
+        assertEquals("右左", groupOcrBlocks(listOf(input), 100, 100, "auto").single().text)
+    }
+    @Test fun japaneseSourceWithHorizontalLinesReadsRowsAndJoinsWithoutSpaces() {
+        val input = RawOcrBlock(listOf(
+            RawOcrLine("あいう", PixelRect(10, 10, 90, 25)),
+            RawOcrLine("えお", PixelRect(10, 40, 90, 55))
+        ), PixelRect(10, 10, 90, 55))
+        assertEquals("あいうえお", groupOcrBlocks(listOf(input),100,100,"ja").single().text)
+    }
+    @Test fun autoPageWithMostlyVerticalBlocksPutsTheRightBlockFirst() {
+        val input = listOf(block("左", 10,10,30,90),block("右",60,10,80,90))
+        assertEquals(listOf("右","左"),groupOcrBlocks(input,100,100,"auto").map { it.text })
+    }
+
     private fun block(text: String, left: Int, top: Int, right: Int, bottom: Int) =
         RawOcrBlock(listOf(RawOcrLine(text, PixelRect(left, top, right, bottom))), PixelRect(left, top, right, bottom))
 
@@ -30,7 +49,7 @@ class OcrGroupingTest {
         assertEquals(listOf("left", "right"), groupOcrBlocks(input, 1000, 1000, "auto").map { it.text })
     }
 
-    @Test fun autoKeepsSpacesBetweenLines() {
+    @Test fun autoWithWideLatinLinesReadsRowsWithSpaces() {
         val rect = PixelRect(10, 10, 90, 90)
         val input = listOf(RawOcrBlock(listOf(
             RawOcrLine("hello", PixelRect(10, 10, 90, 30)),

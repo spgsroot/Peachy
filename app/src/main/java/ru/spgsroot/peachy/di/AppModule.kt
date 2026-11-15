@@ -15,6 +15,9 @@ import ru.spgsroot.peachy.translate.ProviderSettingsStore
 import ru.spgsroot.peachy.translate.TranslationClient
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
+import java.io.File
+import ru.spgsroot.peachy.translate.OcrCache
+import ru.spgsroot.peachy.translate.FileOcrCache
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -34,17 +37,26 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideHttpClient(): OkHttpClient = OkHttpClient()
+
+    @Provides
+    @Singleton
     fun provideTranslationClient(
         @ApplicationContext context: Context,
-        providerStore: ProviderSettingsStore
+        providerStore: ProviderSettingsStore,
+        http: OkHttpClient
     ): TranslationClient {
         val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
         return TranslationClient(
-            OkHttpClient(),
+            http,
             { providerStore.settings.value },
             "Peachy/$version (+https://github.com/spgsroot/VibePlayer)"
         )
     }
+
+    @Provides
+    @Singleton
+    fun provideOcrCache(@ApplicationContext context: Context): OcrCache = FileOcrCache(File(context.cacheDir, "ocr"))
 
     @Provides
     @Singleton

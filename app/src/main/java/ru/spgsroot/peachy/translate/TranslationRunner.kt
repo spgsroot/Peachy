@@ -77,8 +77,9 @@ class TranslationRunner(
             val before = _pages.value[page]
             publish(page, PageState.Loading)
             try {
-                val jpeg = source.jpeg(galleryId, page)
-                val translation = translator.translate(galleryId, jpeg, request)
+                val translation = translator.translate(galleryId, page, request) {
+                    if (request.engine == TranslateEngine.Model) source.jpeg(galleryId, page) else source.raw(galleryId, page)
+                }
                 cache.put(galleryId, page, lang, model(), translation)
                 publish(page, PageState.Done(translation))
             } catch (e: CancellationException) {
