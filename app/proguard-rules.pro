@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# libsqlcipher.so JNI_OnLoad looks up SQLiteDatabase.mNativeHandle and other members by name.
+-keep class net.sqlcipher.** { *; }
