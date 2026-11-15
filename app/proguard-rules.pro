@@ -22,3 +22,6 @@
 
 # libsqlcipher.so JNI_OnLoad looks up SQLiteDatabase.mNativeHandle and other members by name.
 -keep class net.sqlcipher.** { *; }
+
+# libonnxruntime4j_jni.so resolves ai.onnxruntime classes, fields and methods by name.
+-keep class ai.onnxruntime.** { *; }
