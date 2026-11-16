@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="browser_address_hint">Address or search</string>
+    <string name="browser_open">Browser</string>
+    <string name="browser_navigation_title">Open another site?</string>
+    <string name="browser_navigation_message">The page is asking to open %1$s.</string>
+    <string name="browser_navigation_continue">Open</string>
+    <string name="browser_navigation_stay">Stay</string>
+    <string name="browser_popup_title">Open a new tab?</string>
+    <string name="browser_popup_message">The page wants to open %1$s in a new tab.</string>
+    <string name="browser_popup_open">Open</string>
+    <string name="browser_popup_blocked">Popup blocked</string>
+    <string name="browser_insecure_navigation_blocked">Insecure HTTP navigation blocked</string>
+    <string name="browser_insecure_connection">The connection is not secure; the page was blocked</string>
     <string name="browser_too_many_tabs">Too many tabs</string>
     <string name="browser_download_offered">Video added to the page videos list</string>
     <string name="browser_download_unsupported">Downloading this kind of file is not supported</string>

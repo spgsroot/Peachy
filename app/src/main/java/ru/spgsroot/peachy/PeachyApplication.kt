@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.data.repository.SettingsRepository
 import ru.spgsroot.peachy.locale.LocaleManager
+import ru.spgsroot.peachy.security.AppLockGuard
 import ru.spgsroot.peachy.translate.OrtBubbleDetector
 import javax.inject.Inject
 
@@ -22,6 +23,9 @@ class PeachyApplication : Application() {
     @Inject
     lateinit var bubbleDetector: OrtBubbleDetector
 
+    @Inject
+    lateinit var appLockGuard: AppLockGuard
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun attachBaseContext(base: Context) {
@@ -32,6 +36,7 @@ class PeachyApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        appLockGuard.install(this, MainActivity::class.java)
         initializeSettings()
     }
 

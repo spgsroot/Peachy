@@ -17,46 +17,47 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.core.os.LocaleListCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
-import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import ru.spgsroot.peachy.security.AuthManager
+import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.locale.LocaleManager
-import ru.spgsroot.peachy.ui.auth.AuthScreen
+import ru.spgsroot.peachy.security.AppLockGuard
+import ru.spgsroot.peachy.security.AuthManager
 import ru.spgsroot.peachy.security.AuthSession
+import ru.spgsroot.peachy.ui.auth.AuthScreen
+import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
 import ru.spgsroot.peachy.ui.gallery.GalleryScreen
+import ru.spgsroot.peachy.ui.gallery.GalleryViewModel
 import ru.spgsroot.peachy.ui.manga.GalleryDetailScreen
 import ru.spgsroot.peachy.ui.manga.MangaHubScreen
 import ru.spgsroot.peachy.ui.manga.MangaReaderScreen
 import ru.spgsroot.peachy.ui.manga.TagBrowserScreen
 import ru.spgsroot.peachy.ui.manga.searchCatalog
-import ru.spgsroot.peachy.ui.gallery.GalleryViewModel
 import ru.spgsroot.peachy.ui.onboarding.OnboardingScreen
 import ru.spgsroot.peachy.ui.player.PlayerScreen
 import ru.spgsroot.peachy.ui.player.PlayerViewModel
-import ru.spgsroot.peachy.ui.theme.PeachyTheme
-import ru.spgsroot.peachy.ui.share.ShareImportViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.awaitCancellation
 import ru.spgsroot.peachy.ui.settings.UpdateDialogHost
-import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
-import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.ui.settings.UpdateViewModel
+import ru.spgsroot.peachy.ui.share.ShareImportViewModel
+import ru.spgsroot.peachy.ui.theme.PeachyTheme
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -68,7 +69,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authSession: AuthSession
 
+    @Inject
+    lateinit var appLockGuard: AppLockGuard
+
     private val shareImportViewModel: ShareImportViewModel by viewModels()
+    private var recreated = false
 
     override fun attachBaseContext(newBase: Context) {
         val languageCode = LocaleManager.getCurrentLocale()
@@ -89,6 +94,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().popPeachOnExit()
         super.onCreate(savedInstanceState)
+        recreated = savedInstanceState != null
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (savedInstanceState == null) shareImportViewModel.enqueue(intent)
         // The app is dark in every system theme: light status and navigation bar icons.
@@ -110,33 +116,162 @@ class MainActivity : ComponentActivity() {
         shareImportViewModel.enqueue(intent)
     }
 
-    override fun onStop() {
-        if (::authSession.isInitialized && !isChangingConfigurations) {
-            authSession.lock()
-        }
-        super.onStop()
+    override fun onResume() {
+        super.onResume()
+        appLockGuard.rootResumed(recreated)
+        recreated = false
     }
 
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        val picker = requestCode >= 0 && intent.action?.let(PICKER_ACTIONS::contains) == true
+        if (picker) appLockGuard.pickerLaunched(requestCode)
+        try {
+            super.startActivityForResult(intent, requestCode, options)
+        } catch (failure: Throwable) {
+            if (picker) appLockGuard.pickerResult(requestCode)
+            throw failure
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode >= 0) appLockGuard.pickerResult(requestCode)
+    }
+
+    private companion object {
+        /**
+         * Pickers whose result belongs to the screen that opened them: waiting for one is not
+         * leaving the app. Includes the platform, AndroidX fallback and GMS photo pickers.
+         */
+        val PICKER_ACTIONS = setOf(
+            Intent.ACTION_OPEN_DOCUMENT,
+            Intent.ACTION_OPEN_DOCUMENT_TREE,
+            Intent.ACTION_CREATE_DOCUMENT,
+            Intent.ACTION_GET_CONTENT,
+            Intent.ACTION_PICK,
+            "android.provider.action.PICK_IMAGES",
+            "androidx.activity.result.contract.action.PICK_IMAGES",
+            "com.google.android.gms.provider.action.PICK_IMAGES"
+        )
+    }
 }
 
 @Composable
 fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImports: ShareImportViewModel) {
-    val navController = rememberNavController()
-    var startDestination by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val unlocked by authSession.unlocked.collectAsState()
-    val hasPendingShare by shareImports.hasPending.collectAsState()
+    val passwordSetFlow = remember(authManager) { authManager.isPasswordSetFlow() }
+    val onboardingFlow = remember(authManager) { authManager.isOnboardingCompletedFlow() }
+    val passwordSetState by passwordSetFlow.collectAsState(initial = null)
+    val onboardingCompletedState by onboardingFlow.collectAsState(initial = null)
+    // Local copies: delegated properties cannot be smart cast, and both are read once per frame.
+    val onboardingCompleted = onboardingCompletedState
+    val passwordSet = passwordSetState
+    val locked = passwordSet == true && !unlocked
+
+    LaunchedEffect(passwordSet) {
+        passwordSet?.let(authSession::setPasswordConfigured)
+    }
+
+    // A link handed over by another app keeps downloading in the background; say how each ended,
+    // even while the password screen is up.
+    LaunchedEffect(Unit) {
+        shareImports.linkResults.collect { result ->
+            val error = result.exceptionOrNull()
+            when {
+                error == null -> context.getString(R.string.download_success)
+                error is DuplicateVideoException -> null // the duplicate dialog explains it
+                else -> context.getString(R.string.error_download_failed)
+            }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    when {
+        // The stored session is still being read; the splash screen covers this moment.
+        onboardingCompleted == null || passwordSet == null -> Unit
+        !onboardingCompleted -> OnboardingScreen(
+            onComplete = {
+                scope.launch { authManager.skipOnboarding() }
+            },
+            onPasswordSet = { password ->
+                scope.launch {
+                    authManager.setPassword(password)
+                    authSession.setPasswordConfigured(true)
+                    authSession.unlock()
+                }
+            }
+        )
+        locked -> AuthGate(authManager, authSession)
+        else -> UnlockedApp(shareImports)
+    }
+}
+
+/**
+ * The password screen is the whole app while the session is locked: no destination is composed
+ * underneath it, so nothing protected is drawn for even one frame on the way back.
+ */
+@Composable
+private fun AuthGate(authManager: AuthManager, authSession: AuthSession) {
+    var status by remember { mutableStateOf<String?>(null) }
+    var inputEnabled by remember { mutableStateOf(true) }
+    var resetRequired by remember { mutableStateOf(false) }
+    val lockedTemplate = stringResource(R.string.auth_locked_seconds)
+    val resetText = stringResource(R.string.auth_reset_required)
+    LaunchedEffect(Unit) {
+        resetRequired = authManager.isResetRequired()
+        while (true) {
+            val remaining = authManager.lockRemainingMs()
+            val seconds = ((remaining + 999) / 1000).toInt()
+            inputEnabled = remaining == 0L
+            status = when {
+                resetRequired -> resetText
+                remaining > 0L -> lockedTemplate.format(seconds)
+                else -> null
+            }
+            delay(500)
+        }
+    }
+    AuthScreen(
+        onVerifyPassword = { password ->
+            if (resetRequired) {
+                authManager.setPassword(password)
+                authSession.setPasswordConfigured(true)
+                resetRequired = false
+                authSession.unlock()
+                true
+            } else {
+                val accepted = authManager.verifyPassword(password)
+                resetRequired = authManager.isResetRequired()
+                if (accepted) authSession.unlock()
+                accepted
+            }
+        },
+        onAuthenticated = {},
+        statusMessage = status,
+        inputEnabled = inputEnabled
+    )
+}
+
+@Composable
+private fun UnlockedApp(shareImports: ShareImportViewModel) {
+    // The controller belongs to the unlocked session: locking disposes it together with every
+    // destination, so an unlock always starts from the graph's start destination.
+    val navController = rememberNavController()
+    val context = LocalContext.current
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val canImport = route != null && route != "onboarding" && route != "auth"
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val canImport = route != null
     val updates: UpdateViewModel = hiltViewModel()
     val updateOptions by updates.options.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val hasPendingShare by shareImports.hasPending.collectAsState()
     var updateAccess by remember { mutableStateOf(false) }
 
-    LaunchedEffect(canImport, unlocked, updateOptions.autoCheckEnabled, lifecycleOwner) {
-        updateAccess = canImport && (!authManager.isPasswordSet() || unlocked)
+    LaunchedEffect(canImport, updateOptions.autoCheckEnabled, lifecycleOwner) {
+        updateAccess = canImport
         if (updateAccess) {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 updates.checkAutomatically()
@@ -151,13 +286,13 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
 
     // Import only inside the unlocked app, not in the player destination. An onNewIntent share
     // therefore works while gallery/manga is already open, and photos never enter PlayerViewModel.
-    LaunchedEffect(hasPendingShare, canImport, unlocked) {
-        if (hasPendingShare && canImport && (!authManager.isPasswordSet() || unlocked)) {
+    LaunchedEffect(hasPendingShare, canImport) {
+        if (hasPendingShare && canImport) {
             shareImports.importPending()
         }
     }
-    LaunchedEffect(canImport, unlocked) {
-        if (!canImport || (authManager.isPasswordSet() && !unlocked)) return@LaunchedEffect
+    LaunchedEffect(canImport) {
+        if (!canImport) return@LaunchedEffect
         shareImports.results.collect { result ->
             val onlyLinks = result.started > 0 && result.imported + result.failed + result.duplicates == 0
             Toast.makeText(
@@ -179,160 +314,63 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
             }
         }
     }
-    // A link handed over by another app keeps downloading in the background; say how each ended.
-    LaunchedEffect(Unit) {
-        shareImports.linkResults.collect { result ->
-            val error = result.exceptionOrNull()
-            when {
-                error == null -> context.getString(R.string.download_success)
-                error is DuplicateVideoException -> null // the duplicate dialog explains it
-                else -> context.getString(R.string.error_download_failed)
-            }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+
+    NavHost(
+        navController = navController,
+        startDestination = "player",
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None }
+    ) {
+        composable("player") {
+            val playerViewModel: PlayerViewModel = hiltViewModel()
+            PlayerScreen(navController = navController, viewModel = playerViewModel)
         }
-    }
-
-    LaunchedEffect(Unit) {
-        startDestination = when {
-            !authManager.isOnboardingCompleted() -> "onboarding"
-            authManager.isPasswordSet() && !authSession.unlocked.value -> "auth"
-            else -> "player"
+        composable("gallery") {
+            val galleryViewModel: GalleryViewModel = hiltViewModel()
+            GalleryScreen(navController = navController, viewModel = galleryViewModel)
         }
-    }
-
-
-    val authGateActive = startDestination != null && route != null && route != "onboarding"
-    LaunchedEffect(unlocked, authGateActive) {
-        if (!authGateActive) return@LaunchedEffect
-        val needsAuth = authManager.isPasswordSet() && !unlocked
-        if (needsAuth && navController.currentDestination?.route != "auth") {
-            navController.navigate("auth") {
-                popUpTo(navController.graph.id) { inclusive = true }
-            }
+        composable("manga") { entry ->
+            MangaHubScreen(navController = navController, entry = entry)
         }
-    }
-
-    startDestination?.let { start ->
-        NavHost(
-            navController = navController,
-            startDestination = start,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
-        ) {
-            composable("onboarding") {
-                OnboardingScreen(
-                    onComplete = {
-                        scope.launch {
-                            authManager.skipOnboarding()
-                            navController.navigate("player") {
-                                popUpTo("onboarding") { inclusive = true }
-                            }
-                        }
-                    },
-                    onPasswordSet = { password ->
-                        scope.launch {
-                            authManager.setPassword(password)
-                            authSession.unlock()
-                            navController.navigate("player") {
-                                popUpTo("onboarding") { inclusive = true }
-                            }
-                        }
-                    }
-                )
-            }
-            composable("auth") {
-                var status by remember { mutableStateOf<String?>(null) }
-                var inputEnabled by remember { mutableStateOf(true) }
-                var resetRequired by remember { mutableStateOf(false) }
-                val lockedTemplate = stringResource(R.string.auth_locked_seconds)
-                val resetText = stringResource(R.string.auth_reset_required)
-                LaunchedEffect(Unit) {
-                    resetRequired = authManager.isResetRequired()
-                    while (true) {
-                        val remaining = authManager.lockRemainingMs()
-                        val seconds = ((remaining + 999) / 1000).toInt()
-                        inputEnabled = remaining == 0L
-                        status = when {
-                            resetRequired -> resetText
-                            remaining > 0L -> lockedTemplate.format(seconds)
-                            else -> null
-                        }
-                        delay(500)
-                    }
+        composable(
+            "manga/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.IntType })
+        ) { entry ->
+            GalleryDetailScreen(
+                galleryId = entry.arguments?.getInt("id") ?: return@composable,
+                navController = navController
+            )
+        }
+        composable(
+            "manga/{id}/read?page={page}",
+            arguments = listOf(
+                navArgument("id") { type = NavType.IntType },
+                navArgument("page") {
+                    type = NavType.IntType
+                    defaultValue = -1
                 }
-                AuthScreen(
-                    onVerifyPassword = { password ->
-                        if (resetRequired) {
-                            authManager.setPassword(password)
-                            resetRequired = false
-                            authSession.unlock()
-                            true
-                        } else {
-                            val accepted = authManager.verifyPassword(password)
-                            resetRequired = authManager.isResetRequired()
-                            if (accepted) authSession.unlock()
-                            accepted
-                        }
-                    },
-                    onAuthenticated = {
-                        navController.navigate("player") {
-                            popUpTo("auth") { inclusive = true }
-                        }
-                    },
-                    statusMessage = status,
-                    inputEnabled = inputEnabled
-                )
-            }
-            composable("player") {
-                val playerViewModel: PlayerViewModel = hiltViewModel()
-                PlayerScreen(navController = navController, viewModel = playerViewModel)
-            }
-            composable("gallery") {
-                val galleryViewModel: GalleryViewModel = hiltViewModel()
-                GalleryScreen(navController = navController, viewModel = galleryViewModel)
-            }
-            composable("manga") { entry ->
-                MangaHubScreen(navController = navController, entry = entry)
-            }
-            composable(
-                "manga/{id}",
-                arguments = listOf(navArgument("id") { type = NavType.IntType })
-            ) { entry ->
-                GalleryDetailScreen(
-                    galleryId = entry.arguments?.getInt("id") ?: return@composable,
-                    navController = navController
-                )
-            }
-            composable(
-                "manga/{id}/read?page={page}",
-                arguments = listOf(
-                    navArgument("id") { type = NavType.IntType },
-                    navArgument("page") {
-                        type = NavType.IntType
-                        defaultValue = -1
-                    }
-                )
-            ) { entry ->
-                MangaReaderScreen(
-                    galleryId = entry.arguments?.getInt("id") ?: return@composable,
-                    startAt = entry.arguments?.getInt("page")?.takeIf { it >= 0 },
-                    navController = navController
-                )
-            }
-            composable(
-                "mangatags/{type}",
-                arguments = listOf(navArgument("type") { type = NavType.StringType })
-            ) { entry ->
-                TagBrowserScreen(
-                    onSearch = navController::searchCatalog,
-                    onBack = { navController.popBackStack() },
-                    initialType = entry.arguments?.getString("type") ?: "tag"
-                )
-            }
+            )
+        ) { entry ->
+            MangaReaderScreen(
+                galleryId = entry.arguments?.getInt("id") ?: return@composable,
+                startAt = entry.arguments?.getInt("page")?.takeIf { it >= 0 },
+                navController = navController
+            )
+        }
+        composable(
+            "mangatags/{type}",
+            arguments = listOf(navArgument("type") { type = NavType.StringType })
+        ) { entry ->
+            TagBrowserScreen(
+                onSearch = navController::searchCatalog,
+                onBack = { navController.popBackStack() },
+                initialType = entry.arguments?.getString("type") ?: "tag"
+            )
         }
     }
 }

@@ -5,25 +5,34 @@ import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
@@ -35,12 +44,16 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.StickyNote2
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +64,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -67,6 +81,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -77,6 +94,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.browser.BrowserUrls
@@ -151,6 +169,8 @@ fun BrowserScreen(
     BackHandler {
         when {
             fullscreen != null -> controller.hideFullscreen()
+            controller.pendingNavigation != null -> controller.dismissPendingNavigation()
+            controller.pendingWindow != null -> controller.dismissPendingWindow()
             sheet != null -> sheet = null
             tab.canGoBack -> controller.goBack(tab)
             tab.webView != null -> controller.showStart(tab)
@@ -204,7 +224,21 @@ fun BrowserScreen(
                         Icon(Icons.Filled.Movie, stringResource(R.string.browser_videos))
                     }
                 }
-                IconButton(onClick = { sheet = Sheet.TABS }) {
+                IconButton(onClick = {
+                    var opened = false
+                    fun openTabs() {
+                        if (!opened) {
+                            opened = true
+                            sheet = Sheet.TABS
+                        }
+                    }
+                    controller.captureActiveThumbnail { openTabs() }
+                    // The preview is a bonus; the overview must open even if no frame arrives.
+                    scope.launch {
+                        delay(400)
+                        openTabs()
+                    }
+                }) {
                     Box(
                         Modifier.size(24.dp).border(BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), RoundedCornerShape(5.dp)),
                         contentAlignment = Alignment.Center
@@ -356,6 +390,44 @@ fun BrowserScreen(
         }
     }
 
+    val pending = controller.pendingNavigation
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = controller::dismissPendingNavigation,
+            title = { Text(stringResource(R.string.browser_navigation_title)) },
+            text = { Text(stringResource(R.string.browser_navigation_message, BrowserUrls.displayHost(pending.url))) },
+            confirmButton = {
+                Button(onClick = controller::continuePendingNavigation) {
+                    Text(stringResource(R.string.browser_navigation_continue))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = controller::dismissPendingNavigation) {
+                    Text(stringResource(R.string.browser_navigation_stay))
+                }
+            }
+        )
+    }
+
+    val pendingWindow = controller.pendingWindow
+    if (pendingWindow != null && pending == null) {
+        AlertDialog(
+            onDismissRequest = controller::dismissPendingWindow,
+            title = { Text(stringResource(R.string.browser_popup_title)) },
+            text = { Text(stringResource(R.string.browser_popup_message, BrowserUrls.displayHost(pendingWindow.url))) },
+            confirmButton = {
+                Button(onClick = controller::openPendingWindow) {
+                    Text(stringResource(R.string.browser_popup_open))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = controller::dismissPendingWindow) {
+                    Text(stringResource(R.string.browser_navigation_stay))
+                }
+            }
+        )
+    }
+
     DuplicateVideoHost()
 }
 
@@ -459,28 +531,130 @@ private fun LinkList(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TabsSheet(controller: BrowserController, onPick: (BrowserTab) -> Unit, onNew: () -> Unit) {
-    Column {
-        Button(onClick = onNew, modifier = Modifier.padding(horizontal = 16.dp)) { Text(stringResource(R.string.browser_new_tab)) }
-        Spacer(Modifier.size(8.dp))
-        LazyColumn {
-            items(controller.tabs.toList(), key = { it.id }) { item ->
-                val label = item.title.ifBlank { BrowserUrls.displayHost(item.url).ifBlank { stringResource(R.string.browser_untitled) } }
-                ListItem(
-                    headlineContent = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = { if (item.url.isNotEmpty()) Text(item.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    trailingContent = {
-                        IconButton(onClick = { controller.close(item) }) {
-                            Icon(Icons.Filled.Close, stringResource(R.string.browser_close_tab))
-                        }
-                    },
-                    colors = androidx.compose.material3.ListItemDefaults.colors(
-                        containerColor = if (item.id == controller.activeId) MaterialTheme.colorScheme.secondaryContainer
-                        else MaterialTheme.colorScheme.surface
-                    ),
-                    modifier = Modifier.clickable { onPick(item) }
-                )
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                stringResource(R.string.browser_tabs),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+        gridItems(controller.tabs.toList(), key = { it.id }) { item ->
+            TabCard(
+                tab = item,
+                active = item.id == controller.activeId,
+                thumbnail = controller.thumbnails[item.id],
+                onPick = { onPick(item) },
+                onClose = { controller.close(item) }
+            )
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.browser_new_tab))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TabCard(
+    tab: BrowserTab,
+    active: Boolean,
+    thumbnail: android.graphics.Bitmap?,
+    onPick: () -> Unit,
+    onClose: () -> Unit
+) {
+    val label = tab.title.ifBlank { BrowserUrls.displayHost(tab.url).ifBlank { stringResource(R.string.browser_untitled) } }
+    val host = BrowserUrls.displayHost(tab.url)
+    Card(
+        onClick = onPick,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (active) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        border = if (active) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.66f)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                if (thumbnail != null) {
+                    Image(
+                        bitmap = thumbnail.asImageBitmap(),
+                        contentDescription = label,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Public,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Text(
+                            host.ifBlank { stringResource(R.string.browser_untitled) },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                        .clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        stringResource(R.string.browser_close_tab),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (host.isNotEmpty()) {
+                    Text(
+                        host,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

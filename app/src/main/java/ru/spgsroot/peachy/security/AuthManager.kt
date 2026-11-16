@@ -105,12 +105,8 @@ class AuthManager @Inject constructor(
         return context.authDataStore.data.map { it[passwordKey] != null }
     }
 
-    suspend fun isPasswordSet(): Boolean {
-        return context.authDataStore.data.map { it[passwordKey] }.first() != null
-    }
-
-    suspend fun isOnboardingCompleted(): Boolean {
-        return context.authDataStore.data.map { it[onboardingKey] ?: false }.first()
+    fun isOnboardingCompletedFlow(): Flow<Boolean> {
+        return context.authDataStore.data.map { it[onboardingKey] ?: false }
     }
 
     private fun hashPassword(password: String): String {

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
@@ -123,6 +124,12 @@ fun PlayerScreen(
                             }
                             IconButton(onClick = { navController.navigate("manga") }) {
                                 Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
+                            }
+                            IconButton(onClick = {
+                                viewModel.pauseForWebView()
+                                context.startActivity(Intent(context, WebViewActivity::class.java))
+                            }) {
+                                Icon(Icons.Default.Public, stringResource(R.string.browser_open))
                             }
                             IconButton(onClick = { showAddDialog = true }) {
                                 Icon(Icons.Default.Add, stringResource(R.string.content_description_add_video))

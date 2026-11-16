@@ -54,9 +54,14 @@ fun PasswordSetupDialog(
         text = {
             Column(
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(stringResource(R.string.password_hint), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.password_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 DigitSlot(
                     stringResource(R.string.label_password),
                     password,
@@ -75,7 +80,9 @@ fun PasswordSetupDialog(
                     { active = 1 },
                     { revealed = !revealed }
                 )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
+                }
                 NumericKeypad(
                     enabled = true,
                     onDigit = { digit ->
@@ -135,7 +142,8 @@ fun PasswordChangeDialog(
         text = {
             Column(
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 DigitSlot(
                     stringResource(R.string.label_current_password),
@@ -164,7 +172,9 @@ fun PasswordChangeDialog(
                     { active = 2 },
                     { revealed = !revealed }
                 )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
+                }
                 NumericKeypad(
                     enabled = true,
                     onDigit = { digit ->

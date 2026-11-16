@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -65,8 +68,14 @@ fun AuthScreen(
     }
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
         val keySize = if (maxHeight < 640.dp || maxWidth < 360.dp) 56.dp else 72.dp
+        // verticalScroll gives unbounded height, so fillMaxSize alone cannot centre the card;
+        // the minimum height keeps it in the middle of the visible area.
         Box(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             ElevatedCard(Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
@@ -81,6 +90,8 @@ fun AuthScreen(
                         textAlign = TextAlign.Center
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Mirrors the visibility button so the digits sit on the card's centre line.
+                        Spacer(Modifier.size(48.dp))
                         DigitReadout(
                             value = password,
                             revealed = visible,

@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="browser_address_hint">Адрес или поисковый запрос</string>
+    <string name="browser_open">Браузер</string>
+    <string name="browser_navigation_title">Перейти на другой сайт?</string>
+    <string name="browser_navigation_message">Страница запрашивает переход на %1$s.</string>
+    <string name="browser_navigation_continue">Перейти</string>
+    <string name="browser_navigation_stay">Остаться</string>
+    <string name="browser_popup_title">Открыть новую вкладку?</string>
+    <string name="browser_popup_message">Страница просит открыть %1$s в новой вкладке.</string>
+    <string name="browser_popup_open">Открыть</string>
+    <string name="browser_popup_blocked">Всплывающее окно заблокировано</string>
+    <string name="browser_insecure_navigation_blocked">Небезопасный переход по HTTP заблокирован</string>
+    <string name="browser_insecure_connection">Соединение не защищено, страница заблокирована</string>
     <string name="browser_too_many_tabs">Слишком много вкладок</string>
     <string name="browser_download_offered">Видео добавлено в список «Видео на странице»</string>
     <string name="browser_download_unsupported">Скачивание таких файлов не поддерживается</string>
