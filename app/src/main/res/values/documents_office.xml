@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Office editor: only reachable after the build opt-in and a successful engine probe. -->
+    <string name="office_title">Документ Office</string>
+    <string name="office_preparing">Подготавливаем страницу…</string>
+    <string name="office_viewport_description">Страница документа. Масштаб и переходы — кнопками под ней.</string>
+    <string name="office_edited">Изменено в этой сессии</string>
+    <string name="office_read_only_badge">Только чтение</string>
+
+    <!-- Gate states -->
+    <string name="office_gate_disabled_title">Редактор Office выключен в этой сборке</string>
+    <string name="office_gate_disabled_body">Интеграция Office не включена. Импортированные файлы остаются нетронутыми, открыть или изменить их здесь нельзя.</string>
+    <string name="office_gate_refused_title">Этот документ здесь не открывается</string>
+    <string name="office_refused_unknown">Формат сессии не распознан.</string>
+    <string name="office_refused_not_office">PDF и изображения открываются в своих редакторах, а не в Office.</string>
+
+    <!-- Legacy .ppt: text-only, read-only, in file order -->
+    <string name="office_legacy_scope">Только текст</string>
+    <string name="office_legacy_scope_body">Старый .ppt открыт только для чтения: показан текст слайдов и заметки в порядке файла. Изображения, вёрстка и экспорт недоступны.</string>
+    <string name="office_legacy_slide">Слайд %1$d</string>
+    <string name="office_legacy_hidden">Скрытый слайд</string>
+    <string name="office_legacy_table">Таблица</string>
+    <string name="office_legacy_notes">Заметки</string>
+    <string name="office_legacy_loading">Извлекаем текст слайдов…</string>
+    <string name="office_legacy_empty_title">В этом .ppt нет текста</string>
+    <string name="office_legacy_empty_body">Движок не нашёл ни текста слайдов, ни заметок. Изображения и вёрстка для старого .ppt не показываются: эта сборка открывает его только как текст.</string>
+    <string name="office_legacy_failed_title">Не удалось извлечь текст</string>
+    <string name="office_legacy_failed_body">Движок не вернул текст слайдов. Файл не изменён. Откройте его ещё раз или конвертируйте в .pptx вне Peachy.</string>
+
+    <string name="office_unavailable_title">Движок Office недоступен</string>
+    <string name="office_unavailable_bridge_classes">В сборке нет Java-моста движка.</string>
+    <string name="office_unavailable_native_libraries">Нативные библиотеки движка отсутствуют или не загрузились.</string>
+    <string name="office_unavailable_engine_assets">Дерево ресурсов движка (program/unpack) не упаковано.</string>
+    <string name="office_unavailable_build_manifest">Манифест закреплённой сборки движка отсутствует или неверен.</string>
+    <string name="office_unavailable_tile_mode">Сборка движка не использует проверенный формат пикселей, поэтому отрисовка запрещена.</string>
+    <string name="office_unavailable_initialisation">Инициализация движка не удалась.</string>
+    <string name="office_unavailable_macro_lock">Сборка движка не заявляет блокировку макросов, поэтому движок отклонён.</string>
+
+    <!-- Notices -->
+    <string name="office_notice_edits_memory">Изменения живут только в этой сессии и не записываются в рабочую копию. Исходный файл не меняется; чтобы сохранить результат, экспортируйте копию.</string>
+    <string name="office_notice_legacy">Старый двоичный .doc: текст и вёрстка приблизительны.</string>
+    <string name="office_notice_macro">Макросы из этого файла не исполняются и не попадают в экспорт.</string>
+    <string name="office_notice_xlsb">XLSB только импортируется: экспорт пишет XLSX, ODS, CSV, TSV или PDF.</string>
+    <string name="office_notice_read_only">Презентации открываются только для чтения. Экспорт создаёт копию.</string>
+
+    <!-- Navigation and zoom -->
+    <string name="office_page_previous">Предыдущая страница</string>
+    <string name="office_page_next">Следующая страница</string>
+    <string name="office_page_of">Страница %1$d из %2$d</string>
+    <string name="office_part_previous">Предыдущая часть</string>
+    <string name="office_part_next">Следующая часть</string>
+    <string name="office_part_of">Лист %1$d из %2$d</string>
+    <string name="office_slide_of">Слайд %1$d из %2$d</string>
+    <string name="office_slides">Слайды</string>
+    <string name="office_notes">Заметки</string>
+    <string name="office_zoom_out">Уменьшить</string>
+    <string name="office_zoom_in">Увеличить</string>
+    <string name="office_zoom_fit">Вписать</string>
+    <string name="office_zoom_percent">%1$d%%</string>
+
+    <!-- Writer and Calc editing (only commands the adapter allowlists per family) -->
+    <string name="office_cmd_bold">Полужирный</string>
+    <string name="office_cmd_italic">Курсив</string>
+    <string name="office_cmd_underline">Подчёркнутый</string>
+    <string name="office_cmd_center">По центру</string>
+    <string name="office_cmd_justify">По ширине</string>
+    <string name="office_cmd_bullets">Маркированный список</string>
+    <string name="office_cmd_numbering">Нумерованный список</string>
+    <string name="office_cmd_undo">Отменить</string>
+    <string name="office_cmd_redo">Повторить</string>
+    <string name="office_cmd_select_all">Выделить всё</string>
+    <string name="office_cmd_delete">Удалить</string>
+    <string name="office_cmd_row_above">Строка выше</string>
+    <string name="office_cmd_row_below">Строка ниже</string>
+    <string name="office_cmd_column_before">Столбец слева</string>
+    <string name="office_cmd_column_after">Столбец справа</string>
+    <string name="office_cmd_delete_row">Удалить строку</string>
+    <string name="office_cmd_delete_column">Удалить столбец</string>
+    <string name="office_cmd_merge">Объединить</string>
+    <string name="office_cmd_split">Разбить</string>
+    <string name="office_key_backspace">Удалить символ слева</string>
+    <string name="office_key_return">Ввод</string>
+    <string name="office_key_tab">Табуляция</string>
+    <string name="office_key_delete">Удалить символ справа</string>
+    <string name="office_key_left">Влево</string>
+    <string name="office_key_up">Вверх</string>
+    <string name="office_key_down">Вниз</string>
+    <string name="office_key_right">Вправо</string>
+    <string name="office_insert_label">Текст для вставки</string>
+    <string name="office_insert_action">Вставить</string>
+    <string name="office_text_invalid">Слишком длинно или содержит недопустимые управляющие символы.</string>
+
+    <!-- Export -->
+    <string name="office_export_copy">Экспортировать копию</string>
+    <string name="office_export_title">Экспорт копии</string>
+    <string name="office_export_body">Копия записывается через системный выбор места. Рабочая копия и исходный файл не меняются.</string>
+    <string name="office_export_active_sheet_only">Только активный лист</string>
+    <string name="office_busy_wait">Дождитесь завершения текущей операции.</string>
+    <string name="office_notice_exported">Копия экспортирована</string>
+
+    <!-- Leaving -->
+    <string name="office_leave_title">Уйти с несохранёнными изменениями?</string>
+    <string name="office_leave_body">Изменения живут только в этой сессии, исходный файл не меняется. Экспортируйте копию, откажитесь от изменений или останьтесь в редакторе.</string>
+    <string name="office_leave_save">Сохранить копию</string>
+    <string name="office_leave_discard">Отказаться от изменений</string>
+    <string name="office_leave_cancel">Остаться</string>
+
+    <!-- Errors: typed, never engine text or document content -->
+    <string name="office_error_engine_unavailable">Движок Office недоступен.</string>
+    <string name="office_error_engine">Движок вернул ошибку.</string>
+    <string name="office_error_busy">В этом процессе уже открыт другой документ Office.</string>
+    <string name="office_error_open">Не удалось открыть документ.</string>
+    <string name="office_error_family">Документ оказался другого семейства, чем определён при импорте.</string>
+    <string name="office_error_document">Размер документа нельзя отрисовать.</string>
+    <string name="office_error_managed">Файл вне личной рабочей папки сессии.</string>
+    <string name="office_error_part">Такой части в документе нет.</string>
+    <string name="office_error_input">Ввод отклонён движком.</string>
+    <string name="office_error_read_only">В этом документе редактирование недоступно.</string>
+    <string name="office_error_command">Команда не разрешена для этого семейства.</string>
+    <string name="office_error_render">Не удалось отрисовать страницу.</string>
+    <string name="office_error_export">Не удалось создать экспорт.</string>
+    <string name="office_error_export_invalid">Экспорт не прошёл проверку файла.</string>
+    <string name="office_error_save">Не удалось записать копию в выбранное место.</string>
+    <string name="office_error_delete">Не удалось удалить файлы сессии.</string>
+    <string name="office_error_not_open">Документ уже закрыт.</string>
+</resources>

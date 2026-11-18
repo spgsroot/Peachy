@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -32,7 +33,7 @@ internal fun plateLayout(text: String, kind: LineKind, sizePx: Float, widthPx: I
     }
     return StaticLayout.Builder.obtain(text, 0, text.length, paint, widthPx.coerceAtLeast(1))
         .setAlignment(Layout.Alignment.ALIGN_CENTER)
-        .setBreakStrategy(Layout.BREAK_STRATEGY_BALANCED)
+        .setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
         .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
         .setLineSpacing(0f, 1.1f)
         .setIncludePad(false)

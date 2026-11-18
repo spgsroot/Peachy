@@ -156,21 +156,31 @@ data class VaultData(
                             !it.extension.matches(Regex("[a-z0-9]{1,10}"))
                     }
                 ) throw VaultException(VaultError.CORRUPT, "Invalid photo metadata")
+                val videos = list(root, "videos") {
+                    VaultVideo(
+                        it.getLong("id"), it.getString("title"), it.getLong("duration"), it.getLong("addedAt"),
+                        it.getLong("fileSize"), it.getBoolean("isCorrupted"), it.getString("extension"),
+                        it.getBoolean("hasThumbnail"), if (it.isNull("albumId")) null else it.getLong("albumId")
+                    )
+                }
+                if (videos.map { it.id }.toSet().size != videos.size ||
+                    videos.any {
+                        it.id <= 0 || it.duration < 0 || it.fileSize <= 0 ||
+                            !it.extension.matches(Regex("[a-z0-9]{1,8}"))
+                    }
+                ) throw VaultException(VaultError.CORRUPT, "Invalid video metadata")
+                val galleries = list(root, "galleries") {
+                    LibraryGalleryEntity(
+                        it.getInt("id"), it.getString("title"), it.getString("thumbnailPath"),
+                        it.getString("pagePaths"), it.getBoolean("favorite"), it.getLong("addedAt")
+                    )
+                }
+                if (galleries.any { it.id <= 0 } || galleries.map { it.id }.toSet().size != galleries.size)
+                    throw VaultException(VaultError.CORRUPT, "Invalid gallery metadata")
                 return VaultData(
                     entryCount = root.getInt("entryCount"),
-                    videos = list(root, "videos") {
-                        VaultVideo(
-                            it.getLong("id"), it.getString("title"), it.getLong("duration"), it.getLong("addedAt"),
-                            it.getLong("fileSize"), it.getBoolean("isCorrupted"), it.getString("extension"),
-                            it.getBoolean("hasThumbnail"), if (it.isNull("albumId")) null else it.getLong("albumId")
-                        )
-                    },
-                    galleries = list(root, "galleries") {
-                        LibraryGalleryEntity(
-                            it.getInt("id"), it.getString("title"), it.getString("thumbnailPath"),
-                            it.getString("pagePaths"), it.getBoolean("favorite"), it.getLong("addedAt")
-                        )
-                    },
+                    videos = videos,
+                    galleries = galleries,
                     readHistory = list(root, "readHistory") {
                         ReadHistoryEntity(
                             it.getInt("galleryId"), it.getString("title"), it.getString("thumbnailPath"),

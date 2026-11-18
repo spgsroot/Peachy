@@ -20,8 +20,14 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
-    @Query("UPDATE videos SET title = :title, filePath = :filePath, duration = :duration, thumbnailPath = :thumbnailPath, addedAt = :addedAt, fileSize = :fileSize, isCorrupted = :isCorrupted, contentHash = :contentHash WHERE id = :id")
-    suspend fun updateContent(id: Long, title: String, filePath: String, duration: Long, thumbnailPath: String?, addedAt: Long, fileSize: Long, isCorrupted: Boolean, contentHash: String?)
+    @Query("UPDATE videos SET title = :title WHERE id = :id")
+    suspend fun rename(id: Long, title: String)
+
+    @Query("UPDATE videos SET thumbnailPath = :replacement WHERE id = :id AND thumbnailPath IS :expected")
+    suspend fun replaceThumbnail(id: Long, expected: String?, replacement: String): Int
+
+    @Query("UPDATE videos SET filePath = :replacement, fileSize = :size, duration = :duration, isCorrupted = 0, contentHash = NULL WHERE id = :id AND filePath = :expected")
+    suspend fun replaceFile(id: Long, expected: String, replacement: String, size: Long, duration: Long): Int
 
     @Query("SELECT * FROM videos WHERE contentHash = :hash LIMIT 1")
     suspend fun findByHash(hash: String): VideoEntity?
@@ -37,6 +43,13 @@ interface VideoDao {
 
     @Query("DELETE FROM videos WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Transaction
+    suspend fun remove(id: Long): VideoEntity? {
+        val video = getById(id) ?: return null
+        deleteById(id)
+        return video
+    }
 
     @Query("UPDATE videos SET isCorrupted = 1 WHERE id = :id")
     suspend fun markAsCorrupted(id: Long)

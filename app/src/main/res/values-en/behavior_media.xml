@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Media filters: edits apply immediately, so the dialog only closes or resets. -->
+    <string name="behavior_media_filter_reset">Reset</string>
+
+    <!-- Settings drawer: collapsible toys section. -->
+    <string name="behavior_toys_settings">Toys Settings</string>
+    <string name="behavior_toys_expanded">Expanded</string>
+    <string name="behavior_toys_collapsed">Collapsed</string>
+</resources>

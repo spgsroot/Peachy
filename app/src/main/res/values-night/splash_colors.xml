@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash Screen Colors - Dark Theme (override) -->
-    <color name="splash_background_light">#1C1B1F</color>
-    <color name="splash_icon_background_light">#1C1B1F</color>
+    <!-- Night mode keeps the same brand black; kept so the night splash never falls back. -->
+    <color name="splash_background">#FF0B0B0D</color>
 </resources>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Image editor -->
+    <string name="img_title">Изображение</string>
+    <string name="img_undo">Отменить действие</string>
+    <string name="img_redo">Повторить действие</string>
+    <string name="img_tool_crop">Обрезка</string>
+    <string name="img_tool_rotate">Поворот</string>
+    <string name="img_tool_adjust">Свет</string>
+    <string name="img_tool_draw">Кисть</string>
+    <string name="img_crop_apply">Обрезать</string>
+    <string name="img_crop_reset">Сбросить выделение</string>
+    <string name="img_rotate_left">Повернуть влево</string>
+    <string name="img_rotate_right">Повернуть вправо</string>
+    <string name="img_rotate_angle">Угол поворота</string>
+    <string name="img_rotate_apply">Применить поворот</string>
+    <string name="img_adjust_brightness">Яркость</string>
+    <string name="img_adjust_contrast">Контраст</string>
+    <string name="img_adjust_saturation">Насыщенность</string>
+    <string name="img_adjust_apply">Применить</string>
+    <string name="img_adjust_reset">Сбросить</string>
+    <string name="img_draw_width">Толщина линии</string>
+    <string name="img_draw_color">Цвет</string>
+    <string name="img_export_title">Сохранить копию</string>
+    <string name="img_export_png">PNG</string>
+    <string name="img_export_png_note">Без потерь, прозрачность сохраняется</string>
+    <string name="img_export_jpeg">JPEG</string>
+    <string name="img_export_jpeg_note">Без прозрачности: прозрачные пиксели заливаются белым</string>
+    <string name="img_export_note">%1$d×%2$d · sRGB · без EXIF, ориентация уже в пикселях</string>
+    <string name="img_saved">Копия сохранена</string>
+    <string name="img_save_failed">Не удалось сохранить копию</string>
+    <string name="img_edit_failed">Не удалось применить изменение</string>
+    <string name="img_discard_failed">Не удалось удалить сессию</string>
+    <string name="img_heic_unsupported">HEIC не поддерживается на этом устройстве</string>
+    <string name="img_heic_unsupported_body">Система не предоставляет декодер HEIC/HEIF. Файл остался в сессии нетронутым, пустой результат не создаётся.</string>
+    <string name="img_load_failed">Не удалось прочитать изображение</string>
+    <string name="img_load_failed_body">Файл повреждён или его формат не декодируется на этом устройстве.</string>
+    <string name="img_too_large">Изображение больше допустимого размера</string>
+    <string name="img_too_large_body">Сторона изображения превышает предел декодирования. Файл не изменён.</string>
+    <string name="img_animated_webp">Анимированный WebP: редактируется и сохраняется только первый кадр</string>
+    <string name="img_downscaled">Для редактирования изображение уменьшено до %1$d×%2$d; экспорт будет в этом размере</string>
+    <string name="img_processing">Обработка…</string>
+    <string name="img_preview_failed">Не удалось показать изображение</string>
+</resources>

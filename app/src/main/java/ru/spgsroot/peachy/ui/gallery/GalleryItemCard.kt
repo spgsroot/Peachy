@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -96,7 +95,11 @@ private fun WideCard(video: Video, imageData: Any, isSelected: Boolean, actions:
         Card(
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                 .combinedClickable(onClick = actions.onClick, onLongClick = actions.onLongClick),
-            colors = CardDefaults.cardColors(containerColor = Color.DarkGray)
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
         ) {
             Box {
                 Preview(video, imageData, Modifier.fillMaxSize())
@@ -104,8 +107,20 @@ private fun WideCard(video: Video, imageData: Any, isSelected: Boolean, actions:
                 else VideoMenu(actions, Color.White, Modifier.align(Alignment.TopEnd))
             }
         }
-        Text(video.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(videoDetails(video), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            video.title,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            videoDetails(video),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -119,8 +134,11 @@ private fun PortraitCard(video: Video, imageData: Any, isSelected: Boolean, acti
                 .fillMaxWidth()
                 .aspectRatio(PORTRAIT_ASPECT)
                 .combinedClickable(onClick = actions.onClick, onLongClick = actions.onLongClick),
-            colors = CardDefaults.cardColors(containerColor = Color.DarkGray),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
         ) {
             Box {
                 Preview(video, imageData, Modifier.fillMaxSize())
@@ -133,6 +151,7 @@ private fun PortraitCard(video: Video, imageData: Any, isSelected: Boolean, acti
         Text(
             text = video.title,
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -152,9 +171,12 @@ private fun RowCard(video: Video, imageData: Any, isSelected: Boolean, actions: 
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = actions.onClick, onLongClick = actions.onLongClick),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurface
         )
     ) {
         Row(
@@ -164,7 +186,7 @@ private fun RowCard(video: Video, imageData: Any, isSelected: Boolean, actions: 
         ) {
             Preview(
                 video, imageData,
-                Modifier.width(128.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp))
+                Modifier.width(128.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -278,7 +300,7 @@ private fun VideoMenu(actions: CardActions, tint: Color, modifier: Modifier) {
                     open = false
                     actions.onDelete()
                 },
-                leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
             )
         }
     }

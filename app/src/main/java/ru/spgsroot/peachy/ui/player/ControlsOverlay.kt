@@ -10,7 +10,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -315,19 +314,19 @@ private fun DeviceStatusBar(
             stringResource(R.string.device_status_active, activeDevice.name),
             stringResource(R.string.device_status_on),
             Icons.Default.CheckCircle,
-            Color(0xFF4CAF50)
+            MaterialTheme.colorScheme.tertiary
         )
         deviceState is DeviceState.Connected && firstDevice != null -> Quadruple(
             stringResource(R.string.device_status_connected, firstDevice.name),
             stringResource(R.string.device_status_select),
             Icons.Default.BluetoothConnected,
-            Color(0xFFFFC107)
+            MaterialTheme.colorScheme.secondary
         )
         deviceState is DeviceState.Scanning -> Quadruple(
             stringResource(R.string.searching_devices),
             "…",
             Icons.Default.Sync,
-            Color(0xFF64B5F6)
+            MaterialTheme.colorScheme.primary
         )
         deviceState is DeviceState.Error -> Quadruple(
             stringResource(R.string.device_status_error),
@@ -348,7 +347,7 @@ private fun DeviceStatusBar(
             .fillMaxWidth()
             .background(
                 Color.Black.copy(alpha = 0.5f),
-                RoundedCornerShape(8.dp)
+                MaterialTheme.shapes.small
             )
             .padding(12.dp)
     ) {

@@ -276,6 +276,22 @@ class VaultManagerPhotoTest {
         assertArrayEquals(videoBytes, File(video.filePath).readBytes())
     }
 
+    @Test fun missingMangaPageRollsBackVideoAndDoesNotAddAnIncompleteGallery() = runBlocking {
+        val video = VaultVideo(19, "new video", 12, 123, 3, false, "mp4", false)
+        val gallery = ru.spgsroot.peachy.data.db.LibraryGalleryEntity(7, "gallery", "one.png", "one.png\ntwo.png", false, 123)
+        val metadata = data(emptyList()).copy(entryCount = 3, videos = listOf(video), galleries = listOf(gallery))
+        val file = archive(metadata) {
+            it.add(video.entryName, byteArrayOf(1, 2, 3))
+            it.add("manga/7/one.png", byteArrayOf(4))
+        }
+        val error = expectFailure { manager.import(Uri.fromFile(file), password) }
+        assertEquals(VaultError.CORRUPT, (error as VaultException).error)
+        assertTrue(database.videoDao().getAllNow().isEmpty())
+        assertNull(database.libraryGalleryDao().getById(gallery.id))
+        assertTrue(File(root, "videos").listFiles().orEmpty().isEmpty())
+        assertFalse(File(root, "manga/7/one.png").exists())
+    }
+
     @Test fun photoExportRetainsTheTenCharacterStorageExtension() = runBlocking {
         val file = storage.save(original.inputStream(), "photo.abcdefghij")
         database.photoDao().insert(PhotoEntity(

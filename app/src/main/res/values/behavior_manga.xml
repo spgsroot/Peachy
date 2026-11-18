@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_recent_queries_expanded">Последние запросы: панель развернута</string>
+    <string name="manga_recent_queries_collapsed">Последние запросы: панель свернута</string>
+    <string name="manga_recent_queries_toggle">Развернуть или свернуть последние запросы</string>
+</resources>

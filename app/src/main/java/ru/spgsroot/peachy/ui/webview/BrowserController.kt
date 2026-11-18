@@ -18,6 +18,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -27,9 +28,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.webkit.WebStorageCompat
+import androidx.webkit.WebViewFeature
 import java.io.ByteArrayInputStream
 import kotlin.math.roundToInt
-import org.json.JSONObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.browser.BrowserPolicy
 import ru.spgsroot.peachy.browser.BrowserUrls
@@ -37,8 +40,9 @@ import ru.spgsroot.peachy.browser.FoundVideo
 import ru.spgsroot.peachy.browser.MediaSniffer
 import ru.spgsroot.peachy.browser.RequestKinds
 import ru.spgsroot.peachy.browser.MediaKind
-import ru.spgsroot.peachy.browser.adblock.FilterEngine
+import ru.spgsroot.peachy.browser.adblock.BrowserFilter
 import ru.spgsroot.peachy.browser.adblock.Hosts
+import ru.spgsroot.peachy.data.browser.BrowserSessionStore
 
 /** One browser tab. The WebView exists only once the tab has loaded something. */
 class BrowserTab(val id: Int) {
@@ -54,6 +58,54 @@ class BrowserTab(val id: Int) {
 
     /** Host of the page being shown. Read from WebView's request threads, so it is volatile. */
     @Volatile var host: String? = null
+    @Volatile internal var filterSource = ""
+
+    /** Changes on every page start so queued request effects cannot mutate a newer page. */
+    @Volatile internal var pageGeneration = 0L
+
+    /** Page offset in pixels, remembered for the next process and used to restore this one. */
+    var scrollY by mutableIntStateOf(0)
+
+    /** Offset to apply once a restored page finishes loading; -1 while nothing is pending. */
+    internal var pendingScrollY = -1
+
+    /** True while a restored offset is being applied, so that jump is not read as a user scroll. */
+    internal var scrollRestoring = false
+
+    /** Top chrome is out of the way because the page was scrolled down. */
+    var chromeHidden by mutableStateOf(false)
+
+    /** Signed scroll travel in pixels since the last chrome change; hysteresis, not raw direction. */
+    internal var scrollTravel = 0
+
+    /** A restored tab whose page is opened when the tab is first shown; keeps the restore lazy. */
+    internal var pendingLazyLoad = false
+
+    /**
+     * Addresses this tab visited, oldest first, bounded by [BrowserSessionStore.MAX_HISTORY]. Only
+     * addresses are kept — never form values or page state — so everything restored from disk is
+     * fetched again with a plain GET.
+     */
+    internal val history = mutableStateListOf<String>()
+
+    /** Where the page on screen sits in [history]; -1 while the tab shows its start page. */
+    internal var historyIndex by mutableIntStateOf(-1)
+
+    /** Our own load is in flight: its commit settles [historyIndex] instead of appending an entry. */
+    internal var expectCommit = false
+
+    /** Live back/forward we started (-1/+1); the index already moved and the commit only settles it. */
+    internal var pendingStep = 0
+
+    /** Clear the WebView's own history once this page finishes, so it cannot disagree with [history]. */
+    internal var clearLiveHistory = false
+
+    /**
+     * Addresses this session reached with a POST (or another non-GET) request. They stay in the
+     * in-memory list so Back/Forward tracking stays aligned with the WebView, but they are not
+     * written as walkable history: a stored entry is always re-fetched with a GET.
+     */
+    internal val posted = mutableSetOf<String>()
 
     internal fun noteVideo(video: FoundVideo) {
         if (videos.any { it.url == video.url } || videos.size >= BrowserController.MAX_VIDEOS) return
@@ -79,9 +131,13 @@ class PendingWindow(val url: String)
  */
 class BrowserController(
     private val activity: Activity,
-    private val engine: () -> FilterEngine,
+    private val engine: BrowserFilter,
+    private val onBlocked: () -> Unit,
     private val blockerOff: (String?) -> Boolean,
-    private val onVisit: (url: String, title: String) -> Unit
+    private val mode: () -> ru.spgsroot.peachy.data.browser.AdblockService.Mode,
+    private val onVisit: (url: String, title: String) -> Unit,
+    private val session: BrowserSessionStore,
+    restored: BrowserSessionStore.Snapshot? = null
 ) {
     val tabs = mutableStateListOf<BrowserTab>()
     var activeId by mutableIntStateOf(0)
@@ -111,18 +167,68 @@ class BrowserController(
     /** Temporary WebView that captures a popup's URL instead of loading it. */
     private var popupProbe: WebView? = null
     private val main = Handler(Looper.getMainLooper())
+    private val persistRunnable = Runnable { persist() }
+    private val shields = HashMap<WebView, PageShield>()
+    private val cosmeticRuntime by lazy { activity.assets.open("adblock/cosmetic.js").bufferedReader().use { it.readText() } }
     private var nextId = 1
 
     val active: BrowserTab get() = tabs.first { it.id == activeId }
 
     init {
-        newTab()
+        if (restored == null || !restore(restored)) newTab()
     }
 
-    fun newTab(input: String? = null): BrowserTab {
-        val tab = addTab(activate = true) ?: return active
-        if (input != null) navigate(tab, input)
-        return tab
+    /**
+     * Rebuilds the tab strip from the previous process. Stable ids keep tab identity (and so the
+     * active tab and its preview slot) across the restart; only the active tab opens its page, the
+     * others stay lazy until the user selects them, so a restored session does not load every site
+     * at once. Each tab keeps its stored address history: Back and Forward walk those addresses
+     * (GET only) once the live WebView has no history of its own.
+     */
+    private fun restore(snapshot: BrowserSessionStore.Snapshot): Boolean {
+        if (snapshot.tabs.isEmpty()) return false
+        snapshot.tabs.take(MAX_TABS).forEach { saved ->
+            if (saved.id <= 0 || tabs.any { it.id == saved.id }) return@forEach
+            val history = saved.history.filter { it.isNotEmpty() && BrowserUrls.isWebUrl(it) }
+                .takeLast(BrowserSessionStore.MAX_HISTORY)
+            val index = if (history.isEmpty()) -1 else saved.historyIndex.coerceIn(0, history.lastIndex)
+            tabs += BrowserTab(saved.id).apply {
+                url = if (index >= 0) history[index] else saved.url
+                title = saved.title
+                host = Hosts.hostOf(url)
+                scrollY = saved.scrollY
+                this.history.addAll(history)
+                historyIndex = index
+                if (this.history.isEmpty() && url.isNotEmpty()) {
+                    // A tab that only knows its address still gets that one history entry.
+                    this.history.add(url)
+                    historyIndex = 0
+                }
+                // Only the active tab is fetched now; the rest open their page when selected.
+                pendingLazyLoad = url.isNotEmpty()
+            }
+            nextId = maxOf(nextId, saved.id + 1)
+        }
+        if (tabs.isEmpty()) return false
+        activeId = tabs.firstOrNull { it.id == snapshot.activeId }?.id ?: tabs.first().id
+        val tab = active
+        if (tab.url.isNotEmpty()) {
+            tab.pendingLazyLoad = false
+            openRestored(tab)
+        }
+        return true
+    }
+
+    /** Opens a restored tab at the page it was left on, as a GET of its stored address. */
+    private fun openRestored(tab: BrowserTab) {
+        val target = tab.history.getOrNull(tab.historyIndex) ?: tab.url.takeIf { it.isNotEmpty() } ?: return
+        tab.expectCommit = true
+        tab.pendingStep = 0
+        tab.clearLiveHistory = true
+        tab.pendingScrollY = tab.scrollY
+        tab.loading = true
+        loadFiltered(tab, target)
+        refreshHistoryFlags(tab)
     }
 
     /** Adds a tab; [activate] false keeps the current page on screen. */
@@ -134,16 +240,30 @@ class BrowserController(
         val tab = BrowserTab(nextId++)
         tabs += tab
         if (activate) activeId = tab.id
+        persist()
+        return tab
+    }
+
+    fun newTab(input: String? = null): BrowserTab {
+        val tab = addTab(activate = true) ?: return active
+        if (input != null) navigate(tab, input)
         return tab
     }
 
     fun select(tab: BrowserTab) {
         if (tab.id != activeId) tabs.firstOrNull { it.id == activeId }?.webView?.onPause()
         activeId = tab.id
+        tab.chromeHidden = false
+        tab.scrollTravel = 0
+        if (tab.webView == null && tab.pendingLazyLoad) {
+            tab.pendingLazyLoad = false
+            if (tab.url.isNotEmpty()) openRestored(tab)
+        }
         tab.webView?.onResume()
         main.postDelayed({
             if (tab.id == activeId) captureActiveThumbnail()
         }, THUMB_CAPTURE_DELAY_MS)
+        persist()
     }
 
     fun close(tab: BrowserTab) {
@@ -158,6 +278,7 @@ class BrowserController(
         } else if (tab.id == activeId) {
             select(tabs[(index - 1).coerceAtLeast(0)])
         }
+        persist()
     }
 
     /** Loads what was typed in the address bar: an address, or a search. */
@@ -167,9 +288,21 @@ class BrowserController(
             toast(R.string.error_webview_https)
             return
         }
+        // A new navigation starts a new branch: whatever the tab could have gone forward to is gone.
+        recordEntry(tab, target)
         tab.url = target
         tab.host = Hosts.hostOf(target)
-        webViewOf(tab).loadUrl(target)
+        tab.expectCommit = true
+        tab.pendingStep = 0
+        tab.clearLiveHistory = false
+        tab.pendingScrollY = -1
+        tab.pendingLazyLoad = false
+        tab.scrollY = 0
+        tab.chromeHidden = false
+        tab.scrollTravel = 0
+        loadFiltered(tab, target)
+        refreshHistoryFlags(tab)
+        persist()
     }
 
     /** Back to the start page of the tab. */
@@ -184,7 +317,63 @@ class BrowserController(
         tab.loading = false
         tab.canGoBack = false
         tab.canGoForward = false
+        tab.history.clear()
+        tab.posted.clear()
+        tab.historyIndex = -1
+        tab.expectCommit = false
+        tab.pendingStep = 0
+        tab.clearLiveHistory = false
+        tab.scrollY = 0
+        tab.pendingScrollY = -1
+        tab.pendingLazyLoad = false
+        tab.chromeHidden = false
+        tab.scrollTravel = 0
         dropTabState(tab)
+        persist()
+    }
+
+    /**
+     * Explicitly clears WebView-owned site data and every open tab/history. This is intentionally
+     * separate from clearing the recorded visit list: bookmarks and that visit list stay untouched.
+     */
+    fun clearSiteData(onComplete: () -> Unit) {
+        val fullClear = WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)
+        tabs.forEach { tab ->
+            tab.webView?.apply {
+                clearFormData()
+                clearHistory()
+                clearSslPreferences()
+            }
+        }
+        if (!fullClear) {
+            // The legacy HTTP cache is shared by all the WebViews in this profile.
+            val view = tabs.firstNotNullOfOrNull { it.webView }
+            if (view != null) {
+                view.clearCache(true)
+            } else {
+                WebView(activity).apply {
+                    clearCache(true)
+                    destroy()
+                }
+            }
+        }
+        destroyAll()
+        tabs.clear()
+        // Never reuse tab IDs: Compose and pending callbacks still know the old ones.
+        newTab()
+
+        val storage = WebStorage.getInstance()
+        if (fullClear) {
+            WebStorageCompat.deleteBrowsingData(storage) { onComplete() }
+        } else {
+            storage.deleteAllData()
+            CookieManager.getInstance().apply {
+                removeAllCookies {
+                    flush()
+                    onComplete()
+                }
+            }
+        }
     }
 
     /** Picks up [pendingNavigation] after the user said yes; loading does not re-enter the gate. */
@@ -295,16 +484,211 @@ class BrowserController(
         if (pendingNavigation?.tabId == tab.id) pendingNavigation = null
     }
 
+    /**
+     * Writes the tab strip for the next process: ids, addresses, titles, scroll offsets, each tab's
+     * address history and its current position, and the active tab. Called on navigation/tab
+     * transitions and once scrolling settles — never only from onDestroy, which a killed process
+     * does not run.
+     */
+    fun persist() {
+        main.removeCallbacks(persistRunnable)
+        session.save(
+            BrowserSessionStore.Snapshot(
+                tabs = tabs.map { tab ->
+                    // Walkable history is addresses fetched with GET only; the page on screen is
+                    // always kept, even if a POST put it there, because its address is what the
+                    // tab restores to (and it is fetched with GET too).
+                    val entries = ArrayList<String>(tab.history.size)
+                    var current = -1
+                    tab.history.forEachIndexed { at, entry ->
+                        if (at != tab.historyIndex && entry in tab.posted) return@forEachIndexed
+                        if (at == tab.historyIndex) current = entries.size
+                        entries += entry
+                    }
+                    BrowserSessionStore.Tab(
+                        id = tab.id,
+                        url = tab.url.trim(),
+                        title = tab.title,
+                        scrollY = tab.scrollY.coerceAtLeast(0),
+                        history = entries,
+                        historyIndex = current
+                    )
+                },
+                activeId = activeId
+            )
+        )
+    }
+
+    /**
+     * Appends [url] to the tab's history and drops whatever was ahead of the current page: a new
+     * navigation starts a new branch, exactly like the WebView's own history list.
+     */
+    private fun recordEntry(tab: BrowserTab, url: String) {
+        if (!BrowserUrls.isWebUrl(url)) return
+        while (tab.history.size > tab.historyIndex + 1) tab.history.removeAt(tab.history.lastIndex)
+        if (tab.history.getOrNull(tab.historyIndex) == url) return
+        tab.history.add(url)
+        while (tab.history.size > BrowserSessionStore.MAX_HISTORY) tab.history.removeAt(0)
+        if (tab.posted.size > tab.history.size) tab.posted.retainAll(tab.history.toSet())
+        tab.historyIndex = tab.history.lastIndex
+        refreshHistoryFlags(tab)
+    }
+
+    /**
+     * The page at [tab.historyIndex] is now the committed one; a redirect may have landed on a
+     * different address, and that resolved address is what the next visit should request.
+     */
+    private fun settleEntry(tab: BrowserTab, url: String) {
+        if (!BrowserUrls.isWebUrl(url)) return
+        val index = tab.historyIndex
+        if (index in tab.history.indices) tab.history[index] = url
+    }
+
+    /** Back/Forward availability covers the live WebView and the stored backlog behind it. */
+    private fun refreshHistoryFlags(tab: BrowserTab) {
+        val view = tab.webView
+        tab.canGoBack = (view?.canGoBack() ?: false) || tab.historyIndex > 0
+        tab.canGoForward = (view?.canGoForward() ?: false) || tab.historyIndex < tab.history.lastIndex
+    }
+
+    private fun schedulePersist() {
+        main.removeCallbacks(persistRunnable)
+        main.postDelayed(persistRunnable, PERSIST_DELAY_MS)
+    }
+
+    /**
+     * Scroll feedback from the active tab's WebView. Besides remembering the offset it slides the
+     * top chrome: collapsing needs a clear downward travel, revealing a shorter upward one, and a
+     * page near its top always shows the chrome. The travel accumulator resets whenever the
+     * direction changes, so jitter at one spot cannot toggle the toolbar.
+     */
+    fun onScroll(tab: BrowserTab, scrollY: Int, delta: Int) {
+        tab.scrollY = scrollY.coerceAtLeast(0)
+        // A load that never finishes (error page) must not freeze the chrome logic forever.
+        if (tab.pendingScrollY >= 0 && !tab.loading) tab.pendingScrollY = -1
+        if (tab.scrollRestoring || tab.pendingScrollY >= 0) return
+        schedulePersist()
+        // A jump larger than the viewport is programmatic (restore, anchor, in-page jump), not a
+        // gesture; letting it count would slam the chrome shut.
+        val viewport = tab.webView?.height ?: 0
+        if (viewport > 0 && kotlin.math.abs(delta) >= viewport) return
+        val density = activity.resources.displayMetrics.density
+        if (scrollY <= CHROME_PAGE_TOP_DP * density) {
+            if (tab.chromeHidden) tab.chromeHidden = false
+            tab.scrollTravel = 0
+            return
+        }
+        tab.scrollTravel = if (tab.scrollTravel != 0 && (tab.scrollTravel > 0) != (delta > 0)) {
+            delta
+        } else {
+            tab.scrollTravel + delta
+        }
+        when {
+            !tab.chromeHidden && tab.scrollTravel >= CHROME_COLLAPSE_TRAVEL_DP * density -> {
+                tab.chromeHidden = true
+                tab.scrollTravel = 0
+            }
+            tab.chromeHidden && tab.scrollTravel <= -CHROME_REVEAL_TRAVEL_DP * density -> {
+                tab.chromeHidden = false
+                tab.scrollTravel = 0
+            }
+        }
+    }
+
+    /** The address bar is in use: put the top chrome back, whatever the page is doing. */
+    fun showChrome(tab: BrowserTab) {
+        if (!tab.chromeHidden) return
+        tab.chromeHidden = false
+        tab.scrollTravel = 0
+    }
+
+    /**
+     * Puts a restored tab back where it was. The WebView's own offset is moved first; a page that
+     * keeps its scroll position in script gets one direct fallback. Both are suppressed from the
+     * chrome logic through [BrowserTab.scrollRestoring], so the jump does not slide the toolbar.
+     */
+    private fun applyPendingScroll(view: WebView, tab: BrowserTab) {
+        val target = tab.pendingScrollY
+        tab.pendingScrollY = -1
+        if (target <= 0 || tab.webView !== view) return
+        tab.scrollRestoring = true
+        view.scrollTo(0, target)
+        view.postDelayed({
+            // Ask the page where it actually is; only a page that did not take the offset gets the
+            // direct script call, so a working WebView is not scrolled twice.
+            if (tab.webView === view) {
+                view.evaluateJavascript("window.scrollY") { value ->
+                    val current = value?.trim()?.toFloatOrNull() ?: 0f
+                    if (current + 1f < target) {
+                        view.evaluateJavascript("window.scrollTo(0,$target)", null)
+                    }
+                }
+            }
+            tab.scrollRestoring = false
+            tab.scrollY = view.scrollY.coerceAtLeast(tab.scrollY)
+        }, SCROLL_RESTORE_SETTLE_MS)
+    }
+
+    /**
+     * Back: the live WebView history first (it keeps page state and needs no request), then the
+     * stored addresses once the live list is exhausted — that is the case after a process restart,
+     * and after walking back past the point where the restored page was opened. The stored address
+     * is always loaded as a plain GET, so a form submission is never replayed.
+     */
     fun goBack(tab: BrowserTab) {
-        tab.webView?.takeIf { it.canGoBack() }?.goBack()
+        val view = tab.webView
+        if (view != null && view.canGoBack()) {
+            tab.pendingStep = -1
+            tab.historyIndex = (tab.historyIndex - 1).coerceAtLeast(0)
+            view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex - 1)?.url }?.let { prepare(tab, view, it) }
+            view.goBack()
+            refreshHistoryFlags(tab)
+            persist()
+            return
+        }
+        loadHistoryEntry(tab, tab.historyIndex - 1)
     }
 
     fun goForward(tab: BrowserTab) {
-        tab.webView?.takeIf { it.canGoForward() }?.goForward()
+        val view = tab.webView
+        if (view != null && view.canGoForward()) {
+            tab.pendingStep = 1
+            tab.historyIndex = (tab.historyIndex + 1).coerceAtMost(tab.history.lastIndex)
+            view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex + 1)?.url }?.let { prepare(tab, view, it) }
+            view.goForward()
+            refreshHistoryFlags(tab)
+            persist()
+            return
+        }
+        loadHistoryEntry(tab, tab.historyIndex + 1)
+    }
+
+    /**
+     * Walks the stored history. The WebView's own list is cleared once the page finishes, because
+     * it only holds the pages this session opened from here; leaving it would let a second Back go
+     * forward in the stored list, which is the one thing a history fallback must not do.
+     */
+    private fun loadHistoryEntry(tab: BrowserTab, target: Int) {
+        if (target !in tab.history.indices) return
+        val url = BrowserPolicy.httpsOnly(tab.history[target])
+        if (!BrowserUrls.isWebUrl(url)) return
+        tab.historyIndex = target
+        tab.url = url
+        tab.host = Hosts.hostOf(url)
+        tab.expectCommit = true
+        tab.pendingStep = 0
+        tab.clearLiveHistory = true
+        tab.pendingScrollY = -1
+        tab.loading = true
+        tab.chromeHidden = false
+        tab.scrollTravel = 0
+        loadFiltered(tab, url)
+        refreshHistoryFlags(tab)
+        persist()
     }
 
     fun reload(tab: BrowserTab) {
-        tab.webView?.reload()
+        tab.webView?.let { prepare(tab, it, tab.url); it.reload() }
     }
 
     fun stop(tab: BrowserTab) {
@@ -313,7 +697,10 @@ class BrowserController(
 
     /** Videos the page has loaded, plus the ones its `<video>` elements point at right now. */
     fun refreshVideos(tab: BrowserTab) {
-        tab.webView?.evaluateJavascript(MediaSniffer.COLLECT_SCRIPT) { raw ->
+        val view = tab.webView ?: return
+        val generation = tab.pageGeneration
+        view.evaluateJavascript(MediaSniffer.COLLECT_SCRIPT) { raw ->
+            if (tab.webView !== view || tab.pageGeneration != generation) return@evaluateJavascript
             MediaSniffer.parseCollected(raw).forEach(tab::noteVideo)
         }
     }
@@ -321,9 +708,15 @@ class BrowserController(
     /** Headers a download of [url] needs to look like the page's own request. */
     fun downloadHeaders(tab: BrowserTab, url: String): Map<String, String> {
         val out = LinkedHashMap<String, String>()
-        if (tab.url.isNotEmpty()) out["Referer"] = tab.url
+        val page = tab.url.toHttpUrlOrNull()
+        val target = url.toHttpUrlOrNull()
         tab.webView?.settings?.userAgentString?.let { out["User-Agent"] = it }
-        CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let { out["Cookie"] = it }
+        if (page != null && target != null && page.scheme == target.scheme &&
+            page.host == target.host && page.port == target.port
+        ) {
+            out["Referer"] = page.newBuilder().fragment(null).build().toString()
+            CookieManager.getInstance().getCookie(url)?.takeIf(String::isNotBlank)?.let { out["Cookie"] = it }
+        }
         return out
     }
 
@@ -336,6 +729,8 @@ class BrowserController(
     }
 
     fun destroyAll() {
+        engine.endSession()
+        main.removeCallbacks(persistRunnable)
         hideFullscreen()
         tabs.forEach { tab -> tab.webView?.let(::destroy); tab.webView = null }
         thumbStates.clear()
@@ -346,6 +741,7 @@ class BrowserController(
     }
 
     private fun destroy(view: WebView) {
+        shields.remove(view)?.close()
         view.stopLoading()
         view.webViewClient = WebViewClient()
         view.webChromeClient = null
@@ -379,18 +775,32 @@ class BrowserController(
         settings.displayZoomControls = false
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
         setDownloadListener { url, _, _, mimeType, _ ->
-            if (mimeType.startsWith("video/") && MediaSniffer.isAllowedDownload(url, tab.host)) {
+            if (mimeType?.startsWith("video/") == true && MediaSniffer.isAllowedDownload(url, tab.host)) {
                 tab.noteVideo(FoundVideo(url, MediaSniffer.classify(url) ?: MediaKind.FILE))
                 toast(R.string.browser_download_offered)
             } else {
                 toast(R.string.browser_download_unsupported)
             }
         }
-        webViewClient = Client()
+        val shield = PageShield(this, engine, cosmeticRuntime, { mode().generic }) { blockerOff(it) || !mode().cosmetic }
+        shields[this] = shield
+        webViewClient = Client(tab, shield)
         webChromeClient = Chrome()
     }
 
-    private inner class Client : WebViewClient() {
+    private fun prepare(tab: BrowserTab, view: WebView, url: String) {
+        tab.filterSource = url
+        shields[view]?.prepare(url)
+    }
+
+    private fun loadFiltered(tab: BrowserTab, url: String) {
+        val view = webViewOf(tab)
+        prepare(tab, view, url)
+        view.loadUrl(url)
+    }
+
+    private inner class Client(private val owner: BrowserTab, private val shield: PageShield) : WebViewClient() {
+        private val filterSession = engine.sessionEpoch
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val tab = tabOf(view) ?: return true
             val target = request.url?.toString().orEmpty()
@@ -404,13 +814,23 @@ class BrowserController(
                 return true
             }
             val secure = BrowserPolicy.httpsOnly(target)
-            val get = request.method.equals("GET", ignoreCase = true)
+            val get = request.method?.equals("GET", ignoreCase = true) == true
             if (!get) {
                 // A form post cannot be replayed as a GET: an insecure one is simply refused.
                 if (secure != target) {
                     toast(R.string.browser_insecure_navigation_blocked)
                     return true
                 }
+                if (BrowserPolicy.requiresConfirmation(tab.host, secure)) {
+                    // WebView gives no way to resume this exact request after a dialog. Converting
+                    // it to GET would change its meaning, so cross-site non-GET is honestly blocked.
+                    toast(R.string.browser_non_get_navigation_blocked)
+                    return true
+                }
+                // The address is remembered for tracking only; it is never stored as a walkable
+                // history entry, because that would mean re-requesting a POST result as a GET.
+                tab.posted += target
+                prepare(tab, view, secure)
                 return false
             }
             if (BrowserPolicy.requiresConfirmation(tab.host, secure)) {
@@ -420,6 +840,7 @@ class BrowserController(
                 view.stopLoading()
                 return true
             }
+            prepare(tab, view, secure)
             if (secure != target) {
                 view.loadUrl(secure)
                 return true
@@ -439,16 +860,32 @@ class BrowserController(
 
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
             val url = request.url?.toString() ?: return null
-            val tab = tabOf(view)
-            if (!request.isForMainFrame && tab != null && !blockerOff(tab.host)) {
+            val tab = owner
+            val generation = tab.pageGeneration
+            if (request.isForMainFrame && request.method.equals("POST", ignoreCase = true)) {
+                // WebView does not call shouldOverrideUrlLoading for form POSTs.
+                if (!BrowserPolicy.isSecureWebTarget(url) || BrowserPolicy.isCrossSite(tab.host, url)) {
+                    main.post {
+                        if (tab.webView === view) toast(R.string.browser_non_get_navigation_blocked)
+                    }
+                    return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), null)
+                }
+                main.post { if (tab.webView === view) tab.posted += url }
+            }
+            shield.stylesheet(request)?.let { return it }
+            val source = tab.filterSource
+            if (!request.isForMainFrame && !blockerOff(Hosts.hostOf(source))) {
                 val kind = RequestKinds.guess(url, request.requestHeaders, false)
-                if (engine().shouldBlock(url, tab.host, kind)) {
-                    main.post { tab.blocked++ }
-                    return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                val result = engine.decide(url, source, kind, request.method.lowercase(), filterSession)
+                if (result != null) {
+                    main.post { if (tab.webView === view && tab.pageGeneration == generation) { tab.blocked++; onBlocked() } }
+                    return replacement(if (request.url.scheme.equals("https", true)) result else "")
                 }
             }
             val media = MediaSniffer.classify(url)
-            if (media != null && tab != null) main.post { tab.noteVideo(FoundVideo(url, media)) }
+            if (media != null) main.post {
+                if (tab.webView === view && tab.pageGeneration == generation) tab.noteVideo(FoundVideo(url, media))
+            }
             return null
         }
 
@@ -456,6 +893,8 @@ class BrowserController(
             // The URL is adopted only when the page commits: a blocked redirect must not become
             // the host that the next cross-site check compares against.
             val tab = tabOf(view) ?: return
+            tab.pageGeneration++
+            tab.filterSource = url
             tab.loading = true
             tab.blocked = 0
             tab.videos = emptyList()
@@ -465,15 +904,30 @@ class BrowserController(
             val tab = tabOf(view) ?: return
             tab.url = url
             tab.host = Hosts.hostOf(url)
-            hideAds(view)
+            shields[view]?.committed(url)
+            persist()
         }
 
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
             val tab = tabOf(view) ?: return
             tab.url = url
             tab.host = Hosts.hostOf(url)
-            tab.canGoBack = view.canGoBack()
-            tab.canGoForward = view.canGoForward()
+            when {
+                // Our own load: the entry is already in the list, the commit only settles it.
+                tab.expectCommit -> {
+                    tab.expectCommit = false
+                    settleEntry(tab, url)
+                }
+                // A live back/forward we started: the index already moved, the commit settles it.
+                tab.pendingStep != 0 -> {
+                    tab.pendingStep = 0
+                    settleEntry(tab, url)
+                }
+                // A navigation the page started (link, script, redirect) is a new history entry.
+                !isReload && url != tab.history.getOrNull(tab.historyIndex) -> recordEntry(tab, url)
+            }
+            refreshHistoryFlags(tab)
+            persist()
         }
 
         override fun onPageFinished(view: WebView, url: String) {
@@ -481,11 +935,27 @@ class BrowserController(
             tab.loading = false
             tab.url = url
             tab.host = Hosts.hostOf(url)
-            tab.canGoBack = view.canGoBack()
-            tab.canGoForward = view.canGoForward()
-            hideAds(view)
+            // A history navigation always finishes a page even when it reports no new visited URL;
+            // settling here keeps a stale step marker from swallowing the next real navigation.
+            if (tab.pendingStep != 0) {
+                tab.pendingStep = 0
+                settleEntry(tab, url)
+            }
+            // Same for our own load that never produced a visited-history callback (error page):
+            // its entry exists already and must not be appended a second time later.
+            if (tab.expectCommit) {
+                tab.expectCommit = false
+                settleEntry(tab, url)
+            }
+            if (tab.clearLiveHistory) {
+                tab.clearLiveHistory = false
+                view.clearHistory()
+            }
+            refreshHistoryFlags(tab)
+            applyPendingScroll(view, tab)
             refreshVideos(tab)
             onVisit(url, view.title.orEmpty())
+            persist()
             if (tab.id == activeId) {
                 main.postDelayed({
                     if (tab.id == activeId && tab.webView === view) captureActiveThumbnail()
@@ -498,6 +968,14 @@ class BrowserController(
             val tab = tabOf(view) ?: return true
             tab.webView = null
             tab.loading = false
+            tab.pendingScrollY = -1
+            tab.scrollRestoring = false
+            tab.pendingLazyLoad = false
+            tab.expectCommit = false
+            tab.pendingStep = 0
+            tab.clearLiveHistory = false
+            tab.canGoBack = tab.historyIndex > 0
+            tab.canGoForward = tab.historyIndex < tab.history.lastIndex
             dropTabState(tab)
             destroy(view)
             toast(R.string.browser_page_crashed)
@@ -506,7 +984,7 @@ class BrowserController(
     }
 
     /** Drops the popup probe and turns its captured URL into a window the user may approve. */
-    private fun finishPopupProbe(url: String?) {
+    private fun finishPopupProbe(url: String?, opener: BrowserTab) {
         val probe = popupProbe ?: return
         popupProbe = null
         probe.stopLoading()
@@ -517,21 +995,23 @@ class BrowserController(
             toast(R.string.browser_popup_blocked)
             return
         }
-        pendingWindow = PendingWindow(BrowserPolicy.httpsOnly(url))
+        val secure = BrowserPolicy.httpsOnly(url)
+        if (!blockerOff(opener.host) && engine.decide(secure, opener.filterSource, "popup", "get") != null) {
+            opener.blocked++; onBlocked()
+            toast(R.string.browser_popup_blocked)
+            return
+        }
+        pendingWindow = PendingWindow(secure)
     }
 
-    private fun hideAds(view: WebView) {
-        val tab = tabOf(view) ?: return
-        val host = tab.host ?: return
-        if (blockerOff(host)) return
-        val css = engine().cosmeticCss(host)
-        if (css.isEmpty()) return
-        view.evaluateJavascript(
-            "(function(){var s=document.getElementById('peachy-hide');if(!s){s=document.createElement('style');" +
-                "s.id='peachy-hide';(document.head||document.documentElement).appendChild(s);}" +
-                "s.textContent=${JSONObject.quote(css)};})()",
-            null
-        )
+    private fun replacement(result: String): WebResourceResponse {
+        val comma = result.indexOf(',')
+        if (result.startsWith("data:") && comma > 5 && result.substring(5, comma).endsWith(";base64")) {
+            val bytes = android.util.Base64.decode(result.substring(comma + 1), android.util.Base64.DEFAULT)
+            return WebResourceResponse(result.substring(5, comma).substringBefore(';'), null, 200, "OK",
+                mapOf("Cache-Control" to "no-store", "X-Content-Type-Options" to "nosniff"), ByteArrayInputStream(bytes))
+        }
+        return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), null)
     }
 
     private inner class Chrome : WebChromeClient() {
@@ -554,6 +1034,7 @@ class BrowserController(
             // user decides whether the tab opens.
             if (!isUserGesture) return false
             if (popupProbe != null || pendingWindow != null) return false
+            val opener = tabOf(view) ?: return false
             val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
             val probe = WebView(activity).apply {
                 settings.javaScriptEnabled = false
@@ -566,13 +1047,13 @@ class BrowserController(
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                        finishPopupProbe(request.url?.toString())
+                        finishPopupProbe(request.url?.toString(), opener)
                         return true
                     }
 
                     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                         // Some popups start without a shouldOverride; capture before any load.
-                        finishPopupProbe(url)
+                        finishPopupProbe(url, opener)
                     }
                 }
             }
@@ -580,7 +1061,7 @@ class BrowserController(
             transport.webView = probe
             resultMsg.sendToTarget()
             main.postDelayed({
-                if (popupProbe === probe) finishPopupProbe(null)
+                if (popupProbe === probe) finishPopupProbe(null, opener)
             }, POPUP_PROBE_TIMEOUT_MS)
             return true
         }
@@ -623,5 +1104,18 @@ class BrowserController(
 
         /** A popup that has not revealed its URL by then is dropped. */
         private const val POPUP_PROBE_TIMEOUT_MS = 2000L
+
+        /** Scrolling settles before the session file is rewritten. */
+        private const val PERSIST_DELAY_MS = 500L
+
+        /** Time for a restored page to accept its scroll offset before the script fallback runs. */
+        private const val SCROLL_RESTORE_SETTLE_MS = 200L
+
+        /** Chrome stays visible while the page is within this distance of its top. */
+        private const val CHROME_PAGE_TOP_DP = 36f
+
+        /** Downward travel that collapses the top chrome, and the shorter upward travel that returns it. */
+        private const val CHROME_COLLAPSE_TRAVEL_DP = 56f
+        private const val CHROME_REVEAL_TRAVEL_DP = 20f
     }
 }

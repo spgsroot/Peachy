@@ -1,0 +1,116 @@
+{
+  "period": ".",
+  "meta": {
+    "title": "Peachy: Gallery, player and browser for Android",
+    "description": "Peachy is a local-first Android media workspace: your gallery, player and browser in one app. Media you add is kept in the app's library on your phone. Open source, with limits stated plainly.",
+    "socialDescription": "A local-first Android media workspace. Your gallery, player and browser in one app, with media kept in the app's library on your phone.",
+    "socialLocale": "en_US"
+  },
+  "nav": {
+    "skip": "Skip to content",
+    "home": "Peachy home",
+    "primary": "Primary",
+    "menu": "Menu",
+    "close": "Close",
+    "features": "Features",
+    "principles": "Principles",
+    "download": "Download",
+    "language": "Language",
+    "backToTop": "Back to top"
+  },
+  "hero": {
+    "titleFirst": "Your content.",
+    "titleSecond": "Your space",
+    "openSource": "Open Source",
+    "localFirst": "Local First",
+    "lead": "Browse your gallery, play media and open the web in one Android workspace. Media you add is kept in the app's library on your phone.",
+    "download": "Download for Android",
+    "source": "View source",
+    "featuresTitle": "Library, player and browser",
+    "chooseScreen": "Choose a screen to preview",
+    "appLabel": "Peachy Android app"
+  },
+  "screens": {
+    "library": {
+      "label": "Library",
+      "alt": "Peachy Android Library search screen with All selected and sample landscape photos in two columns.",
+      "caption": "Photos and videos together, with albums, search and media management."
+    },
+    "player": {
+      "label": "Player",
+      "alt": "Peachy Android Player screen showing a sample clip with playback controls and a queue.",
+      "caption": "A media player with smooth playback and essential controls."
+    },
+    "browser": {
+      "label": "Browser",
+      "alt": "A NASA Science article showing a pink and blue cloud around a forming star, photographed by the Webb telescope.",
+      "sourceLabel": "NASA Science · web screenshot",
+      "caption": "Browse HTTPS sites and save supported video files with ad and tracker filtering."
+    }
+  },
+  "featureDetails": {
+    "title": "Watch and read at your own pace.",
+    "items": [
+      {
+        "title": "Ad and tracker blocking",
+        "text": "The browser uses a native Brave engine with bundled EasyList, EasyPrivacy and adult-site filters. Manage subscriptions, custom rules and site exceptions from its menu. WebView limits mean not every request can be filtered."
+      },
+      {
+        "title": "Sync with compatible devices",
+        "text": "If you want to use a compatible device, connect it through Intiface Central (Buttplug.io). Peachy can sync the device to the sound of your video."
+      },
+      {
+        "title": "Manga reader (18+)",
+        "text": "Browse the nHentai catalog by tag and read in the app. Zoom in, bookmark a page, or pick up where you left off."
+      },
+      {
+        "title": "Documents, with clear limits",
+        "text": "View and edit PDFs and supported images on working copies. Word, Excel (including XLS/XLSX) and PowerPoint files can be imported and listed, but Office viewing and editing remain disabled, even when a debug build packages the optional engine."
+      }
+    ]
+  },
+  "storage": {
+    "alt": "A padlock lit from above against a dark graphite surface.",
+    "title": "Private storage, on your device.",
+    "lead": "Peachy's library is local-first: the media you add is kept in the app's storage on your phone. Local-first does not mean offline-only, and it is not a promise of anonymity.",
+    "localTitle": "Local library",
+    "localText": "Media you add lives in the app's storage on your device.",
+    "networkTitle": "Network, on your terms",
+    "networkText": "The browser contacts sites and filter-list publishers; the manga catalog contacts nhentai. Translation sends page images or locally recognised text to your chosen provider after host consent. Updates contact GitHub; automatic daily checks are off by default.",
+    "protectionTitle": "Device-dependent protection",
+    "protectionText": "A numeric password locks the interface; SQLCipher encrypts the database with a separate Keystore-protected key. Media files are not individually encrypted by Peachy: they rely on Android's app sandbox and device encryption, not protection against a compromised phone."
+  },
+  "principles": {
+    "title": "Six principles, kept in view.",
+    "lead": "These principles guide what we build and how we explain its limits.",
+    "items": [
+      { "title": "Privacy by design", "text": "Privacy is architectural, not a marketing guarantee." },
+      { "title": "Local-first", "text": "Local processing and storage where the application supports it." },
+      { "title": "Open source", "text": "Source availability and independent examination." },
+      { "title": "User control", "text": "Users control their own data." },
+      { "title": "Simplicity", "text": "Minimize unnecessary complexity." },
+      { "title": "No false promises", "text": "State limitations honestly." }
+    ]
+  },
+  "platforms": {
+    "title": "Availability, stated plainly.",
+    "lead": "Android is available today. Desktop and alternative networks are not.",
+    "mainApplication": "Main application",
+    "available": "Available",
+    "desktop": "Desktop",
+    "desktopApplication": "Desktop application",
+    "planned": "Planned",
+    "noBuild": "No build yet",
+    "alternativeNetworks": "Alternative networks",
+    "research": "Research",
+    "noIntegration": "No integration yet",
+    "note": "Planned and research rows describe intent, not shipped software."
+  },
+  "philosophy": {
+    "title": "Privacy should be the default, not a privilege",
+    "statement": "Your content belongs to you. Your software should respect that."
+  },
+  "footer": {
+    "signature": "From Russia with Love, by LLMCrew.org"
+  }
+}

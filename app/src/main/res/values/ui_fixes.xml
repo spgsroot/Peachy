@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Player: empty queue -->
+    <string name="player_empty_title">Очередь пуста</string>
+    <string name="player_empty_body">Добавьте видео — всё останется на устройстве.</string>
+    <string name="player_empty_action">Открыть библиотеку</string>
+</resources>

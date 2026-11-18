@@ -8,12 +8,12 @@ private const val POP_MS = 380L
 private const val POP_SCALE = 1.35f
 
 /**
- * The peach draws back a little, then pops towards the viewer while the splash fades into the
- * app. It runs once the app is ready, so it is visible on every launch: an animation inside
+ * The brand icon draws back a little, then pops towards the viewer while the splash fades into
+ * the app. It runs once the app is ready, so it is visible on every launch: an animation inside
  * the splash icon would already be over while the launch transition is still revealing the
  * window. Works the same on every API level the splash library supports.
  */
-fun SplashScreen.popPeachOnExit() {
+fun SplashScreen.popBrandOnExit() {
     setOnExitAnimationListener { splash ->
         splash.iconView.animate()
             .scaleX(POP_SCALE)

@@ -34,9 +34,13 @@ import ru.spgsroot.peachy.manga.LibraryGallery
 import ru.spgsroot.peachy.manga.RememberedGallery
 import ru.spgsroot.peachy.manga.NhentaiCdn
 import ru.spgsroot.peachy.manga.PageTurnHaptic
-import ru.spgsroot.peachy.manga.startPage
+import ru.spgsroot.peachy.manga.ReaderPageJump
+import ru.spgsroot.peachy.manga.ReaderPosition
 import ru.spgsroot.peachy.manga.filterSearchResults
+import ru.spgsroot.peachy.manga.offsetFraction
+import ru.spgsroot.peachy.manga.readerStart
 import ru.spgsroot.peachy.data.db.SavedPageEntity
+import ru.spgsroot.peachy.data.manga.ReaderPositionStore
 import ru.spgsroot.peachy.data.manga.SavedPagesRepository
 import ru.spgsroot.peachy.data.storage.ExportItem
 import ru.spgsroot.peachy.data.storage.ExportResult
@@ -67,7 +71,8 @@ class MangaViewModel @Inject constructor(
     private val memory: GalleryMemoryStore,
     private val savedPagesRepository: SavedPagesRepository,
     private val exporter: VideoExporter,
-    private val tagPreferences: TagPreferences
+    private val tagPreferences: TagPreferences,
+    private val readerPositions: ReaderPositionStore
 ) : ViewModel() {
     val libraryItems: StateFlow<List<LibraryGallery>> = library.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -92,11 +97,19 @@ class MangaViewModel @Inject constructor(
     val remembered: StateFlow<Map<Int, RememberedGallery>> = memory.all
         .map { galleries -> galleries.associateBy { it.id } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
-    private val _catalog = MutableStateFlow(CatalogState())
-    val catalog: StateFlow<CatalogState> = _catalog
-    private var searchJob: Job? = null
-    private var rawResults: List<GallerySummary> = emptyList()
-    private var filterVersion = 0
+    private val catalogSearch = CatalogSearch(
+        scope = viewModelScope,
+        fetch = { query, page ->
+            withContext(Dispatchers.IO) { api.search(query.toSearchQuery(), query.sort.toApi(), page) }
+        },
+        rememberQuery = { query ->
+            withContext(Dispatchers.IO) { catalogStore.rememberQuery(query.toSearchQuery()) }
+        },
+        filter = { source ->
+            withContext(Dispatchers.IO) { filterSearchResults(source, emptyMap(), catalogStore::blocks) }
+        }
+    )
+    val catalog: StateFlow<CatalogState> = catalogSearch.state
     private val _blockedIds = MutableStateFlow<Set<Int>>(emptySet())
     val blockedIds: StateFlow<Set<Int>> = _blockedIds
     private val _blockedNames = MutableStateFlow<Set<String>>(emptySet())
@@ -109,8 +122,10 @@ class MangaViewModel @Inject constructor(
 
     private val _detail = MutableStateFlow<GalleryDetail?>(null)
     val detail: StateFlow<GalleryDetail?> = _detail
-    private val _initialPage = MutableStateFlow<Int?>(null)
-    val initialPage: StateFlow<Int?> = _initialPage
+
+    /** The resolved page and in-page offset the reader must start on; null until the gallery is known. */
+    private val _initialPosition = MutableStateFlow<ReaderPosition?>(null)
+    val initialPosition: StateFlow<ReaderPosition?> = _initialPosition
     private var openJob: Job? = null
     private var historyWrite: Job? = null
 
@@ -125,54 +140,11 @@ class MangaViewModel @Inject constructor(
 
     fun search(query: CatalogQuery, page: Int = 1) {
         if (searchDestination(query.text) is SearchDestination.OpenGallery) return
-        searchJob?.cancel()
-        rawResults = emptyList()
-        _catalog.value = CatalogState(query = query, page = page, loading = true, searched = true)
-        searchJob = viewModelScope.launch {
-            try {
-                val results = withContext(Dispatchers.IO) {
-                    catalogStore.rememberQuery(query.toSearchQuery())
-                    api.search(query.toSearchQuery(), query.sort.toApi(), page)
-                }
-                rawResults = results
-                refreshVisibleResults()
-                // The API exposes no total/page count. An empty raw page ends paging;
-                // a fully blacklisted page must still allow moving forward.
-                _catalog.value = _catalog.value.copy(loading = false, hasNext = results.isNotEmpty())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _catalog.value = _catalog.value.copy(loading = false, failed = true)
-            }
-        }
+        catalogSearch.search(query, page)
     }
 
-    /**
-     * Appends the page after the last one shown. Called when the list nears its end; a new search cancels it,
-     * and a failure keeps the list and waits for [retry] instead of looping.
-     */
-    fun loadMore(retry: Boolean = false) {
-        val state = _catalog.value
-        if (!state.searched || state.loading || state.loadingMore || state.failed || !state.hasNext) return
-        if (state.moreFailed && !retry) return
-        val page = state.page + 1
-        val query = state.query
-        _catalog.value = state.copy(loadingMore = true, moreFailed = false)
-        searchJob = viewModelScope.launch {
-            try {
-                val results = withContext(Dispatchers.IO) {
-                    api.search(query.toSearchQuery(), query.sort.toApi(), page)
-                }
-                rawResults = (rawResults + results).distinctBy { it.id }
-                _catalog.value = _catalog.value.copy(page = page, loadingMore = false, hasNext = results.isNotEmpty())
-                refreshVisibleResults()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _catalog.value = _catalog.value.copy(loadingMore = false, moreFailed = true)
-            }
-        }
-    }
+    /** Appends the page after the last one shown; a new search cancels it. */
+    fun loadMore(retry: Boolean = false) = catalogSearch.loadMore(retry)
 
     fun blockId(id: Int) = changeBlacklist { catalogStore.blockId(id) }
     fun unblockId(id: Int) = changeBlacklist { catalogStore.unblockId(id) }
@@ -192,32 +164,28 @@ class MangaViewModel @Inject constructor(
         refreshVisibleResults()
     }
 
-    private suspend fun refreshVisibleResults() {
-        val source = rawResults
-        val version = ++filterVersion
-        val visible = withContext(Dispatchers.IO) {
-            filterSearchResults(source, emptyMap(), catalogStore::blocks)
-        }
-        if (rawResults === source && filterVersion == version) {
-            _catalog.value = _catalog.value.copy(results = visible)
-        }
-    }
+    private suspend fun refreshVisibleResults() = catalogSearch.refreshVisible()
 
     fun open(id: Int, startAt: Int? = null) {
         openJob?.cancel()
         _detail.value = null
-        _initialPage.value = null
+        _initialPosition.value = null
         _error.value = null
         openJob = viewModelScope.launch {
             try {
-                val savedPage = withContext(Dispatchers.IO) { catalogStore.getHistory(id)?.page }
+                // A deliberate page tapped in this process wins; a route argument restored after process
+                // death is only a hint, so the newest durable position is resumed instead.
+                val explicitPage = startAt?.takeIf { ReaderPageJump.isFresh(id, it) }
+                val progress = withContext(Dispatchers.IO) { loadProgress(id) }
                 val saved = library.observe().first().find { it.id == id && it.pagePaths.isNotEmpty() }
                 if (saved != null) {
-                    _initialPage.value = startPage(startAt ?: savedPage, saved.pagePaths.size)
+                    _initialPosition.value = readerStart(explicitPage, progress, saved.pagePaths.size)
                     _detail.value = GalleryDetail(saved.id, saved.title, saved.thumbnailPath, saved.pagePaths)
                 }
                 val fetched = withContext(Dispatchers.IO) { api.gallery(id) }
-                if (_detail.value == null) _initialPage.value = startPage(startAt ?: savedPage, fetched.pagePaths.size)
+                if (_detail.value == null) {
+                    _initialPosition.value = readerStart(explicitPage, progress, fetched.pagePaths.size)
+                }
                 _detail.value = fetched
                 catalogStore.rememberTags(fetched.tags)
                 refreshVisibleResults()
@@ -228,6 +196,14 @@ class MangaViewModel @Inject constructor(
                 if (_detail.value == null) _error.value = e.message ?: "Open failed"
             }
         }
+    }
+
+    /** The durable position: the read-history page plus the offset stored for exactly that page. */
+    private suspend fun loadProgress(galleryId: Int): ReaderPosition? {
+        val history = catalogStore.getHistory(galleryId) ?: return null
+        val stored = readerPositions.load(galleryId)
+        val offset = stored?.takeIf { it.page == history.page }?.offset ?: 0f
+        return ReaderPosition(history.page, offset)
     }
 
     private val _randomFailed = MutableStateFlow(false)
@@ -252,8 +228,9 @@ class MangaViewModel @Inject constructor(
         return local?.takeIf { it.exists() } ?: NhentaiCdn.page(path)
     }
 
-    fun saveReadHistory(current: GalleryDetail, page: Int) {
+    fun saveReadHistory(current: GalleryDetail, page: Int, offset: Float = 0f) {
         if (page !in current.pagePaths.indices) return
+        val position = ReaderPosition(page, offsetFraction(offset))
         val entry = ReadHistoryEntity(
             galleryId = current.id,
             title = current.title,
@@ -266,6 +243,7 @@ class MangaViewModel @Inject constructor(
         val previous = historyWrite
         historyWrite = viewModelScope.launch(NonCancellable + Dispatchers.IO) {
             previous?.join()
+            readerPositions.save(current.id, position)
             catalogStore.upsertHistory(entry)
         }
     }

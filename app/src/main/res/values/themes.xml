@@ -1,18 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- Brand black #0B0B0D: window, status and navigation bars match the Compose background. -->
     <style name="Theme.Peachy" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/window_background</item>
-        <item name="android:colorBackground">@color/window_background</item>
-        <item name="android:statusBarColor">@color/window_background</item>
-        <item name="android:navigationBarColor">@color/window_background</item>
+        <!-- A colour resource, not a literal: the platform's starting window reads
+             android:windowSplashScreenBackground first and only falls back to a windowBackground
+             *resource*. A literal here is unreadable there, and the splash falls back to the
+             system default (#FFFFFF in day mode) - the white window seen on a cold share start. -->
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:colorBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">#FF0B0B0D</item>
+        <item name="android:navigationBarColor">#FF0B0B0D</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <style name="Theme.Peachy.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/window_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_peach</item>
+    <!-- The splash shows the same adaptive launcher icon as the home screen. -->
+    <style name="Theme.Peachy.Splash" parent="Base.Theme.Peachy.Splash" />
+
+    <style name="Base.Theme.Peachy.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="windowSplashScreenAnimationDuration">200</item>
         <item name="postSplashScreenTheme">@style/Theme.Peachy</item>
+        <!-- Window painted before the splash swap (e.g. when the platform skips the starting window): never the DayNight default white. -->
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

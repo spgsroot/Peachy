@@ -82,11 +82,17 @@ class ShareImportViewModel @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 val jobContext = currentCoroutineContext()
+                var title: String? = null
                 val declaredSize = context.contentResolver.query(
-                    uri, arrayOf(OpenableColumns.SIZE), null, null, null
+                    uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null
                 )?.use { cursor ->
-                    val index = cursor.getColumnIndex(OpenableColumns.SIZE)
-                    if (index >= 0 && cursor.moveToFirst() && !cursor.isNull(index)) cursor.getLong(index) else -1L
+                    if (!cursor.moveToFirst()) return@use -1L
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && !cursor.isNull(nameIndex)) {
+                        title = cursor.getString(nameIndex).substringBeforeLast('.').trim()
+                    }
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else -1L
                 } ?: -1L
                 val input = context.contentResolver.openInputStream(uri) ?: throw IOException("Cannot open shared video")
                 val source = object : FilterInputStream(input) {
@@ -99,7 +105,7 @@ class ShareImportViewModel @Inject constructor(
                 saved = file
                 jobContext.ensureActive()
                 withContext(NonCancellable) {
-                    videoImporter.persist(file).also { persisted = it.isSuccess }
+                    videoImporter.persist(file, title = title).also { persisted = it.isSuccess }
                 }
             }.also { if (it.isFailure) saved?.let { file -> videoStorage.deleteFile(file.absolutePath) } }
         } catch (cancelled: CancellationException) {

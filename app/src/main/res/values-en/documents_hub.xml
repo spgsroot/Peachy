@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Documents hub -->
+    <string name="documents_title">Documents</string>
+    <string name="documents_open_file">Open file</string>
+    <string name="documents_back">Back</string>
+    <string name="documents_empty_title">No documents yet</string>
+    <string name="documents_empty_body">PDFs, images and Office files open here. Only the file you pick is copied into the app; the original stays untouched.</string>
+    <string name="documents_kind_pdf">PDF</string>
+    <string name="documents_kind_word">Word</string>
+    <string name="documents_kind_excel">Excel</string>
+    <string name="documents_kind_powerpoint">PowerPoint</string>
+    <string name="documents_kind_image">Image</string>
+    <string name="documents_dirty">Edited</string>
+    <string name="documents_updated">Edited %1$s</string>
+    <string name="documents_delete">Delete</string>
+    <string name="documents_delete_confirm_title">Delete this document?</string>
+    <string name="documents_delete_confirm_body">Session “%1$s” and its working copy will be deleted. The original file stays where you opened it from.</string>
+    <string name="documents_delete_failed">Could not delete the session files</string>
+    <string name="documents_missing_title">Session not found</string>
+    <string name="documents_missing_body">The document was deleted or its working copy is no longer available.</string>
+
+    <!-- Unsaved changes -->
+    <string name="documents_unsaved_title">Unsaved changes</string>
+    <string name="documents_unsaved_body">Changes live only in this app session. Save a copy to a location you choose, or delete the session together with its edits.</string>
+    <string name="documents_save_copy">Save a copy</string>
+    <string name="documents_discard">Delete session</string>
+    <string name="documents_dialog_cancel">Cancel</string>
+
+    <!-- Import errors -->
+    <string name="documents_import_failed">Could not open the file</string>
+    <string name="documents_error_empty">The file is empty</string>
+    <string name="documents_error_too_large">The file is larger than this format allows (%1$s)</string>
+    <string name="documents_error_too_large_generic">The file is larger than allowed</string>
+    <string name="documents_error_no_space">Not enough free space for the copy</string>
+    <string name="documents_error_unknown">The file format could not be read from its contents</string>
+    <string name="documents_error_unsupported">This format is not supported yet: %1$s</string>
+    <string name="documents_error_mismatch">The contents do not match the extension: the file is %1$s</string>
+    <string name="documents_error_corrupt">The file is damaged or is not a document</string>
+
+    <!-- Office not available -->
+    <string name="documents_office_title">The Office editor is not available yet</string>
+    <string name="documents_office_body">The file is %1$s (%2$s). Editing %2$s documents arrives in the next build; this build cannot change or save it.</string>
+    <string name="documents_office_delete">Delete session</string>
+
+    <!-- Save a copy -->
+    <string name="documents_saved">Copy saved</string>
+    <string name="documents_save_failed">Could not save the copy</string>
+</resources>

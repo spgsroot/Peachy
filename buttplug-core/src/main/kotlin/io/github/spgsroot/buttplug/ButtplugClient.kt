@@ -30,7 +30,7 @@ import kotlinx.serialization.modules.subclass
  */
 class ButtplugClient(
     val config: ButtplugClientConfig = ButtplugClientConfig.DEFAULT,
-    private val transport: ButtplugTransport = WebSocketTransport(config.bypassCertVerify),
+    private val transport: ButtplugTransport = WebSocketTransport(),
     private val idGenerator: MessageIdGenerator = MessageIdGenerator(),
     private val messageSorter: MessageSorter = MessageSorter(),
     private val deviceManager: DeviceManager = DeviceManager()

@@ -11,6 +11,7 @@
     <string name="browser_popup_open">Открыть</string>
     <string name="browser_popup_blocked">Всплывающее окно заблокировано</string>
     <string name="browser_insecure_navigation_blocked">Небезопасный переход по HTTP заблокирован</string>
+    <string name="browser_non_get_navigation_blocked">Браузер заблокировал отправку формы на другой сайт или по HTTP</string>
     <string name="browser_insecure_connection">Соединение не защищено, страница заблокирована</string>
     <string name="browser_too_many_tabs">Слишком много вкладок</string>
     <string name="browser_download_offered">Видео добавлено в список «Видео на странице»</string>
@@ -34,7 +35,11 @@
     <string name="browser_capture">Вибрация от звука страницы</string>
     <string name="browser_home">Стартовая страница</string>
     <string name="browser_close_browser">Закрыть браузер</string>
-    <string name="browser_clear_history">Очистить историю</string>
+    <string name="browser_clear_history">Очистить список посещений</string>
+    <string name="browser_clear_site_data">Очистить данные сайтов</string>
+    <string name="browser_clear_site_data_message">Все вкладки будут закрыты, файлы cookie, кэш WebView и данные сайтов — удалены. Возможно, придётся войти на сайты заново. Закладки и список посещений сохранятся.</string>
+    <string name="browser_clear_site_data_legacy_message">Все вкладки будут закрыты, файлы cookie и кэш WebView — удалены. В этой версии Android System WebView часть данных сайтов может сохраниться. Для полной очистки обновите WebView. Закладки и список посещений сохранятся.</string>
+    <string name="browser_clear_site_data_confirm">Очистить данные</string>
     <string name="browser_no_bookmarks">Закладок пока нет. Добавьте страницу через меню.</string>
     <string name="browser_no_history">История пуста</string>
     <string name="browser_no_videos">На странице видео не найдено. Запустите видео и откройте список снова.</string>
@@ -52,4 +57,14 @@
     <string name="dialog_browser_title">Браузер</string>
     <string name="dialog_browser_url_hint">Адрес (необязательно)</string>
     <string name="dialog_browser_capture">Вибрация от звука страницы</string>
+    <string name="browser_shield_total">Всего заблокировано: %1$d</string>
+    <string name="browser_shield_lists">Списки фильтров</string>
+    <string name="browser_shield_apply">Обновить выбранные списки</string>
+    <string name="browser_shield_old_webview">В этой версии WebView косметические правила могут запаздывать, а динамические селекторы — не работать. Сетевые фильтры остаются активны.</string>
+    <string name="browser_shield_load_failed">Не удалось загрузить фильтры. Страница не открыта.</string>
+    <string name="browser_shield_network">Блокировка рекламы</string>
+    <string name="browser_shield_cosmetic">Скрывать элементы</string>
+    <string name="browser_shield_generic">Общие косметические правила</string>
+    <string name="browser_shield_rules">Свои правила, по одному на строку</string>
+    <string name="browser_shield_urls">Свои подписки: публичные HTTPS-адреса, по одному на строку</string>
 </resources>

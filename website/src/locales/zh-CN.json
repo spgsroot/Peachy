@@ -1,0 +1,116 @@
+{
+  "period": "。",
+  "meta": {
+    "title": "Peachy：Android 图库、播放器与浏览器",
+    "description": "Peachy 将图库、播放器和浏览器整合在一个 Android 应用中，优先在本地处理和存储数据。添加的媒体保存在手机上的应用媒体库中。源代码开放，也如实说明限制。",
+    "socialDescription": "优先使用本地存储的 Android 媒体应用。图库、播放器和浏览器合而为一，添加的媒体保存在手机上的应用媒体库中。",
+    "socialLocale": "zh_CN"
+  },
+  "nav": {
+    "skip": "跳转到正文",
+    "home": "Peachy 首页",
+    "primary": "主导航",
+    "menu": "菜单",
+    "close": "关闭",
+    "features": "功能",
+    "principles": "原则",
+    "download": "下载",
+    "language": "语言",
+    "backToTop": "返回顶部"
+  },
+  "hero": {
+    "titleFirst": "你的内容。",
+    "titleSecond": "你的空间",
+    "openSource": "开源",
+    "localFirst": "本地优先",
+    "lead": "在同一个 Android 应用中浏览图库、播放媒体、访问网页。你添加的媒体会保存在手机上的应用媒体库中。",
+    "download": "下载 Android 版",
+    "source": "查看源代码",
+    "featuresTitle": "媒体库、播放器与浏览器",
+    "chooseScreen": "选择要预览的界面",
+    "appLabel": "Peachy Android 应用"
+  },
+  "screens": {
+    "library": {
+      "label": "媒体库",
+      "alt": "Peachy Android 媒体库的搜索界面，已选择全部，风景示例照片分两列显示。",
+      "caption": "照片和视频统一管理，支持相册与搜索。"
+    },
+    "player": {
+      "label": "播放器",
+      "alt": "Peachy Android 播放器界面，显示示例视频、播放控件和播放队列。",
+      "caption": "播放流畅，常用控件齐全的媒体播放器。"
+    },
+    "browser": {
+      "label": "浏览器",
+      "alt": "NASA Science 的文章配有韦布望远镜拍摄的照片，展示一颗形成中的恒星周围的粉蓝色云团。",
+      "sourceLabel": "NASA Science · 网页截图",
+      "caption": "浏览 HTTPS 网站，保存支持的视频文件，并过滤广告和跟踪器。"
+    }
+  },
+  "featureDetails": {
+    "title": "按自己的节奏观看和阅读。",
+    "items": [
+      {
+        "title": "拦截广告和跟踪器",
+        "text": "浏览器使用原生 Brave 过滤引擎，内置 EasyList、EasyPrivacy 和成人网站过滤列表。可在菜单中管理订阅、自定义规则和网站例外。受 WebView 限制，并非所有请求都能过滤。"
+      },
+      {
+        "title": "同步兼容设备",
+        "text": "你可以通过 Intiface Central（Buttplug.io）连接兼容设备，让 Peachy 根据视频声音同步控制设备。"
+      },
+      {
+        "title": "成人漫画阅读器（18+）",
+        "text": "按标签浏览 nHentai 目录，并在 Peachy 中阅读。你可以放大画面、保存书签，也可以从上次读到的位置继续。"
+      },
+      {
+        "title": "文档功能与限制",
+        "text": "使用工作副本查看和编辑 PDF 及支持的图片。Word、Excel（包括 XLS/XLSX）和 PowerPoint 文件可导入并显示在列表中，但 Office 查看和编辑仍被禁用，即使调试构建包含可选引擎也不例外。"
+      }
+    ]
+  },
+  "storage": {
+    "alt": "深色石墨表面上的挂锁，光线从上方照下。",
+    "title": "私密存储，就在你的设备上。",
+    "lead": "Peachy 的媒体库采用本地优先的方式，你添加的媒体保存在手机上的应用存储空间中。本地优先不代表只能离线使用，也不承诺匿名。",
+    "localTitle": "本地媒体库",
+    "localText": "你添加的媒体保存在设备上的应用存储空间中。",
+    "networkTitle": "由你决定如何联网",
+    "networkText": "浏览器会连接网站和过滤列表发布者，漫画目录会访问 nhentai。翻译仅在你同意指定服务商后发送页面图片或本地识别的文字。更新功能会访问 GitHub；每日自动检查默认关闭。",
+    "protectionTitle": "保护程度取决于设备",
+    "protectionText": "数字密码锁定应用界面；SQLCipher 使用由 Keystore 保护的独立密钥加密数据库。Peachy 不会逐个加密媒体文件，文件依赖 Android 沙盒和设备加密，无法防护已遭入侵的手机。"
+  },
+  "principles": {
+    "title": "始终遵循的六项原则。",
+    "lead": "这些原则决定应用的功能，也要求我们坦诚说明限制。",
+    "items": [
+      { "title": "从设计上保护隐私", "text": "隐私取决于应用架构，而非营销承诺。" },
+      { "title": "本地优先", "text": "在应用支持的范围内，优先在设备上处理和存储数据。" },
+      { "title": "开放源代码", "text": "公开源代码，接受独立审查。" },
+      { "title": "用户掌控数据", "text": "用户自行掌控自己的数据。" },
+      { "title": "保持简单", "text": "减少不必要的复杂性。" },
+      { "title": "不做虚假承诺", "text": "如实说明限制。" }
+    ]
+  },
+  "platforms": {
+    "title": "可用情况，如实说明。",
+    "lead": "Android 版现已可用。桌面版和替代网络支持尚未推出。",
+    "mainApplication": "主要应用",
+    "available": "已可用",
+    "desktop": "桌面版",
+    "desktopApplication": "桌面应用",
+    "planned": "已计划",
+    "noBuild": "暂无构建版本",
+    "alternativeNetworks": "替代网络",
+    "research": "研究中",
+    "noIntegration": "尚未集成",
+    "note": "计划和研究中的项目仅代表意向，不代表已发布的软件功能。"
+  },
+  "philosophy": {
+    "title": "隐私应当是默认，而非特权",
+    "statement": "你的内容属于你。你使用的软件应该尊重这一点。"
+  },
+  "footer": {
+    "signature": "来自俄罗斯的爱，LLMCrew.org 敬上"
+  }
+}

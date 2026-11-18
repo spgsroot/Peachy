@@ -2,10 +2,12 @@ package ru.spgsroot.peachy.ui.gallery
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -247,46 +249,39 @@ class GalleryViewModel @Inject constructor(
     }
 
     private suspend fun deleteVideo(video: Video) {
-        withContext(Dispatchers.IO) {
-            // Remove from playlist first
+        withContext(Dispatchers.IO + NonCancellable) {
+            val removed = videoRepository.remove(video.id) ?: return@withContext
             playlistManager.removeVideo(video)
-
-            internalStorageManager.deleteFile(video.filePath)
-            internalStorageManager.delete(video.id)
-            // Delete from database
-            videoRepository.deleteById(video.id)
-            notes.delete(NoteKind.VIDEO, video.id.toString())
+            internalStorageManager.deleteFile(removed.filePath)
+            removed.thumbnailPath?.let(internalStorageManager::deleteThumbnail)
+            notes.delete(NoteKind.VIDEO, removed.id.toString())
         }
     }
 
     fun renameVideo(video: Video, newTitle: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val updatedVideo = video.copy(title = newTitle)
-                videoRepository.update(updatedVideo)
-            }
+            videoRepository.rename(video.id, newTitle)
         }
     }
 
     fun updateThumbnail(video: Video, uri: Uri, context: Context) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    // Delete old thumbnail if exists
-                    video.thumbnailPath?.let { oldPath ->
-                        internalStorageManager.deleteThumbnail(oldPath)
+            try {
+                withContext(Dispatchers.IO + NonCancellable) {
+                    val input = context.contentResolver.openInputStream(uri) ?: return@withContext
+                    val path = internalStorageManager.saveThumbnail(input, video.id)
+                    var published = false
+                    try {
+                        published = videoRepository.replaceThumbnail(video.id, video.thumbnailPath, path)
+                        if (published) video.thumbnailPath?.let(internalStorageManager::deleteThumbnail)
+                    } finally {
+                        if (!published) internalStorageManager.deleteThumbnail(path)
                     }
-
-                    // Save new thumbnail
-                    val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext
-                    val thumbnailPath = internalStorageManager.saveThumbnail(inputStream, video.id)
-
-                    // Update video with new thumbnail path
-                    val updatedVideo = video.copy(thumbnailPath = thumbnailPath)
-                    videoRepository.update(updatedVideo)
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Log.w("GalleryViewModel", "Could not replace video cover", failure)
             }
         }
     }

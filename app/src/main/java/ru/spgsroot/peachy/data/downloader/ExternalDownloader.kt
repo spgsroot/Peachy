@@ -7,13 +7,11 @@ import androidx.core.app.NotificationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.data.storage.InternalStorageManager
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,10 +21,7 @@ class ExternalDownloader @Inject constructor(
     @ApplicationContext private val context: Context,
     private val storageManager: InternalStorageManager
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val client = SafeHttpClient(connectTimeoutSeconds = 30, readTimeoutSeconds = 30)
 
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -70,13 +65,12 @@ class ExternalDownloader @Inject constructor(
         onProgress(0)
 
         return try {
-            val request = Request.Builder()
-                .url(url)
+            val request = PublicNetworkPolicy.requestBuilder(url)
                 .apply { headers.forEach { (name, value) -> header(name, value) } }
                 .get()
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            client.execute(request).use { response ->
                 if (!response.isSuccessful) {
                     val message = "HTTP ${response.code}: ${context.getString(R.string.error_download_failed)}"
 
@@ -148,16 +142,17 @@ class ExternalDownloader @Inject constructor(
 
                 Result.success(file)
             }
-        } catch (e: Exception) {
-            builder.setContentTitle("Ошибка скачивания")
-                .setContentText(e.message ?: "Неизвестная ошибка")
+        } catch (_: Exception) {
+            val message = context.getString(R.string.error_download_failed)
+            builder.setContentTitle(context.getString(R.string.notification_download_error))
+                .setContentText(message)
                 .setProgress(0, 0, false)
                 .setOngoing(false)
                 .setSmallIcon(android.R.drawable.stat_notify_error)
 
             notificationManager.notify(notificationId, builder.build())
-            _downloadProgress.value = DownloadProgress.Error(e.message ?: "Unknown error")
-            Result.failure(e)
+            _downloadProgress.value = DownloadProgress.Error(message)
+            Result.failure(IOException(message))
         }
     }
 

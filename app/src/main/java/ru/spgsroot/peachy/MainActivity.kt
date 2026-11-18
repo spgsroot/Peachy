@@ -15,6 +15,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -27,6 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,11 +39,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ru.spgsroot.peachy.data.session.AppSessionStore
 import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.locale.LocaleManager
 import ru.spgsroot.peachy.security.AppLockGuard
 import ru.spgsroot.peachy.security.AuthManager
 import ru.spgsroot.peachy.security.AuthSession
+import ru.spgsroot.peachy.documents.ui.DocumentRouteScreen
+import ru.spgsroot.peachy.documents.ui.DocumentsScreen
 import ru.spgsroot.peachy.ui.auth.AuthScreen
 import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
 import ru.spgsroot.peachy.ui.gallery.GalleryScreen
@@ -58,6 +63,7 @@ import ru.spgsroot.peachy.ui.settings.UpdateDialogHost
 import ru.spgsroot.peachy.ui.settings.UpdateViewModel
 import ru.spgsroot.peachy.ui.share.ShareImportViewModel
 import ru.spgsroot.peachy.ui.theme.PeachyTheme
+import ru.spgsroot.peachy.ui.webview.WebViewActivity
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -71,6 +77,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var appLockGuard: AppLockGuard
+
+    @Inject
+    lateinit var appSession: AppSessionStore
 
     private val shareImportViewModel: ShareImportViewModel by viewModels()
     private var recreated = false
@@ -92,7 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen().popPeachOnExit()
+        installSplashScreen().popBrandOnExit()
         super.onCreate(savedInstanceState)
         recreated = savedInstanceState != null
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
@@ -105,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PeachyTheme {
-                AppNavigation(authManager, authSession, shareImportViewModel)
+                AppNavigation(authManager, authSession, shareImportViewModel, appSession)
             }
         }
     }
@@ -159,7 +168,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImports: ShareImportViewModel) {
+fun AppNavigation(
+    authManager: AuthManager,
+    authSession: AuthSession,
+    shareImports: ShareImportViewModel,
+    appSession: AppSessionStore
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val unlocked by authSession.unlocked.collectAsState()
@@ -205,7 +219,7 @@ fun AppNavigation(authManager: AuthManager, authSession: AuthSession, shareImpor
             }
         )
         locked -> AuthGate(authManager, authSession)
-        else -> UnlockedApp(shareImports)
+        else -> UnlockedApp(shareImports, appSession)
     }
 }
 
@@ -256,14 +270,52 @@ private fun AuthGate(authManager: AuthManager, authSession: AuthSession) {
 }
 
 @Composable
-private fun UnlockedApp(shareImports: ShareImportViewModel) {
-    // The controller belongs to the unlocked session: locking disposes it together with every
-    // destination, so an unlock always starts from the graph's start destination.
+private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessionStore) {
+    // Composed only while the session is unlocked, so restoration can never stand in for the
+    // password screen. Locking disposes the controller and every destination; what the user was
+    // looking at is kept in AppSessionStore and navigated back to on the next unlock.
     val navController = rememberNavController()
     val context = LocalContext.current
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val canImport = route != null
+    // Read once per unlocked session. A share or link waiting to be imported is a deliberate
+    // destination and outranks the previous screen, so nothing is restored over it.
+    val restored = remember {
+        if (shareImports.hasPending.value) {
+            AppSessionStore.Snapshot(route = null, browserOpen = false)
+        } else {
+            appSession.read()
+        }
+    }
+    var restoredApplied by remember { mutableStateOf(restored.route == null) }
+
+    LaunchedEffect(Unit) {
+        restored.route?.let { target ->
+            // A recreated activity may already have its back stack; only navigate when the top
+            // destination is a different one, so a rotation never stacks a duplicate.
+            if (navController.currentDestination?.route != routePatternOf(target)) {
+                // The parent screens go in first, so Back from a restored sub-screen follows the
+                // usual hierarchy instead of dropping the user out of the app.
+                restoredChain(target).forEach { step ->
+                    navController.navigate(step) { launchSingleTop = true }
+                }
+            }
+        }
+        restoredApplied = true
+        // The browser is a separate activity, not a graph destination: reopening it here keeps it
+        // after the unlock instead of dropping the user on the screen underneath it.
+        if (restored.browserOpen && !appSession.browserVisible) {
+            context.startActivity(Intent(context, WebViewActivity::class.java))
+        }
+    }
+
+    // Every destination change is remembered, not only the final one at exit: a killed process
+    // never gets onDestroy, and the next unlock must land on the same screen.
+    LaunchedEffect(entry) {
+        val current = entry ?: return@LaunchedEffect
+        concreteRouteOf(current)?.let(appSession::saveRoute)
+    }
     val updates: UpdateViewModel = hiltViewModel()
     val updateOptions by updates.options.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -315,62 +367,123 @@ private fun UnlockedApp(shareImports: ShareImportViewModel) {
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = "player",
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-        popEnterTransition = { EnterTransition.None },
-        popExitTransition = { ExitTransition.None }
-    ) {
-        composable("player") {
-            val playerViewModel: PlayerViewModel = hiltViewModel()
-            PlayerScreen(navController = navController, viewModel = playerViewModel)
+    Box(Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = "player",
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None }
+        ) {
+            composable("player") {
+                val playerViewModel: PlayerViewModel = hiltViewModel()
+                PlayerScreen(navController = navController, viewModel = playerViewModel)
+            }
+            composable("gallery") {
+                val galleryViewModel: GalleryViewModel = hiltViewModel()
+                GalleryScreen(navController = navController, viewModel = galleryViewModel)
+            }
+            composable("manga") { entry ->
+                MangaHubScreen(navController = navController, entry = entry)
+            }
+            composable(
+                "manga/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.IntType })
+            ) { entry ->
+                GalleryDetailScreen(
+                    galleryId = entry.arguments?.getInt("id") ?: return@composable,
+                    navController = navController
+                )
+            }
+            composable(
+                "manga/{id}/read?page={page}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.IntType },
+                    navArgument("page") {
+                        type = NavType.IntType
+                        defaultValue = -1
+                    }
+                )
+            ) { entry ->
+                MangaReaderScreen(
+                    galleryId = entry.arguments?.getInt("id") ?: return@composable,
+                    startAt = entry.arguments?.getInt("page")?.takeIf { it >= 0 },
+                    navController = navController
+                )
+            }
+            composable("documents") {
+                DocumentsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id -> navController.navigate("documents/$id") }
+                )
+            }
+            composable(
+                "documents/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) {
+                DocumentRouteScreen(onClose = { navController.popBackStack() })
+            }
+            composable(
+                "mangatags/{type}",
+                arguments = listOf(navArgument("type") { type = NavType.StringType })
+            ) { entry ->
+                TagBrowserScreen(
+                    onSearch = navController::searchCatalog,
+                    onBack = { navController.popBackStack() },
+                    initialType = entry.arguments?.getString("type") ?: "tag"
+                )
+            }
         }
-        composable("gallery") {
-            val galleryViewModel: GalleryViewModel = hiltViewModel()
-            GalleryScreen(navController = navController, viewModel = galleryViewModel)
-        }
-        composable("manga") { entry ->
-            MangaHubScreen(navController = navController, entry = entry)
-        }
-        composable(
-            "manga/{id}",
-            arguments = listOf(navArgument("id") { type = NavType.IntType })
-        ) { entry ->
-            GalleryDetailScreen(
-                galleryId = entry.arguments?.getInt("id") ?: return@composable,
-                navController = navController
-            )
-        }
-        composable(
-            "manga/{id}/read?page={page}",
-            arguments = listOf(
-                navArgument("id") { type = NavType.IntType },
-                navArgument("page") {
-                    type = NavType.IntType
-                    defaultValue = -1
-                }
-            )
-        ) { entry ->
-            MangaReaderScreen(
-                galleryId = entry.arguments?.getInt("id") ?: return@composable,
-                startAt = entry.arguments?.getInt("page")?.takeIf { it >= 0 },
-                navController = navController
-            )
-        }
-        composable(
-            "mangatags/{type}",
-            arguments = listOf(navArgument("type") { type = NavType.StringType })
-        ) { entry ->
-            TagBrowserScreen(
-                onSearch = navController::searchCatalog,
-                onBack = { navController.popBackStack() },
-                initialType = entry.arguments?.getString("type") ?: "tag"
-            )
+        // A NavHost cannot start on a route that carries arguments, so the stored destination is
+        // navigated to right after the graph exists. This cover hides that first frame, so the
+        // player is never composed as a flash on the way to the restored screen.
+        if (!restoredApplied) {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
         }
     }
+}
+
+/** The concrete destination of [entry], with only the arguments needed to navigate to it again. */
+private fun concreteRouteOf(entry: NavBackStackEntry): String? {
+    val pattern = entry.destination.route ?: return null
+    val args = entry.arguments
+    return when (pattern) {
+        "manga/{id}" -> args?.getInt("id")?.takeIf { it > 0 }?.let { "manga/$it" }
+        // The page argument is deliberately not stored: the reader resumes its own durable progress,
+        // and a page number remembered here would be stale after the user read further.
+        "manga/{id}/read?page={page}" -> args?.getInt("id")?.takeIf { it > 0 }?.let { "manga/$it/read" }
+        "mangatags/{type}" -> args?.getString("type")?.takeIf { it.isNotBlank() }?.let { "mangatags/$it" }
+        "documents/{id}" -> args?.getString("id")?.takeIf { AppSessionStore.sanitize("documents/$it") != null }
+            ?.let { "documents/$it" }
+        // A start page or any pattern without arguments can be used as it is.
+        else -> pattern.takeIf { '{' !in it }
+    }
+}
+
+/** The route pattern that [route] navigates to, compared with the graph's current destination. */
+private fun routePatternOf(route: String): String = when {
+    route.startsWith("manga/") && route.endsWith("/read") -> "manga/{id}/read?page={page}"
+    route.startsWith("manga/") -> "manga/{id}"
+    route.startsWith("mangatags/") -> "mangatags/{type}"
+    route.startsWith("documents/") -> "documents/{id}"
+    else -> route
+}
+
+/**
+ * The screens to navigate through when restoring [target]. The player stays at the bottom of the
+ * stack and the catalog hub sits above it, so Back walks the normal hierarchy rather than ending the
+ * app from a reader that was restored directly.
+ */
+private fun restoredChain(target: String): List<String> = when {
+    target.startsWith("manga/") -> {
+        val id = target.removePrefix("manga/").substringBefore('/')
+        if (target.endsWith("/read")) listOf("manga", "manga/$id", target) else listOf("manga", target)
+    }
+    target.startsWith("mangatags/") -> listOf("manga", target)
+    target.startsWith("documents/") -> listOf("documents", target)
+    else -> listOf(target)
 }

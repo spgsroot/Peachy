@@ -36,24 +36,25 @@ class SavedPagesRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val path = detail.pagePaths.getOrNull(page) ?: throw IOException("no such page")
             val ext = path.substringAfterLast('.', "jpg").lowercase().filter { it.isLetterOrDigit() }.take(5).ifEmpty { "jpg" }
-            val name = "${detail.id}_$page.$ext"
-            dir.mkdirs()
-            val target = File(dir, name)
-            val local = files.pageFile(detail.id, path)?.takeIf { it.isFile }
-            if (local != null) {
-                local.copyTo(target, overwrite = true)
-            } else {
-                val url = NhentaiCdn.page(path) ?: throw IOException("bad page path")
-                val bytes = api.download(url)
-                val part = File(dir, "$name.part")
-                try {
-                    part.writeBytes(bytes)
-                    if (!part.renameTo(target)) throw IOException("could not store the page")
-                } finally {
-                    part.delete()
+            if (!dir.isDirectory && !dir.mkdirs()) throw IOException("could not create saved-page storage")
+            val previous = dao.get(detail.id, page)
+            // A saved page becomes visible through its database row, so a unique complete copy can
+            // replace an older one without renaming over it or exposing a partial file on retry.
+            val target = File.createTempFile("${detail.id}_${page}_", ".$ext", dir)
+            try {
+                val local = files.pageFile(detail.id, path)?.takeIf { it.isFile }
+                if (local != null) {
+                    local.inputStream().use { input -> target.outputStream().use { output -> input.copyTo(output) } }
+                } else {
+                    val url = NhentaiCdn.page(path) ?: throw IOException("bad page path")
+                    target.writeBytes(api.download(url))
                 }
+                dao.upsert(SavedPageEntity(detail.id, page, detail.title, target.name, System.currentTimeMillis()))
+            } catch (failure: Throwable) {
+                target.delete()
+                throw failure
             }
-            dao.upsert(SavedPageEntity(detail.id, page, detail.title, name, System.currentTimeMillis()))
+            previous?.takeIf { it.fileName != target.name }?.let { fileOf(it).delete() }
         }
     }
 

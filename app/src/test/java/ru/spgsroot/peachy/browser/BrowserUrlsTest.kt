@@ -46,4 +46,12 @@ class BrowserUrlsTest {
         assertFalse(BrowserUrls.isWebUrl("intent://a"))
         assertFalse(BrowserUrls.isWebUrl("file:///a"))
     }
+
+    @Test
+    fun navigationDistinguishesPrivateSuffixTenantsAndIpAddresses() {
+        assertTrue(BrowserPolicy.requiresConfirmation("alice.github.io", "https://bob.github.io/"))
+        assertFalse(BrowserPolicy.requiresConfirmation("www.example.co.uk", "https://media.example.co.uk/"))
+        assertTrue(BrowserPolicy.requiresConfirmation("192.0.2.10", "https://192.0.2.11/"))
+        assertFalse(BrowserPolicy.requiresConfirmation("2001:db8::7", "https://[2001:db8::7]:8443/"))
+    }
 }

@@ -1,9 +1,14 @@
 package ru.spgsroot.peachy.ui.webview
 
+import android.content.Context
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,12 +20,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -28,7 +42,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -53,6 +66,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -71,19 +85,28 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -94,6 +117,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.R
@@ -101,11 +125,18 @@ import ru.spgsroot.peachy.browser.BrowserUrls
 import ru.spgsroot.peachy.browser.FoundVideo
 import ru.spgsroot.peachy.browser.MediaKind
 import ru.spgsroot.peachy.data.browser.BrowserStore
+import ru.spgsroot.peachy.data.browser.FilterCatalog
 import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.ui.dialog.DuplicateVideoHost
 import ru.spgsroot.peachy.ui.dialog.NoteDialog
 
-private enum class Sheet { TABS, BOOKMARKS, HISTORY, VIDEOS }
+private enum class Sheet { TABS, BOOKMARKS, HISTORY, VIDEOS, FILTERS }
+
+/**
+ * First guess for the address row: an OutlinedTextField (56 dp) plus its 4 dp vertical padding. The
+ * real height is measured during layout, so a larger font scale is not clipped.
+ */
+private val AddressBarHeight = 64.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,10 +152,51 @@ fun BrowserScreen(
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val allowed by viewModel.allowedHosts.collectAsStateWithLifecycle()
+    val lifetime by viewModel.blocked.collectAsStateWithLifecycle()
+    val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    val refreshFailed by viewModel.refreshFailed.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var confirmClearSiteData by remember { mutableStateOf(false) }
+    var clearingSiteData by remember { mutableStateOf(false) }
+    var addressFocused by remember(tab.id) { mutableStateOf(false) }
+
+    // The toolbar is never taken away while the address field is being edited, and a tab switch
+    // starts with it visible (the controller resets the flag). With assistive technology running a
+    // clipped-away toolbar would be unreachable, so the chrome stays put while it is enabled.
+    val context = LocalContext.current
+    val accessibility = remember(context) {
+        context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+    }
+    var accessibilityOn by remember { mutableStateOf(accessibility?.isEnabled == true) }
+    DisposableEffect(accessibility) {
+        val listener = AccessibilityManager.AccessibilityStateChangeListener { enabled ->
+            accessibilityOn = enabled
+        }
+        accessibility?.addAccessibilityStateChangeListener(listener)
+        onDispose { accessibility?.removeAccessibilityStateChangeListener(listener) }
+    }
+    val chromeVisible = !tab.chromeHidden || addressFocused || accessibilityOn
+    // The row's natural height is measured unconstrained below, so a larger font scale grows the
+    // slot instead of clipping the field; 64 dp is only the first guess before layout.
+    var naturalChrome by remember { mutableStateOf(AddressBarHeight) }
+    val density = LocalDensity.current
+    // tween honours the system "Remove animations" setting through Compose's MotionDurationScale,
+    // so with animations disabled the chrome simply snaps instead of sliding.
+    val chromeHeight by animateDpAsState(
+        targetValue = if (chromeVisible) naturalChrome else 0.dp,
+        animationSpec = tween(durationMillis = 180),
+        label = "browserChromeHeight"
+    )
+    val chromeAlpha by animateFloatAsState(
+        targetValue = if (chromeVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "browserChromeAlpha"
+    )
 
     val pageKey = BrowserStore.pageKey(tab.url)
     val bookmarked = pageKey != null && bookmarks.any { it.url == pageKey }
@@ -168,13 +240,18 @@ fun BrowserScreen(
 
     BackHandler {
         when {
+            // Transient surfaces first: Back closes what is on top instead of leaving the page.
             fullscreen != null -> controller.hideFullscreen()
             controller.pendingNavigation != null -> controller.dismissPendingNavigation()
             controller.pendingWindow != null -> controller.dismissPendingWindow()
+            menuOpen -> menuOpen = false
             sheet != null -> sheet = null
+            editingNote -> editingNote = false
+            // Then the page's own history: the live WebView first, then the addresses restored with
+            // the tab, so Back keeps leading to the previous page after a process restart too.
             tab.canGoBack -> controller.goBack(tab)
-            tab.webView != null -> controller.showStart(tab)
-            controller.tabs.size > 1 -> controller.close(tab)
+            // End of this tab's history: leave the browser, keeping every tab for next time. Closing
+            // a tab is the tab strip's own control, so Back here never deletes a window.
             else -> onClose()
         }
     }
@@ -188,7 +265,29 @@ fun BrowserScreen(
 
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
-            AddressBar(tab, controller)
+            // The address row slides up out of its own clipped slot; the slot itself shrinks, so the
+            // page gains the space instead of the toolbar overlapping it. WebView content is never
+            // reloaded by this, only laid out again. Its measured height comes from an unconstrained
+            // pass, so the row is never squeezed by the shrinking slot and larger font scales keep
+            // the whole field.
+            Box(Modifier.fillMaxWidth().height(chromeHeight).clipToBounds()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(align = Alignment.Bottom, unbounded = true)
+                        .onSizeChanged { naturalChrome = with(density) { it.height.toDp() } }
+                        .graphicsLayer { alpha = chromeAlpha }
+                ) {
+                    AddressBar(
+                        tab = tab,
+                        controller = controller,
+                        onFocusChange = { focused ->
+                            addressFocused = focused
+                            if (focused) controller.showChrome(tab)
+                        }
+                    )
+                }
+            }
             if (tab.loading) {
                 LinearProgressIndicator(progress = { tab.progress / 100f }, modifier = Modifier.fillMaxWidth())
             }
@@ -201,12 +300,14 @@ fun BrowserScreen(
                         onOpen = { controller.navigate(tab, it) }
                     )
                 } else {
-                    key(tab.id) { WebHost(view) }
+                    key(tab.id) {
+                        WebHost(view) { scrollY, delta -> controller.onScroll(tab, scrollY, delta) }
+                    }
                 }
             }
             HorizontalDivider()
             Row(
-                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 4.dp),
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -240,7 +341,7 @@ fun BrowserScreen(
                     }
                 }) {
                     Box(
-                        Modifier.size(24.dp).border(BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), RoundedCornerShape(5.dp)),
+                        Modifier.size(24.dp).border(BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), MaterialTheme.shapes.extraSmall),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(controller.tabs.size.toString(), style = MaterialTheme.typography.labelSmall)
@@ -301,6 +402,7 @@ fun BrowserScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
+                                    Text(stringResource(R.string.browser_shield_total, lifetime), style = MaterialTheme.typography.bodySmall)
                                 }
                             },
                             trailingIcon = { Switch(checked = !blockerOff, onCheckedChange = null, enabled = host != null) },
@@ -323,11 +425,19 @@ fun BrowserScreen(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.browser_shield_lists)) },
+                            onClick = { menuOpen = false; sheet = Sheet.FILTERS }
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.browser_capture)) },
                             trailingIcon = { Switch(checked = captureOn, onCheckedChange = null) },
                             onClick = { onCaptureChange(!captureOn) }
                         )
                         HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.browser_clear_site_data)) },
+                            onClick = { menuOpen = false; confirmClearSiteData = true }
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.browser_close_browser)) },
                             onClick = { menuOpen = false; onClose() }
@@ -340,54 +450,163 @@ fun BrowserScreen(
     }
 
     if (sheet != null) {
-        ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            when (sheet) {
-                Sheet.TABS -> TabsSheet(
-                    controller = controller,
-                    onPick = { controller.select(it); sheet = null },
-                    onNew = { controller.newTab(); sheet = null }
-                )
-                Sheet.BOOKMARKS -> LinkList(
-                    empty = stringResource(R.string.browser_no_bookmarks),
-                    rows = bookmarks.map { Triple(it.title, it.url, it.url) },
-                    onOpen = { controller.navigate(tab, it); sheet = null },
-                    onDelete = viewModel::removeBookmark
-                )
-                Sheet.HISTORY -> Column {
-                    TextButton(
-                        onClick = viewModel::clearHistory,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    ) { Text(stringResource(R.string.browser_clear_history)) }
-                    LinkList(
-                        empty = stringResource(R.string.browser_no_history),
-                        rows = history.map { Triple(it.title, it.url, it.url) },
-                        onOpen = { controller.navigate(tab, it); sheet = null },
-                        onDelete = viewModel::removeVisit
+        // Gesture navigation reports a zero navigation-bar inset but a non-zero mandatory gesture
+        // strip, so the union is the real bottom surface in both modes.
+        val systemBarBottom = WindowInsets.navigationBars
+            .union(WindowInsets.mandatorySystemGestures)
+            .only(WindowInsetsSides.Bottom)
+            .asPaddingValues()
+            .calculateBottomPadding()
+        // Measured on device (1080x2400, 420 dpi): insets are real here — 126 px three-button and
+        // 84 px gesture, i.e. 48/32 dp — and this padding is what puts the expanded sheet's grid at
+        // y=2274/2316. The tab picker also opens fully expanded: a partially expanded sheet is
+        // anchored at half height, so a full-height grid body is clipped at the window edge and its
+        // last row sits under the bars until a scroll expands the sheet.
+        val sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = sheet == Sheet.TABS
+        )
+        ModalBottomSheet(
+            onDismissRequest = { sheet = null },
+            sheetState = sheetState,
+            // The body padding is the single source of bottom clearance; zeroing the sheet's own
+            // inset keeps it from stacking a second one.
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+        ) {
+            Column(Modifier.padding(bottom = systemBarBottom)) {
+                when (sheet) {
+                    Sheet.TABS -> TabsSheet(
+                        controller = controller,
+                        onPick = { controller.select(it); sheet = null },
+                        onNew = { controller.newTab(); sheet = null }
                     )
-                }
-                Sheet.VIDEOS -> VideosSheet(
-                    videos = tab.videos,
-                    onSave = { video, done ->
-                        viewModel.download(video, tab.host, controller.downloadHeaders(tab, video.url), tab.title.ifBlank { null }) { result ->
-                            done()
-                            say(
-                                result.fold(
-                                    onSuccess = { msgSaved },
-                                    onFailure = {
-                                        when {
-                                            it is DuplicateVideoException -> msgDuplicate
-                                            video.kind == MediaKind.STREAM -> msgStream
-                                            else -> msgFailed
+                    Sheet.BOOKMARKS -> LinkList(
+                        empty = stringResource(R.string.browser_no_bookmarks),
+                        rows = bookmarks.map { Triple(it.title, it.url, it.url) },
+                        onOpen = { controller.navigate(tab, it); sheet = null },
+                        onDelete = viewModel::removeBookmark
+                    )
+                    Sheet.HISTORY -> Column {
+                        TextButton(
+                            onClick = viewModel::clearHistory,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) { Text(stringResource(R.string.browser_clear_history)) }
+                        LinkList(
+                            empty = stringResource(R.string.browser_no_history),
+                            rows = history.map { Triple(it.title, it.url, it.url) },
+                            onOpen = { controller.navigate(tab, it); sheet = null },
+                            onDelete = viewModel::removeVisit
+                        )
+                    }
+                    Sheet.VIDEOS -> VideosSheet(
+                        videos = tab.videos,
+                        onSave = { video, done ->
+                            viewModel.download(video, tab.host, controller.downloadHeaders(tab, video.url), tab.title.ifBlank { null }) { result ->
+                                done()
+                                say(
+                                    result.fold(
+                                        onSuccess = { msgSaved },
+                                        onFailure = {
+                                            when {
+                                                it is DuplicateVideoException -> msgDuplicate
+                                                video.kind == MediaKind.STREAM -> msgStream
+                                                else -> msgFailed
+                                            }
                                         }
-                                    }
+                                    )
                                 )
-                            )
+                            }
+                        }
+                    )
+                    Sheet.FILTERS -> {
+                        var draft by remember(subscriptions) { mutableStateOf(subscriptions) }
+                        var customRules by remember(profile) { mutableStateOf(profile.rules) }
+                        var urlText by remember(profile) { mutableStateOf(profile.urls.joinToString("\n")) }
+                        val custom = ru.spgsroot.peachy.data.browser.PrivateFilterProfile(customRules, urlText.lines().map(String::trim).filter(String::isNotEmpty).distinct())
+                        Column {
+                            if (refreshFailed) Text(msgUpdateFailed, Modifier.padding(12.dp))
+                            if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) ||
+                                !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                                Text(stringResource(R.string.browser_shield_old_webview), Modifier.padding(12.dp))
+                            }
+                            Button(
+                                enabled = draft != subscriptions || custom != profile,
+                                onClick = {
+                                    sheet = null; say(msgUpdating)
+                                    viewModel.applyProfile(draft, custom) { result ->
+                                        result.fold({ controller.reload(tab); say(msgUpdated.format(it)) }, { say(msgUpdateFailed) })
+                                    }
+                                }, modifier = Modifier.padding(horizontal = 12.dp)
+                            ) { Text(stringResource(R.string.browser_shield_apply)) }
+                            LazyColumn {
+                                item {
+                                    listOf(
+                                        Triple(R.string.browser_shield_network, mode.network, mode.copy(network = !mode.network)),
+                                        Triple(R.string.browser_shield_cosmetic, mode.cosmetic, mode.copy(cosmetic = !mode.cosmetic)),
+                                        Triple(R.string.browser_shield_generic, mode.generic, mode.copy(generic = !mode.generic))
+                                    ).forEach { (label, enabled, next) ->
+                                        ListItem(headlineContent = { Text(stringResource(label)) }, trailingContent = { Switch(enabled, null) },
+                                            modifier = Modifier.clickable { viewModel.setMode(next); controller.reload(tab) })
+                                    }
+                                    OutlinedTextField(customRules, { customRules = it }, modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        label = { Text(stringResource(R.string.browser_shield_rules)) }, maxLines = 4)
+                                    OutlinedTextField(urlText, { urlText = it }, modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        label = { Text(stringResource(R.string.browser_shield_urls)) }, maxLines = 4)
+                                }
+                                items(FilterCatalog.lists, key = { it.id }) { item ->
+                                    val editable = item.id !in setOf("easylist", "easyprivacy", "adult")
+                                    ListItem(
+                                        headlineContent = { Text(item.title) },
+                                        trailingContent = { Switch(item.id in draft, null, enabled = editable) },
+                                        modifier = Modifier.clickable(enabled = editable) {
+                                            draft = if (item.id in draft) draft - item.id else draft + item.id
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
-                )
-                null -> Unit
+                    null -> Unit
+                }
             }
         }
+    }
+
+    if (confirmClearSiteData) {
+        val fullClear = remember {
+            WebViewFeature.isFeatureSupported(WebViewFeature.DELETE_BROWSING_DATA)
+        }
+        AlertDialog(
+            onDismissRequest = { if (!clearingSiteData) confirmClearSiteData = false },
+            title = { Text(stringResource(R.string.browser_clear_site_data)) },
+            text = {
+                if (clearingSiteData) {
+                    CircularProgressIndicator()
+                } else {
+                    Text(stringResource(
+                        if (fullClear) R.string.browser_clear_site_data_message
+                        else R.string.browser_clear_site_data_legacy_message
+                    ))
+                }
+            },
+            confirmButton = {
+                if (!clearingSiteData) {
+                    Button(onClick = {
+                        clearingSiteData = true
+                        controller.clearSiteData {
+                            confirmClearSiteData = false
+                            clearingSiteData = false
+                        }
+                    }) { Text(stringResource(R.string.browser_clear_site_data_confirm)) }
+                }
+            },
+            dismissButton = {
+                if (!clearingSiteData) {
+                    TextButton(onClick = { confirmClearSiteData = false }) {
+                        Text(stringResource(R.string.btn_cancel))
+                    }
+                }
+            }
+        )
     }
 
     val pending = controller.pendingNavigation
@@ -432,7 +651,7 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun AddressBar(tab: BrowserTab, controller: BrowserController) {
+private fun AddressBar(tab: BrowserTab, controller: BrowserController, onFocusChange: (Boolean) -> Unit) {
     val focus = LocalFocusManager.current
     var text by remember(tab.id, tab.url) { mutableStateOf(tab.url) }
     OutlinedTextField(
@@ -457,12 +676,16 @@ private fun AddressBar(tab: BrowserTab, controller: BrowserController) {
             focus.clearFocus()
             controller.navigate(tab, text)
         }),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .onFocusChanged { onFocusChange(it.isFocused) }
     )
 }
 
 @Composable
-private fun WebHost(webView: android.webkit.WebView) {
+private fun WebHost(webView: android.webkit.WebView, onScroll: (scrollY: Int, delta: Int) -> Unit) {
+    val scroll = rememberUpdatedState(onScroll)
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { FrameLayout(it) },
@@ -474,6 +697,22 @@ private fun WebHost(webView: android.webkit.WebView) {
             }
         }
     )
+    // Attached here rather than inside the WebView factory: the page's own offset is what drives the
+    // browser chrome, and the listener is dropped with the composition (tab switch or close). The
+    // first event only samples the position: re-attaching an already scrolled tab must not count as
+    // a downward gesture and slam the toolbar shut.
+    DisposableEffect(webView) {
+        var firstEvent = true
+        webView.setOnScrollChangeListener { _, _, y, _, oldY ->
+            if (firstEvent) {
+                firstEvent = false
+                scroll.value(y, 0)
+            } else {
+                scroll.value(y, y - oldY)
+            }
+        }
+        onDispose { webView.setOnScrollChangeListener(null) }
+    }
 }
 
 @Composable
@@ -493,7 +732,7 @@ private fun StartPage(bookmarks: List<Pair<String, String>>, recent: List<Pair<S
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 4.dp))
+    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 4.dp))
 }
 
 @Composable
@@ -580,7 +819,7 @@ private fun TabCard(
     val host = BrowserUrls.displayHost(tab.url)
     Card(
         onClick = onPick,
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (active) MaterialTheme.colorScheme.secondaryContainer
             else MaterialTheme.colorScheme.surfaceContainerHigh

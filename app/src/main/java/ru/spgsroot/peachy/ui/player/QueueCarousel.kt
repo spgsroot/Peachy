@@ -72,8 +72,9 @@ fun QueueCarousel(
             Card(
                 onClick = { onInteraction(); onSelect(video) },
                 modifier = Modifier.width(CardWidth).then(
-                    if (video.id == currentId) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium) else Modifier
+                    if (video.id == currentId) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier
                 ),
+                shape = MaterialTheme.shapes.small,
                 colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = .55f), contentColor = Color.White)
             ) {
                 AsyncImage(

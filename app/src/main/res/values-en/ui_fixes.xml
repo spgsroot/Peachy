@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Player: empty queue -->
+    <string name="player_empty_title">The queue is empty</string>
+    <string name="player_empty_body">Add a video — it stays on this device.</string>
+    <string name="player_empty_action">Open library</string>
+</resources>

@@ -1,23 +1,19 @@
 package ru.spgsroot.peachy.data.db
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.security.KeyStore
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
+import java.security.SecureRandom
 
 object KeystoreManager {
-    private const val KEYSTORE_ALIAS = "peachy_db_key"
-    private const val ANDROID_KEYSTORE = "AndroidKeyStore"
     private const val PREFS_NAME = "db_encryption_key"
-    private const val KEY_FALLBACK = "db_key_fallback"
+    // Preserve the preference name and key used by existing installations.
+    private const val KEY_ENTRY = "db_key_fallback"
+    private const val KEY_BYTES = 32
 
+    @Synchronized
     fun getOrCreateKey(context: Context): ByteArray {
-        // Try to get from EncryptedSharedPreferences first (more reliable)
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -30,52 +26,20 @@ object KeystoreManager {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        val storedKey = prefs.getString(KEY_FALLBACK, null)
-        if (storedKey != null) {
-            return Base64.decode(storedKey, Base64.DEFAULT)
+        prefs.getString(KEY_ENTRY, null)?.let { stored ->
+            return Base64.decode(stored, Base64.DEFAULT).also {
+                check(it.size == KEY_BYTES) { "Invalid database encryption key" }
+            }
         }
 
-        // Generate new key
-        val keyBytes = generateOrRetrieveKey()
-
-        // Store fallback
-        prefs.edit().putString(KEY_FALLBACK, Base64.encodeToString(keyBytes, Base64.DEFAULT)).apply()
-
-        return keyBytes
-    }
-
-    private fun generateOrRetrieveKey(): ByteArray {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-
-        val key = if (keyStore.containsAlias(KEYSTORE_ALIAS)) {
-            keyStore.getKey(KEYSTORE_ALIAS, null) as? SecretKey
-        } else {
-            generateKey()
+        check(!context.getDatabasePath(AppDatabase.DB_NAME).exists()) {
+            "Database encryption key is missing"
         }
-
-        // If key.encoded is null, generate a new random key
-        return key?.encoded ?: generateFallbackKey()
-    }
-
-    private fun generateKey(): SecretKey {
-        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        val spec = KeyGenParameterSpec.Builder(
-            KEYSTORE_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
-            .setUserAuthenticationRequired(false)
-            .build()
-
-        keyGenerator.init(spec)
-        return keyGenerator.generateKey()
-    }
-
-    private fun generateFallbackKey(): ByteArray {
-        val randomKey = ByteArray(32)
-        java.security.SecureRandom().nextBytes(randomKey)
-        return randomKey
+        val key = ByteArray(KEY_BYTES).also { SecureRandom().nextBytes(it) }
+        // The key must be durable before Room can create the database.
+        check(prefs.edit().putString(KEY_ENTRY, Base64.encodeToString(key, Base64.NO_WRAP)).commit()) {
+            "Could not persist the database encryption key"
+        }
+        return key
     }
 }

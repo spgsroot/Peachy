@@ -11,14 +11,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +48,7 @@ import ru.spgsroot.peachy.ui.dialog.PasswordChangeDialog
 import ru.spgsroot.peachy.ui.dialog.PasswordSetupDialog
 import ru.spgsroot.peachy.ui.dialog.ProviderDialog
 import ru.spgsroot.peachy.ui.manga.TranslationViewModel
+import ru.spgsroot.peachy.ui.theme.PeachyBrand
 import ru.spgsroot.peachy.manga.ReaderSettingsStore
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +72,8 @@ fun SettingsDrawer(
     val vaultModel: VaultViewModel = hiltViewModel()
     val vaultState by vaultModel.state.collectAsStateWithLifecycle()
     var vaultMode by rememberSaveable { mutableIntStateOf(VAULT_NONE) }
+    // Purely a visibility switch: collapsing the group never disconnects or resets a toy.
+    var toysExpanded by rememberSaveable { mutableStateOf(false) }
     var importUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     // Held only until the system file chooser answers; never written to saved state.
     var exportPassword by remember { mutableStateOf<CharArray?>(null) }
@@ -85,68 +96,110 @@ fun SettingsDrawer(
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val solWallet = "FB4B37LCd52dgVED5fR7Vj7CDttsa74CQyBc647agQP7"
 
+    // Gesture navigation reports no bottom navigation-bar inset, so clear both that bar and the
+    // mandatory gesture strip; windowInsetsPadding subtracts what ModalDrawerSheet already
+    // consumed, so three-button navigation does not gain a second inset.
+    val bottomInset = WindowInsets.navigationBars
+        .union(WindowInsets.mandatorySystemGestures)
+        .only(WindowInsetsSides.Bottom)
+
     ModalDrawerSheet {
         LazyColumn(
-            modifier = Modifier.fillMaxHeight(),
+            modifier = Modifier.fillMaxHeight().windowInsetsPadding(bottomInset),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            item(key = "brand") {
+                PeachyBrand(Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
+            }
+
             // ═══════════════════════════════════════════
-            // DEVICE CONNECTION SECTION (at top)
+            // TOYS SETTINGS — collapsed by default; the header keeps the connection state visible
             // ═══════════════════════════════════════════
-            item {
-                Text(
-                    text = stringResource(R.string.settings_device),
-                    style = MaterialTheme.typography.headlineSmall
+            item(key = "toys_header") {
+                ToysSectionHeader(
+                    expanded = toysExpanded,
+                    status = deviceStatus(deviceState, devices, activeDeviceIndex),
+                    onToggle = { toysExpanded = !toysExpanded }
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            if (toysExpanded) {
+                item(key = "toys_connection") {
+                    Column {
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                DeviceConnectionStatus(
-                    deviceState = deviceState,
-                    devices = devices,
-                    activeDeviceIndex = activeDeviceIndex
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { showDeviceDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        stringResource(
-                            if (devices.isNotEmpty()) {
-                                R.string.btn_device_change
-                            } else {
-                                R.string.btn_device_connect
-                            }
+                        DeviceConnectionStatus(
+                            deviceState = deviceState,
+                            devices = devices,
+                            activeDeviceIndex = activeDeviceIndex
                         )
-                    )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = { showDeviceDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (devices.isNotEmpty()) {
+                                        R.string.btn_device_change
+                                    } else {
+                                        R.string.btn_device_connect
+                                    }
+                                )
+                            )
+                        }
+
+                        if (deviceState !is DeviceState.Disconnected || activeDeviceIndex != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = viewModel::disconnectDevice,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.btn_device_disconnect))
+                            }
+                        }
+                    }
                 }
 
-                if (deviceState !is DeviceState.Disconnected || activeDeviceIndex != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = viewModel::disconnectDevice,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.btn_device_disconnect))
+                settings?.let { s ->
+                    item(key = "toys_dsp") {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        DspSettings(
+                            lowFreq = s.dspConfig.lowFreqHz,
+                            highFreq = s.dspConfig.highFreqHz,
+                            smoothing = s.dspConfig.smoothingAlpha,
+                            threshold = s.dspConfig.threshold,
+                            onLowFreqChange = viewModel::updateDspLowFreq,
+                            onHighFreqChange = viewModel::updateDspHighFreq,
+                            onSmoothingChange = viewModel::updateDspSmoothing,
+                            onThresholdChange = viewModel::updateDspThreshold
+                        )
+                    }
+
+                    item(key = "toys_power_boost") {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        PowerBoostSlider(
+                            powerBoost = s.dspConfig.powerBoost,
+                            onPowerBoostChange = viewModel::updateDspPowerBoost
+                        )
                     }
                 }
             }
 
             // Divider
-            item {
+            item(key = "toys_divider") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             // ═══════════════════════════════════════════
-            // SETTINGS SECTION (below device)
+            // APP SETTINGS — language, playback speed and the media auto-switch timer stay here
             // ═══════════════════════════════════════════
-            item {
+            item(key = "settings_title") {
                 Text(
                     text = stringResource(R.string.settings_title),
                     style = MaterialTheme.typography.headlineSmall
@@ -154,7 +207,7 @@ fun SettingsDrawer(
             }
 
             settings?.let { s ->
-                item {
+                item(key = "timer") {
                     Spacer(modifier = Modifier.height(16.dp))
                     TimerSlider(
                         timerMs = s.timerMs,
@@ -162,7 +215,7 @@ fun SettingsDrawer(
                     )
                 }
 
-                item {
+                item(key = "playback_speed") {
                     Spacer(modifier = Modifier.height(16.dp))
                     PlaybackSpeedSlider(
                         speed = s.playbackSpeed,
@@ -170,29 +223,7 @@ fun SettingsDrawer(
                     )
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    DspSettings(
-                        lowFreq = s.dspConfig.lowFreqHz,
-                        highFreq = s.dspConfig.highFreqHz,
-                        smoothing = s.dspConfig.smoothingAlpha,
-                        threshold = s.dspConfig.threshold,
-                        onLowFreqChange = viewModel::updateDspLowFreq,
-                        onHighFreqChange = viewModel::updateDspHighFreq,
-                        onSmoothingChange = viewModel::updateDspSmoothing,
-                        onThresholdChange = viewModel::updateDspThreshold
-                    )
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    PowerBoostSlider(
-                        powerBoost = s.dspConfig.powerBoost,
-                        onPowerBoostChange = viewModel::updateDspPowerBoost
-                    )
-                }
-
-                item {
+                item(key = "language") {
                     Spacer(modifier = Modifier.height(16.dp))
                     LanguageSelector(
                         currentLanguage = s.languageCode,
@@ -205,14 +236,14 @@ fun SettingsDrawer(
             }
 
             // Divider
-            item {
+            item(key = "app_divider") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Password button
-            item {
+            item(key = "password") {
                 Button(
                     onClick = {
                         if (isPasswordSet) {
@@ -236,7 +267,7 @@ fun SettingsDrawer(
             }
 
             // Page translation section
-            item {
+            item(key = "providers") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
@@ -248,7 +279,7 @@ fun SettingsDrawer(
                 }
             }
 
-            item {
+            item(key = "updates") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
@@ -256,7 +287,7 @@ fun SettingsDrawer(
             }
 
             // Backup section
-            item {
+            item(key = "backup") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
@@ -280,14 +311,14 @@ fun SettingsDrawer(
             }
 
             // Divider
-            item {
+            item(key = "support_divider") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Support links
-            item {
+            item(key = "support") {
                 Text(stringResource(R.string.support_title), style = MaterialTheme.typography.titleMedium)
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -417,40 +448,89 @@ fun PowerBoostSlider(
 }
 
 @Composable
-private fun DeviceConnectionStatus(
-    deviceState: DeviceState,
-    devices: List<ButtplugDevice>,
-    activeDeviceIndex: Int?
-) {
+private fun ToysSectionHeader(expanded: Boolean, status: DeviceStatusUi, onToggle: () -> Unit) {
+    val stateText = stringResource(
+        if (expanded) R.string.behavior_toys_expanded else R.string.behavior_toys_collapsed
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onToggle)
+            // One announcement for the whole row: label, and whether the group is open.
+            .semantics(mergeDescendants = true) { stateDescription = stateText }
+            .padding(horizontal = 4.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.behavior_toys_settings),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(Modifier.weight(1f))
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        // The state stays readable while the group is closed.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(status.icon, contentDescription = null, tint = status.color, modifier = Modifier.size(16.dp))
+            Text(
+                text = status.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = status.color,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** Connection state shared by the toys header and the group's status surface. */
+private data class DeviceStatusUi(val text: String, val icon: ImageVector, val color: Color)
+
+@Composable
+private fun deviceStatus(deviceState: DeviceState, devices: List<ButtplugDevice>, activeDeviceIndex: Int?): DeviceStatusUi {
     val activeDevice = activeDeviceIndex?.let { index -> devices.firstOrNull { it.index == index } }
     val firstDevice = devices.firstOrNull()
-    val (text, icon, color) = when {
-        activeDevice != null -> Triple(
+    return when {
+        activeDevice != null -> DeviceStatusUi(
             stringResource(R.string.device_status_active, activeDevice.name),
             Icons.Default.BluetoothConnected,
-            Color(0xFF4CAF50)
+            MaterialTheme.colorScheme.tertiary
         )
-        deviceState is DeviceState.Connected && firstDevice != null -> Triple(
+        deviceState is DeviceState.Connected && firstDevice != null -> DeviceStatusUi(
             stringResource(R.string.device_status_connected, firstDevice.name),
             Icons.Default.BluetoothConnected,
-            Color(0xFFFFA000)
+            MaterialTheme.colorScheme.secondary
         )
-        deviceState is DeviceState.Scanning -> Triple(
+        deviceState is DeviceState.Scanning -> DeviceStatusUi(
             stringResource(R.string.searching_devices),
             Icons.Default.Sync,
             MaterialTheme.colorScheme.primary
         )
-        deviceState is DeviceState.Error -> Triple(
+        deviceState is DeviceState.Error -> DeviceStatusUi(
             (deviceState.reason).takeIf { it.isNotBlank() } ?: stringResource(R.string.device_status_error),
             Icons.Default.Error,
             MaterialTheme.colorScheme.error
         )
-        else -> Triple(
+        else -> DeviceStatusUi(
             stringResource(R.string.device_status_disconnected),
             Icons.Default.BluetoothDisabled,
             MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+private fun DeviceConnectionStatus(
+    deviceState: DeviceState,
+    devices: List<ButtplugDevice>,
+    activeDeviceIndex: Int?
+) {
+    val status = deviceStatus(deviceState, devices, activeDeviceIndex)
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -461,8 +541,8 @@ private fun DeviceConnectionStatus(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = color)
-            Text(text, style = MaterialTheme.typography.bodyMedium)
+            Icon(status.icon, contentDescription = null, tint = status.color)
+            Text(status.text, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

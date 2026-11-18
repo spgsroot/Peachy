@@ -1,6 +1,6 @@
 package ru.spgsroot.peachy.browser
 
-import ru.spgsroot.peachy.browser.adblock.Hosts
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * Native navigation rules of the embedded browser. Only HTTP(S) reaches a WebView, plain HTTP is
@@ -12,8 +12,12 @@ object BrowserPolicy {
     /** Schemes a subframe may use; plain HTTP would be mixed content on an HTTPS page. */
     private val SUBFRAME_SCHEMES = setOf("https", "about", "blob", "data")
 
-    /** True for the only addresses the browser loads. */
+    /** True for HTTP(S) input that can be normalized before the browser loads it. */
     fun isWebTarget(url: String): Boolean = BrowserUrls.isWebUrl(url)
+
+    /** True for an address that may actually be committed or persisted by the browser. */
+    fun isSecureWebTarget(url: String): Boolean =
+        url.startsWith("https://", ignoreCase = true) && BrowserUrls.isWebUrl(url)
 
     /** True when [url] is safe for an embedded frame: HTTPS plus in-page generated content. */
     fun isAllowedSubframe(url: String): Boolean =
@@ -26,8 +30,10 @@ object BrowserPolicy {
     /** True when [url] belongs to a different registrable site than [pageHost]. */
     fun isCrossSite(pageHost: String?, url: String): Boolean {
         if (pageHost.isNullOrEmpty()) return false
-        val host = Hosts.hostOf(url) ?: return true
-        return Hosts.registrable(host) != Hosts.registrable(pageHost)
+        val target = url.toHttpUrlOrNull() ?: return true
+        val authority = if (':' in pageHost) "[$pageHost]" else pageHost
+        val origin = "https://$authority/".toHttpUrlOrNull() ?: return true
+        return (target.topPrivateDomain() ?: target.host) != (origin.topPrivateDomain() ?: origin.host)
     }
 
     /**

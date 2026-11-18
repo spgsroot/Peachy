@@ -1,0 +1,19 @@
+Peachy browser shield — third-party source and notices
+
+This APK does not contain Orbit source, binaries or assets. The Kotlin/JNI glue, host index, downloader and WebView runtime are Peachy code, distributed under the project's AGPL-3.0 licence.
+
+Brave adblock-rust 0.13.5, Anton Lazarev, Andrius Aucinas and contributors. MPL-2.0. Unmodified crate source: https://crates.io/api/v1/crates/adblock/0.13.5/download (published VCS revision f3f72f8471a92eb3b1d50ed29f282e4e36a79b35). The offline native-notices.zip in this directory contains source URLs, authors and licence texts for the locked native dependencies, including MPL-2.0 and Rust runtime notices. Source for this integration and the exact Cargo.lock are in native/adblock in the Peachy source distribution.
+
+uBlock Origin scriptlet definitions: Copyright (C) 2019-present Raymond Hill and uBlock Origin contributors. GPL-3.0-or-later; full text in COPYING-uBlock.txt. Upstream sources: https://github.com/gorhill/uBlock/tree/765c51daa13143b5a7cbf60be4633fb8e7d324a5/src/js/resources . Repackaged as base64 function definitions and metadata for adblock-rust by tools/adblock/prepare-resources.mjs. The last five inert replacements are supplied by Peachy. Executable resource definitions are bundled, never downloaded by the app. Subscription rules receive no privileged scriptlet permissions.
+
+Bundled subscriptions: EasyList and EasyPrivacy by the EasyList authors; EasyList Adult combines the original adult_thirdparty, adult_specific_block and adult_specific_hide sources. Offered under GPL-3.0 or CC BY-SA 3.0; Peachy chooses GPL-3.0. See https://easylist.to/pages/licence.html and https://github.com/easylist/easylist . Original notices remain in assets/filters; see COPYING-uBlock.txt for GPL v3.
+
+Remote subscriptions: only subscription metadata is distributed in the APK. The updater contacts the publishers, not a Peachy relay; it sends no visited URLs, page content, browser cookies, or referrer. Downloaded lists retain authorship and licence headers. Includes and applicable conditional branches are expanded locally.
+- uBlock Origin/uAssets: filters, badware, privacy, quick fixes, unbreak and annoyances; GPL-3.0. https://github.com/uBlockOrigin/uAssets/blob/master/LICENSE
+- AdGuard filter maintainers: Base, Tracking, Mobile, Annoyances, Social, Turkish, Russian, German, French, Spanish/Portuguese, Japanese and Dutch; GPL-3.0. https://github.com/AdguardTeam/AdguardFilters/blob/master/LICENSE
+- EasyList Italy, China and Poland: upstream headers refer to https://easylist.to/pages/licence.html .
+- Fanboy Social, Fanboy Annoyance and EasyList Cookie: EasyList/Fanboy authors. The three publishers' list headers specify CC BY 3.0: https://creativecommons.org/licenses/by/3.0/ .
+- RU AdList (advblock): CC BY 3.0 per publisher's header, https://easylist-downloads.adblockplus.org/advblock.txt .
+- The ABPindo authors: GPL-3.0-or-later or CC BY-SA 3.0-or-later. https://github.com/ABPindo/indonesianadblockrules/blob/master/LICENSE
+- YousList, YousList contributors: CC BY 4.0. https://github.com/yous/YousList#license and https://creativecommons.org/licenses/by/4.0/ .
+- Peter Lowe: the publisher provides its subscription URL explicitly for ad-blocker use: https://pgl.yoyo.org/adservers/ . The policy describes inclusion criteria, not a redistribution licence. Do not bundle or mirror that list without an additional grant.

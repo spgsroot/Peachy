@@ -28,7 +28,7 @@
     <string name="btn_device_connect">Connect device</string>
 
     <!-- Support -->
-    <string name="support_title">Support</string>
+    <string name="support_title">Open source · Local-first</string>
     <string name="support_sol">Sol:</string>
     <string name="support_github">GitHub · Peachy</string>
 
@@ -39,10 +39,10 @@
     <string name="language_system">System</string>
 
     <!-- Onboarding -->
-    <string name="welcome_title">Welcome to Peachy</string>
-    <string name="onboarding_step_1">1. Add video from gallery or URL</string>
-    <string name="onboarding_step_2">2. Connect device via Intiface Central</string>
-    <string name="onboarding_step_3">3. Configure timer and speed</string>
+    <string name="welcome_title">Your content. Your space.</string>
+    <string name="onboarding_step_1">Browse your gallery, play media and open the web in one Android workspace.</string>
+    <string name="onboarding_step_2">Media you add is kept in the app library on your phone.</string>
+    <string name="onboarding_step_3">Privacy should be the default, not a privilege.</string>
     <string name="btn_start">Start</string>
 
     <!-- Gallery -->
@@ -212,7 +212,7 @@
     <string name="btn_open_webview">Open</string>
 
     <!-- Auth Screen -->
-    <string name="auth_enter_password">Enter password</string>
+    <string name="auth_enter_password">A private media workspace. Enter your password.</string>
     <string name="auth_wrong_password">Wrong password</string>
     <string name="btn_login">Login</string>
     <string name="auth_delete_digit">Delete digit</string>
@@ -228,9 +228,9 @@
     <string name="content_description_more">More</string>
 
     <!-- Empty State -->
-    <string name="empty_playlist">Playlist is empty</string>
+    <string name="empty_playlist">Nothing to play yet. Your content stays in your own space.</string>
     <string name="empty_add_first">Add the first video</string>
-    <string name="empty_gallery">No videos or photos in the gallery yet</string>
+    <string name="empty_gallery">Your library is empty. Add media to keep it in your own space.</string>
     <string name="manga_haptic">Page-turn intensity</string>
     <string name="manga_saved">Saved</string>
     <string name="manga_results">Search results</string>

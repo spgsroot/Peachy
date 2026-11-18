@@ -11,6 +11,7 @@
     <string name="browser_popup_open">Open</string>
     <string name="browser_popup_blocked">Popup blocked</string>
     <string name="browser_insecure_navigation_blocked">Insecure HTTP navigation blocked</string>
+    <string name="browser_non_get_navigation_blocked">The browser blocked a form submission to another site or over HTTP</string>
     <string name="browser_insecure_connection">The connection is not secure; the page was blocked</string>
     <string name="browser_too_many_tabs">Too many tabs</string>
     <string name="browser_download_offered">Video added to the page videos list</string>
@@ -34,7 +35,11 @@
     <string name="browser_capture">Vibrate from page audio</string>
     <string name="browser_home">Start page</string>
     <string name="browser_close_browser">Close browser</string>
-    <string name="browser_clear_history">Clear history</string>
+    <string name="browser_clear_history">Clear visit list</string>
+    <string name="browser_clear_site_data">Clear site data</string>
+    <string name="browser_clear_site_data_message">Closes all tabs and removes cookies, WebView cache and stored site data. You may be signed out. Bookmarks and the visit list are kept.</string>
+    <string name="browser_clear_site_data_legacy_message">Closes all tabs and clears cookies and the WebView cache. Some site data can remain with this version of Android System WebView. Update it for full clearing. Bookmarks and the visit list are kept.</string>
+    <string name="browser_clear_site_data_confirm">Clear data</string>
     <string name="browser_no_bookmarks">No bookmarks yet. Add a page from the menu.</string>
     <string name="browser_no_history">History is empty</string>
     <string name="browser_no_videos">No video found on this page. Start a video and open the list again.</string>
@@ -52,4 +57,14 @@
     <string name="dialog_browser_title">Browser</string>
     <string name="dialog_browser_url_hint">Address (optional)</string>
     <string name="dialog_browser_capture">Vibrate from page audio</string>
+    <string name="browser_shield_total">Blocked in total: %1$d</string>
+    <string name="browser_shield_lists">Filter subscriptions</string>
+    <string name="browser_shield_apply">Update selected lists</string>
+    <string name="browser_shield_old_webview">This WebView may apply cosmetic rules late or lack dynamic selectors. Network filtering is still active.</string>
+    <string name="browser_shield_load_failed">Filters could not be loaded. The page was not opened.</string>
+    <string name="browser_shield_network">Ad blocking</string>
+    <string name="browser_shield_cosmetic">Hide page elements</string>
+    <string name="browser_shield_generic">Generic cosmetic rules</string>
+    <string name="browser_shield_rules">Custom rules, one per line</string>
+    <string name="browser_shield_urls">Custom subscriptions: one public HTTPS address per line</string>
 </resources>

@@ -17,6 +17,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
@@ -232,7 +233,8 @@ class ButtplugClientTest {
     /** Enqueue the WebSocket upgrade mock response and start the server */
     private fun startMockServer() {
         mockServer.enqueue(MockResponse().withWebSocketUpgrade(createMockServerListener(mockState)))
-        serverUrl = mockServer.url("/").toString().replace("http", "ws")
+        mockServer.start(InetAddress.getByName("127.0.0.1"), 0)
+        serverUrl = "ws://127.0.0.1:${mockServer.port}/"
     }
 
     /** Create a ButtplugClient pointed at the mock server */

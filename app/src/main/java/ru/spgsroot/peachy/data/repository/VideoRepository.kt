@@ -18,14 +18,17 @@ class VideoRepository @Inject constructor(
 
     suspend fun insert(video: Video): Long = videoDao.insert(video.toEntity())
 
-    suspend fun update(video: Video) = videoDao.updateContent(
-        video.id, video.title, video.filePath, video.duration, video.thumbnailPath,
-        video.addedAt, video.fileSize, video.isCorrupted, video.contentHash
-    )
+    internal suspend fun rename(id: Long, title: String) = videoDao.rename(id, title)
+
+    internal suspend fun replaceThumbnail(id: Long, expected: String?, replacement: String): Boolean =
+        videoDao.replaceThumbnail(id, expected, replacement) == 1
+
+    internal suspend fun replaceFile(id: Long, expected: String, replacement: String, size: Long, duration: Long): Boolean =
+        videoDao.replaceFile(id, expected, replacement, size, duration) == 1
 
     suspend fun delete(video: Video) = videoDao.delete(video.toEntity())
 
-    suspend fun deleteById(id: Long) = videoDao.deleteById(id)
+    internal suspend fun remove(id: Long): Video? = videoDao.remove(id)?.toDomain()
 
     suspend fun markAsCorrupted(id: Long) = videoDao.markAsCorrupted(id)
 

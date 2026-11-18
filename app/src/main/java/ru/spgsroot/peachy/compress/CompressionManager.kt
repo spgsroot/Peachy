@@ -159,36 +159,10 @@ class CompressionManager @Inject constructor(
         }
     }
 
-    /** Puts [temp] where [original] was, then points the library at it. */
+    /** Publishes a complete replacement without putting the original at risk before the database commit. */
     private suspend fun replace(video: Video, original: File, temp: File, result: SourceInfo): Boolean {
-        // The video may have been deleted or moved while it was encoding.
-        val current = videoRepository.getById(video.id)
-        if (current == null || current.filePath != video.filePath || !original.isFile) {
-            temp.delete()
-            return false
-        }
-        val dir = original.parentFile ?: return false
-        val target = if (original.extension.equals("mp4", ignoreCase = true)) {
-            original
-        } else {
-            File(dir, "${original.nameWithoutExtension}-${video.id}.mp4")
-        }
-        try {
-            Files.move(temp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        } catch (e: Exception) {
-            temp.delete()
-            return false
-        }
-        return try {
-            videoRepository.update(
-                current.copy(filePath = target.absolutePath, fileSize = result.sizeBytes, duration = result.durationMs, isCorrupted = false, contentHash = null)
-            )
-            if (target != original) original.delete()
-            true
-        } catch (e: Exception) {
-            // The old file is still the one the library knows about.
-            if (target != original) target.delete()
-            false
+        return commitCompressedVideo(original, temp, video.id) { target ->
+            videoRepository.replaceFile(video.id, video.filePath, target.absolutePath, result.sizeBytes, result.durationMs)
         }
     }
 
@@ -197,4 +171,38 @@ class CompressionManager @Inject constructor(
         const val SPACE_MARGIN = 1.15
         const val MIN_FREE_BYTES = 64L * 1024 * 1024
     }
+}
+
+/** Filesystem commit kept separate for behavioral testing of database failures. */
+internal suspend fun commitCompressedVideo(
+    original: File,
+    encoded: File,
+    videoId: Long,
+    update: suspend (File) -> Boolean
+): Boolean {
+    val dir = original.parentFile
+    if (dir == null || !original.isFile) {
+        encoded.delete()
+        return false
+    }
+    val target = try {
+        File.createTempFile("${original.nameWithoutExtension}-${videoId}-", ".mp4", dir)
+    } catch (e: Exception) {
+        encoded.delete()
+        return false
+    }
+    try {
+        Files.move(encoded.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } catch (e: Exception) {
+        encoded.delete()
+        target.delete()
+        return false
+    }
+    val published = try {
+        update(target)
+    } catch (e: Exception) {
+        false
+    }
+    if (published) original.delete() else target.delete()
+    return published
 }

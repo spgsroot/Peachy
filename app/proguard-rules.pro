@@ -20,8 +20,16 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
-# libsqlcipher.so JNI_OnLoad looks up SQLiteDatabase.mNativeHandle and other members by name.
--keep class net.sqlcipher.** { *; }
-
 # libonnxruntime4j_jni.so resolves ai.onnxruntime classes, fields and methods by name.
 -keep class ai.onnxruntime.** { *; }
+
+# libmupdf_java.so resolves com.artifex.mupdf.fitz classes, fields and methods by name.
+-keep class com.artifex.mupdf.fitz.** { *; }
+
+# LibreOfficeKit JNI and the Office adapter resolve these classes and members by name.
+-keep class org.libreoffice.kit.** { *; }
+
+# BouncyCastle is reached through JCA provider lookups and reflective ASN.1 access, and the
+# jdk18on artifacts carry multi-release metadata R8 does not understand.
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**

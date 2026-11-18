@@ -4,6 +4,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import ru.spgsroot.peachy.browser.BrowserPolicy
 import ru.spgsroot.peachy.browser.BrowserUrls
 import ru.spgsroot.peachy.browser.adblock.Hosts
 import ru.spgsroot.peachy.data.db.AllowlistDao
@@ -57,7 +58,7 @@ class BrowserStore @Inject constructor(
         /** The address as stored: web pages only, without the fragment. */
         fun pageKey(url: String): String? {
             if (!BrowserUrls.isWebUrl(url)) return null
-            return url.trim().substringBefore('#')
+            return BrowserPolicy.httpsOnly(url.trim()).substringBefore('#')
         }
 
         /** The name the blocker switch is stored under: the host without a leading `www.`. */

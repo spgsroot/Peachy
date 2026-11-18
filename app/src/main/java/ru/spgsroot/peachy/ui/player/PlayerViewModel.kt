@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import ru.spgsroot.peachy.ui.gallery.MediaFilter
 import ru.spgsroot.peachy.ui.gallery.GalleryItem
@@ -68,26 +69,46 @@ class PlayerViewModel @Inject constructor(
     val queue: StateFlow<List<Video>> = playlistManager.playlist
     val filter = MutableStateFlow(MediaFilter())
 
+    // Registered in init, so it must already be initialised: property initialisers and init blocks
+    // run in declaration order.
+    private val onCurrentVideoRemoved: (Video?) -> Unit = { nextVideo ->
+        viewModelScope.launch {
+            nextVideo?.let {
+                stopWebViewCapture()
+                exoPlayerWrapper.play(it)
+                startTimer()
+            } ?: run {
+                exoPlayerWrapper.pause()
+                timerController.stop()
+            }
+        }
+    }
+
     init {
         observePlaylist()
         observeSettings()
         loadVideosToPlaylist()
+        followDisplayedVideo()
         setupCurrentVideoRemovedListener()
     }
 
-    private fun setupCurrentVideoRemovedListener() {
-        playlistManager.setOnCurrentVideoRemovedListener { nextVideo ->
-            viewModelScope.launch {
-                nextVideo?.let {
-                    stopWebViewCapture()
-                    exoPlayerWrapper.play(nextVideo)
-                    startTimer()
-                } ?: run {
-                    exoPlayerWrapper.pause()
-                    timerController.stop()
+    /**
+     * The queue pointer must be the video the player shows, whatever started it (queue tap, gallery,
+     * timer, removal replacement). Re-anchoring on every queue emission also covers reorders and
+     * filters: a swipe then advances from the displayed row instead of the first or last one.
+     */
+    private fun followDisplayedVideo() {
+        viewModelScope.launch {
+            combine(playerState, queue) { state, videos -> state.displayedVideoId() to videos }
+                .distinctUntilChanged()
+                .collect { (videoId, videos) ->
+                    videoId?.let { id -> videos.firstOrNull { it.id == id }?.let(playlistManager::syncPlaying) }
                 }
-            }
         }
+    }
+
+    private fun setupCurrentVideoRemovedListener() {
+        playlistManager.setOnCurrentVideoRemovedListener(onCurrentVideoRemoved)
     }
 
     private fun loadVideosToPlaylist() {
@@ -141,11 +162,9 @@ class PlayerViewModel @Inject constructor(
             }
 
             is PlayerState.Idle -> {
-                playlistManager.current()?.let {
-                    stopWebViewCapture()
-                    exoPlayerWrapper.play(it)
-                    startTimer()
-                }
+                // Nothing is anchored yet after a cold queue load: start at the top, still explicitly
+                // selected so the first swipe advances from that row.
+                (playlistManager.current() ?: queue.value.firstOrNull())?.let(::playVideo)
             }
 
             else -> Unit
@@ -313,6 +332,7 @@ class PlayerViewModel @Inject constructor(
 
 
     override fun onCleared() {
+        playlistManager.clearOnCurrentVideoRemovedListener(onCurrentVideoRemoved)
         timerController.stop()
         super.onCleared()
     }
@@ -321,4 +341,12 @@ class PlayerViewModel @Inject constructor(
 sealed interface PlayerUiState {
     data object Empty : PlayerUiState
     data object Ready : PlayerUiState
+}
+
+/** The video the surface shows right now; null while idle or failed. */
+internal fun PlayerState.displayedVideoId(): Long? = when (this) {
+    is PlayerState.Playing -> video.id
+    is PlayerState.Paused -> video.id
+    is PlayerState.Switching -> to.id
+    else -> null
 }

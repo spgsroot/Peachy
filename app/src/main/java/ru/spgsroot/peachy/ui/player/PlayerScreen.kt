@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
@@ -26,7 +29,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.R
-import ru.spgsroot.peachy.playback.player.PlayerState
 import ru.spgsroot.peachy.ui.dialog.AddVideoDialog
 import ru.spgsroot.peachy.ui.dialog.BatchImportDialog
 import ru.spgsroot.peachy.ui.dialog.UrlInputDialog
@@ -34,7 +36,9 @@ import ru.spgsroot.peachy.ui.dialog.WebViewUrlDialog
 import ru.spgsroot.peachy.ui.settings.SettingsDrawer
 import ru.spgsroot.peachy.ui.settings.SettingsViewModel
 import ru.spgsroot.peachy.ui.webview.WebViewActivity
-import ru.spgsroot.peachy.ui.gallery.MediaFilterButton
+import ru.spgsroot.peachy.ui.gallery.MediaFilterDialog
+import ru.spgsroot.peachy.ui.theme.PeachyBrand
+import ru.spgsroot.peachy.ui.theme.peachyBrandWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,12 +51,7 @@ fun PlayerScreen(
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
-    val currentId = when (val state = playerState) {
-        is PlayerState.Playing -> state.video.id
-        is PlayerState.Paused -> state.video.id
-        is PlayerState.Switching -> state.to.id
-        else -> null
-    }
+    val currentId = playerState.displayedVideoId()
     val deviceState by settingsViewModel.deviceState.collectAsStateWithLifecycle()
     val devices by settingsViewModel.devices.collectAsStateWithLifecycle()
     val activeDeviceIndex by settingsViewModel.activeDeviceIndex.collectAsStateWithLifecycle()
@@ -62,6 +61,8 @@ fun PlayerScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var showBatchDialog by remember { mutableStateOf(false) }
     var showWebViewDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var actionsMenuOpen by remember { mutableStateOf(false) }
 
     // Состояние полноэкранного режима
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
@@ -109,7 +110,14 @@ fun PlayerScreen(
                 // Скрываем TopAppBar в полноэкранном режиме
                 if (!isFullscreen) {
                     TopAppBar(
-                        title = { Text(stringResource(R.string.app_name)) },
+                        title = {
+                            BoxWithConstraints {
+                                // Measure the actual Onest wordmark plus the exact mark at the
+                                // current font scale; the slot decides, not a guessed dp value.
+                                val brandWidth = peachyBrandWidth() + 1.dp
+                                PeachyBrand(showWordmark = maxWidth >= brandWidth)
+                            }
+                        },
                         navigationIcon = {
                             IconButton(onClick = {
                                 scope.launch { drawerState.open() }
@@ -118,35 +126,65 @@ fun PlayerScreen(
                             }
                         },
                         actions = {
-                            MediaFilterButton(filter, { viewModel.filter.value = it })
+                            // Three 48 dp actions leave the title slot wide enough for the full
+                            // lockup; secondary destinations stay one tap away in the overflow.
                             IconButton(onClick = { navController.navigate("gallery") }) {
                                 Icon(Icons.Default.VideoLibrary, stringResource(R.string.content_description_gallery))
                             }
-                            IconButton(onClick = { navController.navigate("manga") }) {
-                                Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
-                            }
-                            IconButton(onClick = {
-                                viewModel.pauseForWebView()
-                                context.startActivity(Intent(context, WebViewActivity::class.java))
-                            }) {
-                                Icon(Icons.Default.Public, stringResource(R.string.browser_open))
-                            }
                             IconButton(onClick = { showAddDialog = true }) {
                                 Icon(Icons.Default.Add, stringResource(R.string.content_description_add_video))
+                            }
+                            Box {
+                                IconButton(onClick = { actionsMenuOpen = true }) {
+                                    Icon(Icons.Default.MoreVert, stringResource(R.string.content_description_more))
+                                }
+                                DropdownMenu(expanded = actionsMenuOpen, onDismissRequest = { actionsMenuOpen = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.media_filters)) },
+                                        leadingIcon = { Icon(Icons.Default.FilterList, null) },
+                                        onClick = { actionsMenuOpen = false; showFilterDialog = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.content_description_library)) },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
+                                        onClick = { actionsMenuOpen = false; navController.navigate("manga") }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.documents_title)) },
+                                        leadingIcon = { Icon(Icons.Default.Description, null) },
+                                        onClick = {
+                                            actionsMenuOpen = false
+                                            navController.navigate("documents")
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.browser_open)) },
+                                        leadingIcon = { Icon(Icons.Default.Public, null) },
+                                        onClick = {
+                                            actionsMenuOpen = false
+                                            viewModel.pauseForWebView()
+                                            context.startActivity(Intent(context, WebViewActivity::class.java))
+                                        }
+                                    )
+                                }
                             }
                         }
                     )
                 }
             }
         ) { padding ->
-            when (uiState) {
-                PlayerUiState.Empty -> EmptyState(
+            // Nothing to play means nothing on the stage - a library without videos, or a filter
+            // that matched none. The stage would stay a bare black surface, so the empty state takes
+            // its place. A displayed video keeps the stage even while a queue change settles.
+            if (uiState == PlayerUiState.Empty || (queue.isEmpty() && currentId == null)) {
+                EmptyState(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    onAddVideoClick = { showAddDialog = true }
+                    onOpenLibrary = { navController.navigate("gallery") }
                 )
-                PlayerUiState.Ready -> Column(Modifier.fillMaxSize().padding(if (isFullscreen) PaddingValues(0.dp) else padding)) {
+            } else {
+                Column(Modifier.fillMaxSize().padding(if (isFullscreen) PaddingValues(0.dp) else padding)) {
                     PlayerContent(
                         modifier = Modifier.weight(1f),
                         playerState = playerState,
@@ -188,6 +226,21 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+
+    // The drawer is a transient surface: one Back closes it and the activity stays resumed.
+    // Registered after ModalNavigationDrawer so it outranks the destination's handlers.
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
+
+    if (showFilterDialog) {
+        MediaFilterDialog(
+            current = filter,
+            onDismiss = { showFilterDialog = false },
+            // Live: every valid edit already reached the queue; closing changes nothing back.
+            onChange = { viewModel.filter.value = it }
+        )
     }
 
     if (showAddDialog) {

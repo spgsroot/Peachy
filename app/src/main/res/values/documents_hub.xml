@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Documents hub -->
+    <string name="documents_title">Документы</string>
+    <string name="documents_open_file">Открыть файл</string>
+    <string name="documents_back">Назад</string>
+    <string name="documents_empty_title">Пока нет документов</string>
+    <string name="documents_empty_body">PDF, изображения и файлы Office открываются здесь. В приложение копируется только выбранный файл; оригинал остаётся нетронутым.</string>
+    <string name="documents_kind_pdf">PDF</string>
+    <string name="documents_kind_word">Word</string>
+    <string name="documents_kind_excel">Excel</string>
+    <string name="documents_kind_powerpoint">PowerPoint</string>
+    <string name="documents_kind_image">Изображение</string>
+    <string name="documents_dirty">Изменено</string>
+    <string name="documents_updated">Изменён %1$s</string>
+    <string name="documents_delete">Удалить</string>
+    <string name="documents_delete_confirm_title">Удалить документ?</string>
+    <string name="documents_delete_confirm_body">Сессия «%1$s» и её рабочая копия будут удалены. Оригинальный файл останется там, откуда его открыли.</string>
+    <string name="documents_delete_failed">Не удалось удалить файлы сессии</string>
+    <string name="documents_missing_title">Сессия не найдена</string>
+    <string name="documents_missing_body">Документ удалён или его рабочая копия больше недоступна.</string>
+
+    <!-- Unsaved changes -->
+    <string name="documents_unsaved_title">Несохранённые изменения</string>
+    <string name="documents_unsaved_body">Изменения живут только в этой сессии приложения. Сохраните копию в выбранное место или удалите сессию вместе с изменениями.</string>
+    <string name="documents_save_copy">Сохранить копию</string>
+    <string name="documents_discard">Удалить сессию</string>
+    <string name="documents_dialog_cancel">Отмена</string>
+
+    <!-- Import errors -->
+    <string name="documents_import_failed">Не удалось открыть файл</string>
+    <string name="documents_error_empty">Файл пуст</string>
+    <string name="documents_error_too_large">Файл больше допустимого размера для %1$s</string>
+    <string name="documents_error_too_large_generic">Файл больше допустимого размера</string>
+    <string name="documents_error_no_space">Недостаточно свободного места для копии</string>
+    <string name="documents_error_unknown">Не удалось определить формат файла по его содержимому</string>
+    <string name="documents_error_unsupported">Этот формат пока не поддерживается: %1$s</string>
+    <string name="documents_error_mismatch">Содержимое не совпадает с расширением: файл определён как %1$s</string>
+    <string name="documents_error_corrupt">Файл повреждён или не является документом</string>
+
+    <!-- Office not available -->
+    <string name="documents_office_title">Редактор Office пока недоступен</string>
+    <string name="documents_office_body">Файл определён как %1$s (%2$s). Редактирование документов %2$s появится в следующей сборке; в этой сборке файл нельзя изменить или сохранить.</string>
+    <string name="documents_office_delete">Удалить сессию</string>
+
+    <!-- Save a copy -->
+    <string name="documents_saved">Копия сохранена</string>
+    <string name="documents_save_failed">Не удалось сохранить копию</string>
+</resources>

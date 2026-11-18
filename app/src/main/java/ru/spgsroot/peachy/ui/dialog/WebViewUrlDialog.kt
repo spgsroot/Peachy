@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -20,7 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.browser.BrowserUrls
@@ -32,8 +38,23 @@ fun WebViewUrlDialog(
     onOpen: (url: String, capture: Boolean) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
-    var capture by remember { mutableStateOf(true) }
+    var capture by remember { mutableStateOf(false) }
     var isError by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    fun open() {
+        val typed = url.trim()
+        // Blank opens the start page; anything typed must be an address or a search.
+        if (typed.isNotEmpty() && BrowserUrls.resolve(typed) == null) {
+            isError = true
+            return
+        }
+        focus.clearFocus()
+        keyboard?.hide()
+        onOpen(typed, capture)
+        onDismiss()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -54,6 +75,8 @@ fun WebViewUrlDialog(
                         null
                     },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { open() }),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -74,18 +97,7 @@ fun WebViewUrlDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val typed = url.trim()
-                    // Blank opens the start page; anything typed must be an address or a search.
-                    if (typed.isNotEmpty() && BrowserUrls.resolve(typed) == null) {
-                        isError = true
-                        return@Button
-                    }
-                    onOpen(typed, capture)
-                    onDismiss()
-                }
-            ) {
+            Button(onClick = ::open) {
                 Text(stringResource(R.string.btn_open_webview))
             }
         },

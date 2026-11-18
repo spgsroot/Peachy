@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -48,6 +47,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.data.db.SavedPageEntity
+import ru.spgsroot.peachy.manga.ReaderPageJump
 
 private fun keyOf(page: SavedPageEntity) = "${page.galleryId}:${page.page}"
 
@@ -118,7 +118,7 @@ fun SavedPagesScreen(
             ) {
                 items(pages, key = { keyOf(it) }) { page ->
                     val isSelected = keyOf(page) in selected
-                    val shape = RoundedCornerShape(12.dp)
+                    val shape = MaterialTheme.shapes.small
                     Box(
                         Modifier
                             .aspectRatio(0.7f)
@@ -134,6 +134,7 @@ fun SavedPagesScreen(
                                     if (selected.isNotEmpty()) {
                                         selected = if (isSelected) selected - keyOf(page) else selected + keyOf(page)
                                     } else {
+                                        ReaderPageJump.mark(page.galleryId, page.page)
                                         navController.navigate("manga/${page.galleryId}/read?page=${page.page}")
                                     }
                                 },

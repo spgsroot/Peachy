@@ -1,0 +1,4 @@
+{
+  "prompt": "Origin: user-provided original 'папки.png' (Peachy landing artwork, 1254x1254 RGB over black). Exact supplied three-panel graphite folder render with dusty-pink rim light, no redraw and no generative model. Straight alpha solved from the actual black ground (border flood <=2/255, largest real body, opaque interior, 1-2 px real edge coverage unpremultiplied), trimmed, then area-averaged to 480x462 in premultiplied space; lossless WebP. Detached <=7/255 render fringe ring dropped. Licence: user-provided artwork.",
+  "createdAt": "2026-11-17T15:59:45.821Z"
+}

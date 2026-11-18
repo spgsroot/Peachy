@@ -1,0 +1,307 @@
+{
+ "site": "Peachy landing page",
+ "generated": "2026-11-19",
+ "demo_media": {
+  "purpose": "Sample gallery photos and synthetic demo clips shown only as content inside the genuine Android app captures.",
+  "license": {
+   "name": "Unsplash License",
+   "url": "https://unsplash.com/license",
+   "note": "Commercial and non-commercial use allowed without permission; attribution appreciated but not required. Verified 2026-11-17."
+  },
+  "attribution_file": ".impeccable/demo-media/attribution.json",
+  "delivery": "Self-hosted only; no runtime request to unsplash.com.",
+  "items": [
+   {"file": "01-snow-mountain-pink-dawn.jpg", "author": "Yulia Gadalina", "handle": "@yulia_gadalina", "page": "https://unsplash.com/photos/snow-mountain-l0ascMtIQSw"},
+   {"file": "02-grey-pine-forest-fog.jpg", "author": "Thomas Griesbeck", "handle": "@jack_scorner", "page": "https://unsplash.com/photos/evergreen-trees-in-dense-mountain-fog-BS-Uxe8wU5Y"},
+   {"file": "03-grey-sand-dunes.jpg", "author": "Kimberly Genest", "handle": "@kimberly_genest", "page": "https://unsplash.com/photos/grayscale-photo-of-desert-under-cloudy-sky-UTZz666yXMs"},
+   {"file": "04-coast-cliff-dusk.jpg", "author": "Elisa Kerschbaumer", "handle": "@__elisa__", "page": "https://unsplash.com/photos/rocky-cliff-overlooking-the-ocean-at-dusk-jg87InsEu9Y"},
+   {"file": "05-grey-forest-fog.jpg", "author": "Ingrid Koe", "handle": "@inggridkoe", "page": "https://unsplash.com/photos/gray-forest-with-fog-kbKEuU-YEIw"},
+   {"file": "06-snow-ridge-low-clouds.jpg", "author": "Hunter Masters", "handle": "@huntermastersmusic", "page": "https://unsplash.com/photos/a-mountain-covered-in-snow-with-low-clouds-R4J45_iSxeY"}
+  ]
+ },
+ "generation_policy": "No image or font was generated, redrawn or re-vectorised. Every raster is derived from a user-supplied original: straight alpha solved from the original black-ground composite, interior pixels kept fully opaque and unpremultiplied, resampled in premultiplied space. Screenshots and fonts follow their own entries.",
+ "provenance_embedding": "impeccable embed-prompt: illustration and logo WebP origins are stored in their matching .webp.json sidecars. The runtime app captures were copied without a prompt chunk; their WebP derivatives are documented below.",
+ "sources": {
+  "repository": "https://github.com/spgsroot/Peachy",
+  "latest_release": "https://github.com/spgsroot/Peachy/releases/latest",
+  "latest_release_resolved": "https://github.com/spgsroot/Peachy/releases/tag/v3.6.0",
+  "font_source": "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap",
+  "supplied_originals": {
+   "directory": "../изображения (user supplied)",
+   "note": "Originals preserved byte-for-byte; every shipped raster above is derived only from these, with no redraw and no generative model.",
+   "files": {
+    "сам логотип.png": {
+     "sha256": "b0864c3fc8176eae82b7e771a36ea2f74ae329cfa82c1346b4219ec2524eea91",
+     "bytes": 614388,
+     "dimensions": "1254x1254",
+     "mode": "RGB",
+     "role": "exact source of peachy-mark.png/.webp and favicon.png/.svg; translucent sculpted graphite P with dusty-pink inset, 1254x1254 RGB"
+    },
+    "папки.png": {
+     "sha256": "640397b7d946d9b58fc0ff38f4b9cdca865bdddb190103a708f788ba62c64245",
+     "bytes": 704114,
+     "dimensions": "1254x1254",
+     "mode": "RGB",
+     "role": "exact source of public/assets/library.webp; three graphite panels with dusty-pink rim light, 1254x1254 RGB"
+    },
+    "плеер.png": {
+     "sha256": "e5b17b9d1b77fcab212e6156fbd0bdef390693cf494dae2dd5af1f12be597505",
+     "bytes": 578956,
+     "dimensions": "1254x1254",
+     "mode": "RGB",
+     "role": "exact source of public/assets/player.webp; sculpted graphite play triangle with dusty-pink rim light, 1254x1254 RGB"
+    },
+    "бразуер.png": {
+     "sha256": "be641234061a65ba8698520889ad8a6705eab41b006ac0c7c286c69ef029dece",
+     "bytes": 629573,
+     "dimensions": "1254x1254",
+     "mode": "RGB",
+     "role": "exact source of public/assets/browser.webp; graphite globe with diagonal dusty-pink orbit, 1254x1254 RGB"
+    },
+    "концепт изображения на  телефоне.png": {
+     "sha256": "0948a390ab0de2e89b107daa6bff5e5bbf26c91b29ddf95885281f34315da05e",
+     "bytes": 265753,
+     "dimensions": "433x469",
+     "mode": "RGBA",
+     "role": "design reference for the phone concept only; 433x469 RGBA, not used to produce any shipped raster"
+    }
+   }
+  }
+ },
+ "assets": [
+  {
+   "filename": "browser-nasa.webp",
+   "origin_url": "https://science.nasa.gov/missions/webb/nasas-webb-captures-celestial-fireworks-around-forming-star/",
+   "source_type": "Live NASA Science website screenshot in an isolated Chromium mobile viewport",
+   "subject": "NASA Science article showing the Webb telescope's image of the L1527 protostar. Image credit: NASA, ESA, CSA, STScI.",
+   "transformation": "430x727 CSS pixel viewport captured at 2x device scale and encoded as WebP. No cropping, recoloring, or simulated Android browser controls.",
+   "license": "NASA Science website screenshot; see https://www.nasa.gov/nasa-brand-center/images-and-media/ for NASA media and insignia guidelines.",
+   "generative_model": false,
+   "dimensions": "860x1454",
+   "bytes": 67778,
+   "sha256": "f9af4c9182506a28490ce4d36b39bfc230084cc58ce6e8318771c12740ddb6cc"
+  },
+  {
+   "filename": "gallery.png",
+   "origin_url": null,
+   "origin_file": "../peachy-android/.impeccable/review/gallery-final.png",
+   "source_type": "runtime framebuffer capture of the final Android debug APK",
+   "subject": "Peachy Library screen: All tab, six imported Unsplash sample photos and four sample clips in a two-column grid",
+   "transformation": "Copied byte-identically from gallery-final.png; no crop, retouch or recompression. Raw 1080x2400 RGBA framebuffer capture from the disposable PeachyPhotoSmoke emulator, English UI, font scale 1.0; FLAG_SECURE preserved (adb screencap not used).",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "third_party_content": "Demo photos inside the capture are Unsplash-licensed; see demo_media.",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 1354114,
+   "sha256": "4a48d0027cdeb7a9f3c8ff7d23674c57c0e38217df7306a27fb71a241f03b7e1"
+  },
+  {
+   "filename": "gallery.webp",
+   "origin_url": null,
+   "origin_file": "public/assets/gallery.png",
+   "source_type": "WebP derivative of a runtime Android app capture",
+   "subject": "Peachy Library screen: All tab, six imported Unsplash sample photos and four sample clips in a two-column grid",
+   "transformation": "Encoded from gallery.png with Pillow WebP quality 95, method 6; dimensions unchanged at 1080x2400; RGB because the source alpha channel is fully opaque; no crop, retouch or content change. PSNR 46.22 dB against the PNG.",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "third_party_content": "Demo photos inside the capture are Unsplash-licensed; see demo_media.",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 224624,
+   "sha256": "b54f56860d78838e8cfdb90f9008c3f3b12d85f461e3b282231c0ab878ca7b07"
+  },
+  {
+   "filename": "player-screen.png",
+   "origin_url": null,
+   "origin_file": "../peachy-android/.impeccable/review/final-now-1.png",
+   "source_type": "Android app runtime capture",
+   "subject": "Foggy forest clip with playback controls, queue and scrubber",
+   "transformation": "Copied from the original English-language Android capture without edits.",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "third_party_content": "Demo clip and covers inside the capture are derived from Unsplash-licensed photos; see demo_media.",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 2386658,
+   "sha256": "c65885c72c682e32f9419512839b49fe6476e134ba3b2a6d558f9cf1aff13a4d"
+  },
+  {
+   "filename": "player-screen.webp",
+   "origin_url": null,
+   "origin_file": "public/assets/player-screen.png",
+   "source_type": "WebP derivative of a runtime Android app capture",
+   "subject": "Foggy forest clip with playback controls, queue and scrubber",
+   "transformation": "WebP quality 94 at the original resolution, without retouching or changes to app content.",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "third_party_content": "Demo clip and covers inside the capture are derived from Unsplash-licensed photos; see demo_media.",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 215220,
+   "sha256": "a519dfb2f08142fad3d1a673ec98a94b651bcb158137971fada3113ae4d9aa51"
+  },
+  {
+   "filename": "browser-screen.png",
+   "origin_url": null,
+   "origin_file": "../peachy-android/.impeccable/review/browser-start.png",
+   "source_type": "runtime framebuffer capture of the final Android debug APK",
+   "subject": "Peachy Browser start screen: address row above an empty bookmarks state (no bookmarks created)",
+   "transformation": "Copied byte-identically from browser-start.png; no crop, retouch or recompression. Raw 1080x2400 RGBA framebuffer capture from the disposable PeachyPhotoSmoke emulator, English UI, font scale 1.0; FLAG_SECURE preserved (adb screencap not used).",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 95460,
+   "sha256": "44d44fdde70113a35f203538eeb579fb65ead0964efad5bb6af0210663f186d0"
+  },
+  {
+   "filename": "browser-screen.webp",
+   "origin_url": null,
+   "origin_file": "public/assets/browser-screen.png",
+   "source_type": "WebP derivative of a runtime Android app capture",
+   "subject": "Peachy Browser start screen: address row above an empty bookmarks state (no bookmarks created)",
+   "transformation": "Encoded from browser-screen.png with Pillow WebP quality 95, method 6; dimensions unchanged at 1080x2400; RGB because the source alpha channel is fully opaque; no crop, retouch or content change. PSNR 48.99 dB against the PNG.",
+   "license": "AGPL-3.0 (Peachy application, spgsroot/Peachy)",
+   "generative_model": false,
+   "dimensions": "1080x2400",
+   "bytes": 28924,
+   "sha256": "16fe317decb7db6da7ff5e1749b050a85b8ba73899bba4dcd7692b3d4b9835c2"
+  },
+  {
+   "filename": "protected-storage.webp",
+   "origin_url": null,
+   "origin_file": "Protected Storage.png",
+   "source_type": "user-provided illustration",
+   "subject": "Graphite padlock for the protected-storage/privacy section",
+   "transformation": "Full-resolution original, with the warm metal highlights shifted toward rose while preserving neutral graphite tones. Encoded as lossless WebP; no resizing, synthetic detail or generative fill.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "733x824",
+   "bytes": 86914,
+   "sha256": "f47a6260083fbee6ad6cca6cc116d55a00817e6cdf9892b97a708ee949372148"
+  },
+  {
+   "filename": "manrope-latin.woff2",
+   "origin_url": "https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2",
+   "origin_file": null,
+   "source_type": "official Google Fonts font binary",
+   "subject": "Manrope variable font, Latin subset",
+   "transformation": "Downloaded unmodified from the Google Fonts CSS response (font/woff2). Verified Web Open Font Format Version 2; variable wght axis 200-800; latin subset with 218 mapped code points. CSS unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD.",
+   "license": "SIL Open Font License 1.1 (see manrope-license.txt)",
+   "generative_model": false,
+   "bytes": 24532,
+   "sha256": "8c2def024c1bf31aacf3624ae3c4d701269b4ec3dc765c04830839f0d36b2d9e"
+  },
+  {
+   "filename": "manrope-cyrillic.woff2",
+   "origin_url": "https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggOxSuXd.woff2",
+   "origin_file": null,
+   "source_type": "official Google Fonts font binary",
+   "subject": "Manrope variable font, Cyrillic subset",
+   "transformation": "Downloaded unmodified from the Google Fonts CSS response (font/woff2). Verified Web Open Font Format Version 2; variable wght axis 200-800; cyrillic subset with 105 mapped code points. CSS unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116.",
+   "license": "SIL Open Font License 1.1 (see manrope-license.txt)",
+   "generative_model": false,
+   "bytes": 14352,
+   "sha256": "447c49583b1b735cc6f566151db1d24354cec41076c55dd98455cfbde9e806c1"
+  },
+  {
+   "filename": "manrope-license.txt",
+   "origin_url": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt",
+   "origin_file": null,
+   "source_type": "official font license text",
+   "subject": "SIL Open Font License 1.1 for Manrope",
+   "transformation": "Downloaded unmodified (200); ASCII text, 4387 bytes.",
+   "license": "SIL Open Font License 1.1",
+   "generative_model": false,
+   "bytes": 4387,
+   "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+  },
+  {
+   "filename": "peachy-mark.png",
+   "origin_url": null,
+   "origin_file": "../изображения/сам логотип.png",
+   "source_type": "user-provided illustration",
+   "subject": "Peachy mark: translucent sculpted graphite P with rounded dusty-pink inset",
+   "transformation": "Exact supplied artwork. Source has no alpha channel (RGB over pure black, background measured at 0..2/255). Straight alpha derived from the real composite: border flood for the ground, largest real body as the silhouette, every interior pixel (including the darkest graphite shading and the pink inset) kept at alpha 1 and its original colour, and the 1-2 px anti-aliased edge solved as coverage alpha = C/F against the nearest fully covered interior colour, then unpremultiplied. Kept pixels recomposite over black to the source byte-exactly (max error 0/255). Only the detached <=7/255 render fringe ring (2.6k px, <=2.5% brightness) was dropped rather than shipped as translucent dirt; no geometric clip and no shape approximation. Trimmed with an 8 px pad. Lossless RGBA PNG, 585x748, the lossless alpha source for native and web use.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "585x748",
+   "bytes": 268318,
+   "sha256": "8896e605c7f26ca3c3d3e3050fd1ac49f63777f29871f7e7ac2d9bf89fd666c8"
+  },
+  {
+   "filename": "peachy-mark.webp",
+   "origin_url": null,
+   "origin_file": "../изображения/сам логотип.png",
+   "source_type": "user-provided illustration",
+   "subject": "Peachy mark: translucent sculpted graphite P with rounded dusty-pink inset",
+   "transformation": "Derived from public/assets/peachy-mark.png: area-average (box) downscale in premultiplied space to 375x480, no ringing; lossless WebP with straight alpha.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "375x480",
+   "bytes": 78836,
+   "sha256": "1f84ce081094261d0a60595724eec3ae89d1d3f7a90dffa210b6ea3a60a80b6a"
+  },
+  {
+   "filename": "library.webp",
+   "origin_url": null,
+   "origin_file": "../изображения/папки.png",
+   "source_type": "user-provided illustration",
+   "subject": "Three graphite folder panels with dusty-pink rim light",
+   "transformation": "Exact supplied artwork matted from its black ground with the same coverage solve as the mark (opaque interior, real edge coverage unpremultiplied, detached <=7/255 fringe ring dropped), trimmed, then area-averaged to 480x462 in premultiplied space; lossless WebP, real alpha.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "480x462",
+   "bytes": 108852,
+   "sha256": "804a238e541319752f7ffb470fe93d8ac26cd3e04691f3314bdc95632d500bef"
+  },
+  {
+   "filename": "player.webp",
+   "origin_url": null,
+   "origin_file": "../изображения/плеер.png",
+   "source_type": "user-provided illustration",
+   "subject": "Sculpted graphite play triangle with dusty-pink rim light",
+   "transformation": "Exact supplied artwork matted from its black ground with the same coverage solve as the mark (opaque interior, real edge coverage unpremultiplied, detached <=7/255 fringe ring dropped), trimmed, then area-averaged to 425x480 in premultiplied space; lossless WebP, real alpha.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "425x480",
+   "bytes": 88688,
+   "sha256": "e5004f2d6ee94a830188505429259cad115323e41636ece61a6dce53efb5d4df"
+  },
+  {
+   "filename": "browser.webp",
+   "origin_url": null,
+   "origin_file": "../изображения/бразуер.png",
+   "source_type": "user-provided illustration",
+   "subject": "Graphite globe with a diagonal dusty-pink orbit ring",
+   "transformation": "Exact supplied artwork matted from its black ground with the same coverage solve as the mark (opaque interior, real edge coverage unpremultiplied, detached <=7/255 fringe ring dropped), trimmed, then area-averaged to 480x454 in premultiplied space; lossless WebP, real alpha. Earlier opaque-plate fallback is retired: the ring/globe gap and the dark limb now carry true alpha.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "480x454",
+   "bytes": 99834,
+   "sha256": "26672b27cfab13aec7afad55dbf9aa942cf2adcc536cc06254c560b48c6ce60b"
+  },
+  {
+   "filename": "favicon.png",
+   "origin_url": null,
+   "origin_file": "../изображения/сам логотип.png",
+   "source_type": "user-provided illustration (favicon composition)",
+   "subject": "Peachy mark on the #0B0B0D brand plate, for browser chrome",
+   "transformation": "Exact mark raster (public/assets/peachy-mark.png) area-averaged to 370 px tall and composited over a #0B0B0D plate on a 512x512 canvas. The plate keeps the dark artwork legible in both light and dark browser chrome; no redraw, no vector reinterpretation.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "512x512",
+   "bytes": 66237,
+   "sha256": "2fa8bee249f834ea5318c2d5b921b056a6e98fbcb16b5c4421dee1429333e8d0"
+  },
+  {
+   "filename": "favicon.svg",
+   "origin_url": null,
+   "origin_file": "../изображения/сам логотип.png",
+   "source_type": "exact image wrapper",
+   "subject": "Peachy mark on the #0B0B0D brand plate, for browser chrome",
+   "transformation": "True exact wrapper: the bytes of public/favicon.png embedded as a base64 data URI inside a 512x512 SVG viewBox. It carries the same raster, not a redrawn vector path; the previous flat off-white P path is retired.",
+   "license": "Unspecified (user-provided artwork)",
+   "generative_model": false,
+   "dimensions": "512x512 (viewBox)",
+   "bytes": 88667,
+   "sha256": "41c3d47df5e6a7f57df7871c5f8785b0ee3937eab1236edcbebdffafe31f3aa3"
+  }
+ ]
+}

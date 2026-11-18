@@ -1,7 +1,13 @@
 package ru.spgsroot.peachy.ui.manga
 
 import ru.spgsroot.peachy.manga.TagNames
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -24,10 +31,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -57,6 +65,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,6 +111,8 @@ fun CatalogScreen(
     val tagLibrary by viewModel.tagLibrary.collectAsStateWithLifecycle()
     val favoriteTags = remember(tagLibrary) { tagLibrary.favorites.toSet() }
     val gridState = rememberLazyGridState()
+    // Recent queries start collapsed; only this toggle opens the panel, and the choice survives recreation.
+    var recentsOpen by rememberSaveable { mutableStateOf(false) }
     val nearEnd by remember {
         derivedStateOf {
             val info = gridState.layoutInfo
@@ -135,10 +149,8 @@ fun CatalogScreen(
             onBlockName = viewModel::blockName,
             onUnblockName = viewModel::unblockName,
             onDismiss = onFiltersDismiss,
-            onApply = { query ->
-                onFiltersDismiss()
-                submit(query)
-            }
+            // Filters apply on change: never navigate away and never close the panel mid-selection.
+            onQueryChange = viewModel::search
         )
     }
 
@@ -177,17 +189,52 @@ fun CatalogScreen(
         }
         if (queries.isNotEmpty() && catalog.query.tags.isEmpty()) {
             fullWidth {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stringResource(R.string.manga_recent_queries), style = MaterialTheme.typography.titleSmall)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(queries.take(10), key = { it }) { previous ->
-                            AssistChip(
-                                onClick = {
-                                    onTextChange(previous)
-                                    submit(CatalogQuery(text = previous, sort = catalog.query.sort))
-                                },
-                                label = { Text(previous, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            )
+                Column {
+                    val expandedDescription = stringResource(R.string.manga_recent_queries_expanded)
+                    val collapsedDescription = stringResource(R.string.manga_recent_queries_collapsed)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable(onClickLabel = stringResource(R.string.manga_recent_queries_toggle)) {
+                                recentsOpen = !recentsOpen
+                            }
+                            .semantics(mergeDescendants = true) {
+                                role = Role.Button
+                                stateDescription = if (recentsOpen) expandedDescription else collapsedDescription
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringResource(R.string.manga_recent_queries),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            if (recentsOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = recentsOpen,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        LazyRow(
+                            Modifier.padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(queries.take(10), key = { it }) { previous ->
+                                AssistChip(
+                                    onClick = {
+                                        onTextChange(previous)
+                                        submit(CatalogQuery(text = previous, sort = catalog.query.sort))
+                                    },
+                                    label = { Text(previous, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                )
+                            }
                         }
                     }
                 }
@@ -281,7 +328,7 @@ internal fun GalleryGridCard(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(6.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .background(Color.Black.copy(alpha = 0.6f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
@@ -353,7 +400,7 @@ internal fun OneLineTagChips(
                     maxLines = 1,
                     softWrap = false,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(5.dp))
+                        .clip(MaterialTheme.shapes.extraSmall)
                         .background(
                             if (favorite) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant

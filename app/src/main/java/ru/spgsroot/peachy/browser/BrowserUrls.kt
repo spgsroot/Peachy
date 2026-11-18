@@ -26,7 +26,7 @@ object BrowserUrls {
                 lower.startsWith("https://") -> text
                 lower.startsWith("http://") -> "https://" + text.substring(7)
                 else -> null
-            }
+            }?.takeIf(::isWebUrl)
         }
         if (text.none { it.isWhitespace() } && (HOSTISH.matches(text) || LOCALHOST.matches(text))) {
             return "https://$text"
@@ -34,10 +34,10 @@ object BrowserUrls {
         return SEARCH_URL + URLEncoder.encode(text, "UTF-8")
     }
 
-    /** True for the only pages the browser loads. */
+    /** True for syntactically usable HTTP(S) pages; navigation upgrades HTTP before loading. */
     fun isWebUrl(url: String): Boolean {
         val lower = url.lowercase()
-        return lower.startsWith("https://") || lower.startsWith("http://")
+        return (lower.startsWith("https://") || lower.startsWith("http://")) && Hosts.hostOf(url) != null
     }
 
     private val TRACKING_EXACT = setOf(

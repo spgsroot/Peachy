@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Image editor -->
+    <string name="img_title">Image</string>
+    <string name="img_undo">Undo</string>
+    <string name="img_redo">Redo</string>
+    <string name="img_tool_crop">Crop</string>
+    <string name="img_tool_rotate">Rotate</string>
+    <string name="img_tool_adjust">Light</string>
+    <string name="img_tool_draw">Brush</string>
+    <string name="img_crop_apply">Crop</string>
+    <string name="img_crop_reset">Reset selection</string>
+    <string name="img_rotate_left">Rotate left</string>
+    <string name="img_rotate_right">Rotate right</string>
+    <string name="img_rotate_angle">Rotation angle</string>
+    <string name="img_rotate_apply">Apply rotation</string>
+    <string name="img_adjust_brightness">Brightness</string>
+    <string name="img_adjust_contrast">Contrast</string>
+    <string name="img_adjust_saturation">Saturation</string>
+    <string name="img_adjust_apply">Apply</string>
+    <string name="img_adjust_reset">Reset</string>
+    <string name="img_draw_width">Line width</string>
+    <string name="img_draw_color">Colour</string>
+    <string name="img_export_title">Save a copy</string>
+    <string name="img_export_png">PNG</string>
+    <string name="img_export_png_note">Lossless, transparency kept</string>
+    <string name="img_export_jpeg">JPEG</string>
+    <string name="img_export_jpeg_note">No transparency: transparent pixels are filled with white</string>
+    <string name="img_export_note">%1$d×%2$d · sRGB · no EXIF, orientation is already in the pixels</string>
+    <string name="img_saved">Copy saved</string>
+    <string name="img_save_failed">Could not save the copy</string>
+    <string name="img_edit_failed">Could not apply the change</string>
+    <string name="img_discard_failed">Could not delete the session</string>
+    <string name="img_heic_unsupported">HEIC is not supported on this device</string>
+    <string name="img_heic_unsupported_body">The system provides no HEIC/HEIF decoder. The file stays untouched in the session; no blank result is created.</string>
+    <string name="img_load_failed">Could not read the image</string>
+    <string name="img_load_failed_body">The file is damaged or its format cannot be decoded on this device.</string>
+    <string name="img_too_large">The image is larger than allowed</string>
+    <string name="img_too_large_body">An image side exceeds the decode limit. The file is unchanged.</string>
+    <string name="img_animated_webp">Animated WebP: only the first frame is edited and saved</string>
+    <string name="img_downscaled">The image was reduced to %1$d×%2$d for editing; the export will be this size</string>
+    <string name="img_processing">Processing…</string>
+    <string name="img_preview_failed">Could not display the image</string>
+</resources>

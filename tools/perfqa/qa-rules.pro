@@ -1,0 +1,6 @@
+-keep class ai.onnxruntime.** { *; }
+-keep class ru.spgsroot.peachy.perfqa.BrowserProbe { native <methods>; }
+-keepclassmembers,allowoptimization class ru.spgsroot.peachy.browser.adblock.BrowserFilter { *** lock; *** decisions; }
+-keep,allowoptimization class ru.spgsroot.peachy.browser.adblock.BrowserFilter$Request { <init>(java.lang.String,java.lang.String,java.lang.String,java.lang.String); }
+-keepclassmembers class ru.spgsroot.peachy.documents.image.*Test { public <init>(); @org.junit.Test <methods>; }
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault,InnerClasses,EnclosingMethod

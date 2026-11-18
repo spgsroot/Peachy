@@ -1,0 +1,36 @@
+Third-party components used by the documents feature
+=====================================================
+
+Peachy itself is licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+The documents feature (PDF) links the components below; their licences are compatible with
+AGPL-3.0 distribution of the combined work as described here.
+
+MuPDF (com.artifex.mupdf:fitz 1.28.5)
+   Copyright (C) 2004-2025 Artifex Software, Inc.
+   Licence: GNU Affero General Public License v3.0 (AGPL-3.0).
+   https://mupdf.com/licensing/  -  https://www.gnu.org/licenses/agpl-3.0.html
+   Peachy is distributed under AGPL-3.0 and makes no proprietary use of MuPDF. The MuPDF AAR
+   published on maven.ghostscript.com does not contain its licence file; this notice is the
+   attribution record for the binary dependency. Mutually incompatible commercial/AGPL
+   combinations would require a commercial licence from Artifex and are not made here.
+
+BouncyCastle (org.bouncycastle:bcpkix-jdk18on 1.78.1, with bcprov/bcutil)
+   Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc.
+   Licence: Bouncy Castle Licence (MIT-style).
+   https://www.bouncycastle.org/licence.html
+
+Onest (res/font/onest_regular.ttf, onest_medium.ttf, onest_semibold.ttf)
+   Copyright 2021 The Onest Project Authors.
+   Licence: SIL Open Font License 1.1.
+   https://github.com/googlefonts/onest - https://openfontlicense.org
+   The full licence accompanies the fonts in assets/onest-license.txt.
+   Used as the embedded substitute font for in-place PDF text replacement.
+
+Browser shield
+==============
+Brave adblock-rust 0.13.5 (MPL-2.0), Rust 1.99.1 runtime, Raymond Hill and uBlock Origin
+contributors' scriptlets (GPL-3.0-or-later), and the EasyList authors' filters are used by
+the browser. Source offers, exact upstream revisions, list-specific attributions and changes:
+app/src/main/assets/adblock/SOURCES.txt. The APK also carries COPYING-uBlock.txt and
+native-notices.zip with the complete locked native dependency notices and source URLs.
+No Orbit sources, resources or prebuilt libraries are distributed.

@@ -16,14 +16,22 @@ class PlaylistManager @Inject constructor() {
     private var currentVideo: Video? = null
     private var onCurrentVideoRemovedCallback: ((Video?) -> Unit)? = null
 
-    fun setOnCurrentVideoRemovedListener(callback: (Video?) -> Unit) {
+    fun setOnCurrentVideoRemovedListener(callback: (Video?) -> Unit) = synchronized(lock) {
         onCurrentVideoRemovedCallback = callback
+    }
+
+    /** Drops [callback] only while it is still the registered one, so a newer owner is not muted. */
+    fun clearOnCurrentVideoRemovedListener(callback: (Video?) -> Unit) = synchronized(lock) {
+        if (onCurrentVideoRemovedCallback === callback) onCurrentVideoRemovedCallback = null
     }
 
     fun current(): Video? = synchronized(lock) {
         currentVideo
     }
 
+    // One call moves one row. Repeat policy: the last row wraps to the first and the first to the
+    // last; a pointer that is not in the visible queue (playback outside the filter) starts from the
+    // matching boundary instead of a stale index.
     fun next(): Video? = synchronized(lock) {
         val videos = _playlist.value
         if (videos.isEmpty()) return null
@@ -61,12 +69,25 @@ class PlaylistManager @Inject constructor() {
 
     fun shuffle() = synchronized(lock) {
         _playlist.value = _playlist.value.shuffled()
+        // Shuffling reorders the queue, it never changes which video plays.
+        currentVideo = currentVideo?.let { playing -> _playlist.value.firstOrNull { it.id == playing.id } ?: playing }
     }
 
+    /**
+     * A queue emission only reorders or filters the list. The video that plays is the queue pointer,
+     * so it is carried across emissions by id and is never re-invented from the new first row.
+     */
     fun setPlaylist(videos: List<Video>) = synchronized(lock) {
         _playlist.value = videos
-        currentVideo = if (currentVideo == null) videos.firstOrNull()
-            else videos.firstOrNull { it.id == currentVideo?.id } ?: currentVideo
+        currentVideo = currentVideo?.let { playing -> videos.firstOrNull { it.id == playing.id } ?: playing }
+    }
+
+    /**
+     * Anchors the pointer to the queue row of the video the player actually shows, so the advance
+     * gestures always start from the displayed item and never from a stale or boundary row.
+     */
+    fun syncPlaying(video: Video) = synchronized(lock) {
+        currentVideo = _playlist.value.firstOrNull { it.id == video.id } ?: video
     }
 
     fun selectVideo(video: Video) = synchronized(lock) {

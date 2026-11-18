@@ -21,3 +21,7 @@ build/
 agents/
 # local build log
 build-out.txt
+
+# Python bytecode from tools/office-packaging checks
+__pycache__/
+/native/adblock/target/

@@ -2,11 +2,11 @@ package ru.spgsroot.peachy.data.hosts
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import ru.spgsroot.peachy.data.downloader.PublicNetworkPolicy
+import ru.spgsroot.peachy.data.downloader.SafeHttpClient
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -84,28 +84,25 @@ private const val BROWSER_USER_AGENT =
         "Chrome/126.0.0.0 Mobile Safari/537.36"
 
 class OkHttpHttp : Http {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val client = SafeHttpClient(connectTimeoutSeconds = 20, readTimeoutSeconds = 30)
 
     override fun get(url: String, headers: Map<String, String>): String =
-        execute(Request.Builder().url(url).get(), headers)
+        execute(PublicNetworkPolicy.requestBuilder(url).get(), headers)
 
     override fun postJson(url: String, json: String, headers: Map<String, String>): String =
-        execute(Request.Builder().url(url).post(json.toRequestBody("application/json".toMediaType())), headers)
+        execute(PublicNetworkPolicy.requestBuilder(url).post(json.toRequestBody("application/json".toMediaType())), headers)
 
     private fun execute(builder: Request.Builder, headers: Map<String, String>): String {
         builder.header("User-Agent", BROWSER_USER_AGENT)
         headers.forEach { (name, value) -> builder.header(name, value) }
         try {
-            client.newCall(builder.build()).execute().use { response ->
+            client.execute(builder.build()).use { response ->
                 if (response.code == 429) throw HostException("The host is rate limiting requests, try again in a minute")
                 if (!response.isSuccessful) throw HostException("HTTP ${response.code} from ${response.request.url.host}")
                 return response.body?.string().orEmpty()
             }
-        } catch (e: IOException) {
-            throw HostException("Could not reach ${builder.build().url.host}: ${e.message}", e)
+        } catch (_: IOException) {
+            throw HostException("Could not complete the host request")
         }
     }
 }

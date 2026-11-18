@@ -23,9 +23,13 @@ object Hosts {
         return authority.substringBefore(':').lowercase().trimEnd('.').ifEmpty { null }
     }
 
-    /** Approximate eTLD+1 without the public suffix list: right for the common cases. */
+    /**
+     * Approximate eTLD+1 without the public suffix list: right for the common cases. IP literals
+     * have no registrable parent domain, so their complete address is the site identity.
+     */
     fun registrable(host: String): String {
         val labels = host.split('.')
+        if (host.contains(':') || (labels.size == 4 && labels.all { it.toIntOrNull()?.let { n -> n in 0..255 } == true })) return host
         if (labels.size <= 2) return host
         val last = labels.last()
         val second = labels[labels.size - 2]

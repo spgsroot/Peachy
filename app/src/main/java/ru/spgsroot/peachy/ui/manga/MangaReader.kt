@@ -32,7 +32,6 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -72,6 +71,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +96,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -103,18 +106,27 @@ import androidx.compose.material.icons.filled.Translate
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.manga.GalleryDetail
 import ru.spgsroot.peachy.manga.PageTurnGate
 import ru.spgsroot.peachy.manga.PageTurnHaptic
+import ru.spgsroot.peachy.manga.PagedScrollRestore
 import ru.spgsroot.peachy.manga.ReaderFit
 import ru.spgsroot.peachy.manga.ReaderOrientation
+import ru.spgsroot.peachy.manga.ReaderPosition
 import ru.spgsroot.peachy.manga.ReaderSettings
 import ru.spgsroot.peachy.manga.ReaderSettingsStore
 import ru.spgsroot.peachy.manga.TapZone
 import ru.spgsroot.peachy.manga.centerPage
-import ru.spgsroot.peachy.manga.startPage
+import ru.spgsroot.peachy.manga.clampPosition
+import ru.spgsroot.peachy.manga.offsetFraction
+import ru.spgsroot.peachy.manga.offsetPixels
+import ru.spgsroot.peachy.manga.pageOffsetFraction
+import ru.spgsroot.peachy.manga.pagedOffsetFraction
 import ru.spgsroot.peachy.manga.tapZone
 import ru.spgsroot.peachy.manga.TranslateMode
 import ru.spgsroot.peachy.translate.PageState
@@ -134,13 +146,13 @@ fun MangaReaderScreen(
     viewModel: MangaViewModel = hiltViewModel()
 ) {
     val detail by viewModel.detail.collectAsStateWithLifecycle()
-    val initialPage by viewModel.initialPage.collectAsStateWithLifecycle()
+    val initialPosition by viewModel.initialPosition.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     LaunchedEffect(galleryId, startAt) { viewModel.open(galleryId, startAt) }
     val current = detail?.takeIf { it.id == galleryId }
-    if (current != null && initialPage != null && current.pagePaths.isNotEmpty()) {
+    if (current != null && initialPosition != null && current.pagePaths.isNotEmpty()) {
         key(galleryId) {
-            NativeReader(current, initialPage!!, navController, viewModel)
+            NativeReader(current, initialPosition!!, navController, viewModel)
         }
     } else {
         Column(
@@ -163,7 +175,7 @@ fun MangaReaderScreen(
 @Composable
 private fun NativeReader(
     gallery: GalleryDetail,
-    initialPage: Int,
+    initialPosition: ReaderPosition,
     navController: NavController,
     viewModel: MangaViewModel
 ) {
@@ -188,12 +200,26 @@ private fun NativeReader(
     val provider by translation.provider.collectAsStateWithLifecycle()
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var providerDialog by rememberSaveable { mutableStateOf(false) }
-    var currentPage by rememberSaveable { mutableIntStateOf(startPage(initialPage, gallery.pagePaths.size)) }
+    var currentPage by rememberSaveable {
+        mutableIntStateOf(clampPosition(initialPosition, gallery.pagePaths.size).page)
+    }
+    var currentFraction by rememberSaveable {
+        mutableFloatStateOf(clampPosition(initialPosition, gallery.pagePaths.size).offset)
+    }
     var hints by remember { mutableStateOf(!settings.hideHints) }
     val gate = remember { PageTurnGate() }
     val zoom = remember { ReaderZoom() }
     val latestGallery by rememberUpdatedState(gallery)
     val latestSettings by rememberUpdatedState(settings)
+    val savedPosition = remember { mutableStateOf<ReaderPosition?>(null) }
+
+    /** Writes the page and its in-page offset; repeated samples of the same spot do not hit the store. */
+    fun persistPosition(page: Int, offset: Float) {
+        val position = ReaderPosition(page, offsetFraction(offset))
+        if (position == savedPosition.value) return
+        savedPosition.value = position
+        viewModel.saveReadHistory(latestGallery, position.page, position.offset)
+    }
     val scope = rememberCoroutineScope()
     val thumbnails = rememberLazyListState(initialFirstVisibleItemIndex = currentPage)
     val total = gallery.pagePaths.size
@@ -216,55 +242,132 @@ private fun NativeReader(
         }
     }
 
+    // Backgrounding or process death may skip Back, so the last spot is written while the reader is still alive.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                persistPosition(currentPage.coerceIn(0, (total - 1).coerceAtLeast(0)), currentFraction)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Mode-local states start at the current page when the layout changes.
     key(settings.continuous, settings.orientation) {
+        val startFraction = offsetFraction(currentFraction)
         val pager = rememberPagerState(initialPage = currentPage, pageCount = { total })
         val strip = rememberLazyListState(initialFirstVisibleItemIndex = currentPage)
         val stripMode = settings.continuous
+        val keepsOffset = stripMode && vertical
+        // Paged fit-width pages keep their in-page spot for this layout session; the durable copy stays
+        // the reader position. The page the reader opens on starts from the stored offset.
+        val pagedFractions = remember { mutableMapOf(currentPage to startFraction) }
+        // A strip item's first measure uses the placeholder aspect. Only a height measured after the real
+        // aspect arrives can restore the stored share without a jump.
+        val stripHeights = remember { mutableStateMapOf<Int, Int>() }
+        // The offset is a share of the page height, so it is reapplied once the page has been measured.
+        var restored by remember { mutableStateOf(!keepsOffset || startFraction <= 0f) }
         val visiblePage by remember {
             derivedStateOf {
                 if (stripMode) strip.centeredPage().takeIf { it >= 0 } ?: currentPage
                 else pager.currentPage
             }
         }
+        var jumpPage by remember { mutableIntStateOf(-1) }
+        var jumpAt by remember { mutableIntStateOf(0) }
         val jump: (Int) -> Unit = { target ->
             if (target in gallery.pagePaths.indices) {
-                scope.launch {
-                    if (stripMode) strip.animateScrollToItem(target)
-                    else pager.animateScrollToPage(target)
+                if (!stripMode) {
+                    // An explicit page choice starts at the top, not at an earlier visit's spot.
+                    pagedFractions[target] = 0f
+                    jumpPage = target
+                    jumpAt++
+                }
+                if (stripMode) {
+                    // An explicit page change wins over a restore that is still waiting for layout.
+                    restored = true
+                    scope.launch { strip.animateScrollToItem(target) }
+                } else {
+                    scope.launch { pager.animateScrollToPage(target) }
                 }
             }
         }
+        LaunchedEffect(strip, keepsOffset, restored) {
+            if (!keepsOffset || restored) return@LaunchedEffect
+            val targetPage = currentPage
+            // The first strip measure uses the placeholder aspect. Wait for the height reported after the
+            // real aspect arrives, and abandon the restore if the reader moves or jumps meanwhile.
+            val result = snapshotFlow {
+                val centered = strip.centeredPage()
+                val moved = strip.isScrollInProgress || (centered >= 0 && centered != targetPage)
+                val height = stripHeights[targetPage]
+                when {
+                    restored || moved -> true to null
+                    centered == targetPage && height != null -> false to height
+                    else -> null
+                }
+            }.filterNotNull().first()
+            if (!result.first) {
+                result.second?.let { height ->
+                    val offset = offsetPixels(startFraction, height)
+                    strip.scrollToItem(targetPage, offset)
+                    val fraction = pageOffsetFraction(-offset, height)
+                    currentPage = targetPage
+                    currentFraction = fraction
+                    persistPosition(targetPage, fraction)
+                }
+            }
+            restored = true
+        }
         LaunchedEffect(pager, strip) {
             if (stripMode) {
-                snapshotFlow { strip.centeredPage() to !strip.isScrollInProgress }
-                    .collect { (page, idle) ->
-                        if (page >= 0) {
-                            currentPage = page
-                            if (gate.onPage(page, idle)) {
-                                viewModel.onPageTurned()
-                                viewModel.saveReadHistory(latestGallery, page)
-                                translation.onPageSettled(page, latestSettings)
-                            }
+                snapshotFlow {
+                    val page = strip.centeredPage()
+                    val offset = if (keepsOffset && page >= 0) strip.offsetFractionOf(page) else 0f
+                    Triple(page, !strip.isScrollInProgress, offset)
+                }.collect { (page, idle, offset) ->
+                    if (page >= 0) {
+                        currentPage = page
+                        // Until the stored offset is applied, samples describe the top of the page, not the user.
+                        if (restored) currentFraction = offset
+                        if (gate.onPage(page, idle)) {
+                            viewModel.onPageTurned()
+                            translation.onPageSettled(page, latestSettings)
                         }
+                        if (restored && idle) persistPosition(page, offset)
                     }
+                }
             } else {
                 snapshotFlow { pager.settledPage }.collect { page ->
                     currentPage = page
+                    val offset = pagedFractions[page] ?: 0f
+                    currentFraction = offset
                     if (gate.onPage(page, idle = true)) {
                         viewModel.onPageTurned()
-                        viewModel.saveReadHistory(latestGallery, page)
                         translation.onPageSettled(page, latestSettings)
                     }
+                    persistPosition(page, offset)
                 }
             }
         }
         DisposableEffect(pager, strip) {
             onDispose {
                 // Read layout now, not the last idle sample: Back can interrupt a fling.
-                val page = if (stripMode) strip.centeredPage().takeIf { it >= 0 } ?: currentPage
-                else pager.currentPage
-                viewModel.saveReadHistory(latestGallery, page)
+                if (restored) {
+                    if (keepsOffset) {
+                        val page = strip.centeredPage().takeIf { it >= 0 } ?: currentPage
+                        persistPosition(page, strip.offsetFractionOf(page))
+                    } else if (stripMode) {
+                        val page = strip.centeredPage().takeIf { it >= 0 } ?: currentPage
+                        persistPosition(page, 0f)
+                    } else {
+                        // A paged page's in-page offset is the reader's spot, not the top of the page.
+                        val page = pager.currentPage
+                        persistPosition(page, pagedFractions[page] ?: 0f)
+                    }
+                }
             }
         }
         LaunchedEffect(visiblePage, settings.fit) { zoom.reset() }
@@ -301,6 +404,17 @@ private fun NativeReader(
                     tapOnY = tapOnY,
                     modifier = modifier,
                     viewportHeight = viewportHeight,
+                    startOffset = pagedFractions[index] ?: 0f,
+                    resetAt = if (jumpPage == index) jumpAt else 0,
+                    onResetConsumed = { if (jumpPage == index) jumpPage = -1 },
+                    onScroll = { offset, idle ->
+                        pagedFractions[index] = offset
+                        if (index == currentPage) {
+                            currentFraction = offset
+                            if (idle) persistPosition(index, offset)
+                        }
+                    },
+                    onStripMeasured = { height -> stripHeights[index] = height },
                     lines = (pageStates[index] as? PageState.Done)
                         ?.takeIf { settings.overlay }?.translation?.lines.orEmpty(),
                     onTap = onTap
@@ -425,7 +539,7 @@ private fun NativeReader(
                             ) {
                                 items(total, key = { it }) { index ->
                                     val selected = index == visiblePage
-                                    val shape = RoundedCornerShape(14.dp)
+                                    val shape = MaterialTheme.shapes.small
                                     AsyncImage(
                                         model = remember(gallery.id, gallery.pagePaths[index]) {
                                             viewModel.pageModel(gallery.id, gallery.pagePaths[index])
@@ -453,7 +567,7 @@ private fun NativeReader(
     }
     if (sheet) {
         Dialog(onDismissRequest = { sheet = false }) {
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+            Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -644,6 +758,12 @@ private fun LazyListState.centeredPage(): Int {
     return visible.getOrNull(nearest)?.index ?: -1
 }
 
+/** How far [page] has been scrolled past the top of the viewport, as a share of its height. */
+private fun LazyListState.offsetFractionOf(page: Int): Float {
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == page } ?: return 0f
+    return pageOffsetFraction(item.offset, item.size)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ReaderPage(
@@ -656,11 +776,25 @@ private fun ReaderPage(
     tapOnY: Boolean,
     modifier: Modifier,
     viewportHeight: androidx.compose.ui.unit.Dp,
+    startOffset: Float,
+    resetAt: Int,
+    onResetConsumed: () -> Unit,
+    onScroll: (Float, Boolean) -> Unit,
+    onStripMeasured: (Int) -> Unit,
     lines: List<TranslatedLine>,
     onTap: (Float, Float) -> Unit
 ) {
     var aspect by remember(model) { mutableFloatStateOf(0.7f) }
+    var aspectKnown by remember(model) { mutableStateOf(false) }
+    var aspectReady by remember(model) { mutableStateOf(false) }
     var frame by remember { mutableStateOf(IntSize.Zero) }
+    val paged = fillWidth && !strip
+    val scrollState = rememberScrollState()
+    val restore = remember(paged) { PagedScrollRestore(startOffset) }
+    var pageHeight by remember { mutableIntStateOf(0) }
+    val latestScroll by rememberUpdatedState(onScroll)
+    val latestPageHeight by rememberUpdatedState(pageHeight)
+    val latestStripMeasured by rememberUpdatedState(onStripMeasured)
     val latestTap by rememberUpdatedState(onTap)
     val transform = rememberTransformableState { zoomChange, panChange, _ ->
         if (active) zoom.transform(zoomChange, panChange)
@@ -669,6 +803,62 @@ private fun ReaderPage(
         if (active) {
             zoom.width = frame.width.toFloat()
             zoom.height = frame.height.toFloat()
+        }
+    }
+    // The strip restore needs the item height laid out from the real image aspect. The first measure uses
+    // the 0.7 placeholder, so report only after a successful load supplies that aspect. A failed load
+    // leaves the restore pending: the stored share must not be replaced by a placeholder sample.
+    LaunchedEffect(strip, fillWidth, aspectReady, aspect, pageHeight, frame.width, frame.height) {
+        if (!strip || pageHeight <= 0 || frame.width <= 0) return@LaunchedEffect
+        if (fillWidth) {
+            if (!aspectReady) return@LaunchedEffect
+            if (abs(pageHeight - frame.width / aspect) > 1f) return@LaunchedEffect
+        }
+        latestStripMeasured(frame.height)
+    }
+    // A paged page scrolls inside itself while its image is taller than the window. Its zero start is not
+    // the reader's spot until the stored share has been applied on the measured page.
+    LaunchedEffect(paged, aspectKnown, aspect, pageHeight, frame.width, frame.height) {
+        if (!paged || !aspectKnown || pageHeight <= 0 || frame.width <= 0) return@LaunchedEffect
+        // The first measure uses the placeholder aspect; only the size laid out for the real image counts.
+        if (abs(pageHeight - frame.width / aspect) > 1f) return@LaunchedEffect
+        if (restore.pixels(pageHeight) == null) return@LaunchedEffect
+        if (pageHeight > frame.height) {
+            snapshotFlow { scrollState.maxValue }.first { it > 0 }
+            // A jump reset may have consumed the restore while this waited for layout.
+            val pending = restore.pixels(pageHeight) ?: return@LaunchedEffect
+            scrollState.scrollTo(pending)
+            restore.applied()
+            latestScroll(pagedOffsetFraction(scrollState.value, pageHeight), true)
+        } else {
+            // The whole page fits: there is no in-page spot to move to, so a stored share stays for a
+            // layout where the page is taller than the window.
+            restore.applied()
+        }
+    }
+    LaunchedEffect(resetAt, paged) {
+        if (resetAt <= 0 || !paged) return@LaunchedEffect
+        // The reader chose this page on purpose, so an older in-session spot must not win.
+        restore.applied()
+        scrollState.scrollTo(0)
+        latestScroll(0f, true)
+        onResetConsumed()
+    }
+    LaunchedEffect(paged, active, pageHeight) {
+        if (!paged || !active || pageHeight <= 0) return@LaunchedEffect
+        snapshotFlow {
+            Triple(scrollState.value, !scrollState.isScrollInProgress, scrollState.maxValue)
+        }.collect { (value, idle, max) ->
+            // Samples before the restore describe the top of an unmoved page, not where the reader was.
+            if (restore.restored && max > 0) latestScroll(pagedOffsetFraction(value, pageHeight), idle)
+        }
+    }
+    DisposableEffect(paged, active) {
+        onDispose {
+            // Leaving the page, including Back, keeps the spot even when a gesture never went idle.
+            if (paged && active && restore.restored && latestPageHeight > 0 && scrollState.maxValue > 0) {
+                latestScroll(pagedOffsetFraction(scrollState.value, latestPageHeight), true)
+            }
         }
     }
     Box(
@@ -687,13 +877,13 @@ private fun ReaderPage(
     ) {
         val imageModifier = if (fillWidth) Modifier.fillMaxWidth().aspectRatio(aspect)
         else Modifier.fillMaxWidth().height(viewportHeight)
-        val container = if (fillWidth && !strip) {
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+        val container = if (paged) {
+            Modifier.fillMaxSize().verticalScroll(scrollState)
         } else Modifier.fillMaxWidth()
         Box(container, contentAlignment = Alignment.Center) {
             // The image and the overlay share one box, so zoom and pan move the plates with the page.
             Box(
-                imageModifier.graphicsLayer {
+                imageModifier.onSizeChanged { pageHeight = it.height }.graphicsLayer {
                     if (active) {
                         scaleX = zoom.zoom
                         scaleY = zoom.zoom
@@ -711,8 +901,11 @@ private fun ReaderPage(
                         val drawable = it.result.drawable
                         if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
                             aspect = drawable.intrinsicWidth.toFloat() / drawable.intrinsicHeight
+                            aspectReady = true
                         }
-                    }
+                        aspectKnown = true
+                    },
+                    onError = { aspectKnown = true }
                 )
                 TranslationOverlay(lines, aspect)
             }

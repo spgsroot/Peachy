@@ -3,11 +3,11 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'          # автоматический запуск при пуше тега v1.0.0, v1.0.1 и т.п.
-  workflow_dispatch: # ручной запуск кнопкой Run workflow
+      - 'v*'
+  workflow_dispatch:
 
 permissions:
-  contents: write     # даём GITHUB_TOKEN право создавать релизы и загружать файлы
+  contents: read
 
 jobs:
   build:
@@ -16,60 +16,123 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - uses: ./.github/actions/setup-android
 
       - name: Build AAB and APK
         run: ./gradlew bundleRelease assembleRelease
 
-      - name: Sign AAB for Google Play
-        uses: r0adkll/sign-android-release@v1
-        id: sign_aab
-        with:
-          releaseDirectory: app/build/outputs/bundle/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+      - name: Sign APK and AAB with the publisher key
+        shell: bash
         env:
-          BUILD_TOOLS_VERSION: "34.0.0"
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          umask 077
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/peachy-signing.XXXXXX")
+          trap 'rm -rf -- "$signing_dir"' EXIT
+          keystore="$signing_dir/keystore"
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$keystore"
+          unset SIGNING_KEY
 
-      - name: Sign APK for RuStore & GitHub
-        uses: r0adkll/sign-android-release@v1
-        id: sign_apk
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+          mkdir -p dist
+          zipalign -P 16 -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "$signing_dir/aligned.apk"
+          apksigner sign --ks "$keystore" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEY_STORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --out dist/app-release-unsigned-signed.apk "$signing_dir/aligned.apk"
+          jarsigner -keystore "$keystore" -storepass:env KEY_STORE_PASSWORD -keypass:env KEY_PASSWORD \
+            -signedjar dist/app-release.aab app/build/outputs/bundle/release/app-release.aab "$KEY_ALIAS"
+
+      - name: Verify publisher signatures and native packaging
+        shell: bash
         env:
-          BUILD_TOOLS_VERSION: "34.0.0"
+          # SHA-256 of the signing certificate in the v3.6.0 APK.
+          EXPECTED_CERT: 1a94ec1ea1d58f9e8af06dd24bfddba78b43dc96897751fc8058c6af5c65a744
+        run: |
+          apk=dist/app-release-unsigned-signed.apk
+          aab=dist/app-release.aab
+          apk_cert=$(apksigner verify --print-certs "$apk" \
+            | awk '/^Signer #[0-9]+ certificate SHA-256 digest: / { print $NF }')
+          if [[ "$apk_cert" != "$EXPECTED_CERT" ]]; then
+            echo 'APK must have exactly the v3.6.0 publisher signer' >&2
+            exit 1
+          fi
 
-      # Всегда загружаем подписанные файлы как артефакты,
-      # чтобы ты мог скачать их даже без GitHub Release
+          # Pin the bundle's leaf certificate, then require all entries to be signed.
+          verification_dir=$(mktemp -d "$RUNNER_TEMP/peachy-verification.XXXXXX")
+          trap 'rm -rf -- "$verification_dir"' EXIT
+          cert="$verification_dir/publisher.pem"
+          truststore="$verification_dir/trusted.p12"
+          keytool -J-Duser.language=en -printcert -rfc -jarfile "$aab" | awk '
+            /^Signer #[0-9]+:/ { signers++ }
+            /^-----BEGIN CERTIFICATE-----$/ { certificates++ }
+            certificates == 1 && /^-----BEGIN CERTIFICATE-----$/ { capture = 1 }
+            capture { print }
+            /^-----END CERTIFICATE-----$/ { capture = 0 }
+            END { if (signers != 1 || certificates < 1) exit 1 }
+          ' > "$cert"
+          aab_cert=$(openssl x509 -in "$cert" -outform DER | sha256sum | cut -d ' ' -f 1)
+          if [[ "$aab_cert" != "$EXPECTED_CERT" ]]; then
+            echo 'AAB signer does not match the v3.6.0 publisher certificate' >&2
+            exit 1
+          fi
+          keytool -importcert -noprompt -alias publisher -file "$cert" \
+            -keystore "$truststore" -storetype PKCS12 -storepass changeit
+          jarsigner -verify -strict -keystore "$truststore" -storepass changeit "$aab" publisher
+
+          zipalign -c -P 16 4 "$apk"
+          python3 tools/adblock/verify-apk.py "$apk"
+          python3 - "$apk" "$aab" <<'PY'
+          import sys
+          from zipfile import ZipFile
+
+          def native_headers(path, prefix):
+              headers = {}
+              with ZipFile(path) as archive:
+                  for entry in archive.infolist():
+                      if entry.filename.startswith(prefix) and entry.filename.endswith(".so"):
+                          name = entry.filename[len(prefix):]
+                          if name in headers:
+                              sys.exit(f"{path}: duplicate native entry {name}")
+                          with archive.open(entry) as library:
+                              # Include ELF magic, class and e_machine, not the library payload.
+                              headers[name] = library.read(20)
+              return headers
+
+          apk, aab = sys.argv[1:]
+          if native_headers(aab, "base/lib/") != native_headers(apk, "lib/"):
+              sys.exit("AAB and APK differ in native library paths or ELF ABI headers")
+          print("AAB native entries match the verified APK ABIs")
+          PY
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: |
-            ${{ steps.sign_aab.outputs.signedReleaseFile }}
-            ${{ steps.sign_apk.outputs.signedReleaseFile }}
+            dist/app-release-unsigned-signed.apk
+            dist/app-release.aab
+          if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Release to GitHub
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: |
-            ${{ steps.sign_aab.outputs.signedReleaseFile }}
-            ${{ steps.sign_apk.outputs.signedReleaseFile }}
+          name: android-release
+          path: dist
+
+      - name: Create unpublished GitHub release for review
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/app-release-unsigned-signed.apk dist/app-release.aab \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "$GITHUB_REF_NAME" --notes ''

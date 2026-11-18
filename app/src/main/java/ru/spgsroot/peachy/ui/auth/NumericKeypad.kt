@@ -1,5 +1,6 @@
 package ru.spgsroot.peachy.ui.auth
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,12 @@ private val DigitRows = listOf(
     listOf('7', '8', '9')
 )
 
+/**
+ * Gap [NumericKeypad] keeps between keys of [keySize]. Callers that have to fit the keypad into a
+ * measured box size the keys against this rule, not against a second copy of it.
+ */
+fun keypadGap(keySize: Dp): Dp = if (keySize < 60.dp) 10.dp else 14.dp
+
 /** On-screen digits. [onConfirm] is omitted in dialogs that already have their own action. */
 @Composable
 fun NumericKeypad(
@@ -49,7 +56,7 @@ fun NumericKeypad(
     confirmEnabled: Boolean = false,
     keySize: Dp = 64.dp
 ) {
-    val gap = if (keySize < 60.dp) 10.dp else 14.dp
+    val gap = keypadGap(keySize)
     Column(
         modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -64,6 +71,7 @@ fun NumericKeypad(
                         size = keySize,
                         container = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         onClick = { onDigit(digit) }
                     ) {
                         Text(digit.toString(), style = MaterialTheme.typography.headlineMedium)
@@ -92,6 +100,7 @@ fun NumericKeypad(
                 size = keySize,
                 container = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 onClick = { onDigit('0') }
             ) {
                 Text("0", style = MaterialTheme.typography.headlineMedium)
@@ -100,8 +109,9 @@ fun NumericKeypad(
                 label = stringResource(R.string.auth_delete_digit),
                 enabled = enabled,
                 size = keySize,
-                container = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.primary,
+                container = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 onClick = onDelete
             ) {
                 Icon(Icons.AutoMirrored.Filled.Backspace, null, Modifier.size(keySize * .38f))
@@ -149,6 +159,7 @@ private fun RoundKey(
     container: Color,
     contentColor: Color,
     onClick: () -> Unit,
+    border: BorderStroke? = null,
     content: @Composable () -> Unit
 ) {
     Surface(
@@ -158,7 +169,7 @@ private fun RoundKey(
         shape = CircleShape,
         color = container,
         contentColor = contentColor,
-        shadowElevation = 4.dp
+        border = border
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
     }

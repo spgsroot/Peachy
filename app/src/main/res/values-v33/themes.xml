@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Peachy.Splash" parent="Base.Theme.Peachy.Splash">
+        <!-- Keep the mark when WM Shell would otherwise use a plain window on a share launch. -->
+        <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+    </style>
+</resources>

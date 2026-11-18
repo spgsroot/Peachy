@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pdf_loading">Открываем PDF…</string>
+    <string name="pdf_close">Закрыть</string>
+    <string name="pdf_back">Назад</string>
+    <string name="pdf_more">Ещё</string>
+    <string name="pdf_undo">Отменить</string>
+    <string name="pdf_apply">Применить</string>
+    <string name="pdf_cancel">Отмена</string>
+
+    <string name="pdf_page_indicator">Стр. %1$d из %2$d</string>
+    <string name="pdf_previous_page">Предыдущая страница</string>
+    <string name="pdf_next_page">Следующая страница</string>
+
+    <string name="pdf_tool_text">Текст</string>
+    <string name="pdf_tool_search">Поиск</string>
+    <string name="pdf_tool_annotate">Пометки</string>
+    <string name="pdf_tool_pages">Страницы</string>
+    <string name="pdf_tool_forms">Формы</string>
+
+    <string name="pdf_menu_save_copy">Сохранить копию</string>
+    <string name="pdf_menu_export_text">Экспорт текста</string>
+    <string name="pdf_menu_export_images">Экспорт страниц</string>
+    <string name="pdf_menu_signatures">Подписи</string>
+    <string name="pdf_menu_rotate">Повернуть страницу</string>
+
+    <string name="pdf_copy">Копировать</string>
+    <string name="pdf_edit_text">Изменить текст</string>
+    <string name="pdf_highlight">Выделить</string>
+    <string name="pdf_underline">Подчеркнуть</string>
+    <string name="pdf_strikeout">Зачеркнуть</string>
+    <string name="pdf_clear_selection">Снять выделение</string>
+    <string name="pdf_delete_annotation">Удалить пометку</string>
+    <string name="pdf_annotation">Пометка</string>
+
+    <string name="pdf_hint_ink">Проведите пальцем по странице, чтобы добавить штрих</string>
+    <string name="pdf_hint_note">Коснитесь страницы, чтобы поставить заметку</string>
+    <string name="pdf_hint_textbox">Коснитесь страницы, чтобы вставить текстовое поле</string>
+    <string name="pdf_hint_place_signature">Коснитесь страницы, чтобы поставить подпись</string>
+
+    <string name="pdf_annotations_title">Пометки</string>
+    <string name="pdf_annotations_select_hint">Выберите инструмент и работайте на странице. Свои пометки можно выбрать касанием и перетащить.</string>
+    <string name="pdf_annotations_empty">На этой странице пока нет ваших пометок</string>
+    <string name="pdf_note">Заметка</string>
+    <string name="pdf_note_title">Текстовая заметка</string>
+    <string name="pdf_note_label">Текст заметки</string>
+    <string name="pdf_note_hint">Заметка хранится в файле PDF и видна читателям документа</string>
+    <string name="pdf_ink">Рисунок</string>
+    <string name="pdf_textbox">Текстовое поле</string>
+    <string name="pdf_textbox_title">Текст на странице</string>
+    <string name="pdf_textbox_label">Текст</string>
+    <string name="pdf_textbox_hint">Текст остаётся векторным: это пометка поверх страницы, а не изменение исходного текста</string>
+
+    <string name="pdf_edit_title">Замена текста на месте</string>
+    <string name="pdf_edit_field">Новый текст</string>
+    <string name="pdf_edit_preview">Предпросмотр в исходном поле</string>
+    <string name="pdf_edit_overflow">Текст шире исходного поля примерно на %1$d пт и может наложиться на соседний</string>
+    <string name="pdf_edit_refused">Этот текст нельзя безопасно изменить:</string>
+    <string name="pdf_edit_refuse_rotated">страница повёрнута, координаты текста и содержимого не совпадают</string>
+    <string name="pdf_edit_refuse_offset">у страницы смещено начало координат</string>
+    <string name="pdf_edit_refuse_vertical">текст написан вертикально</string>
+    <string name="pdf_edit_refuse_empty">новый текст пустой</string>
+    <string name="pdf_edit_refuse_unchanged">текст не изменился</string>
+    <string name="pdf_edit_refuse_multiline">заменяется одна строка без переноса</string>
+    <string name="pdf_edit_refuse_long">слишком длинный текст для одной строки</string>
+    <string name="pdf_edit_refuse_glyphs">во встроенном шрифте нет нужных символов</string>
+    <string name="pdf_edit_refuse_line">строка не найдена</string>
+    <string name="pdf_edit_signed_warning">Это изменение может сделать существующие цифровые подписи в PDF недействительными или удалить их.</string>
+    <string name="pdf_edit_confirm_title">Удалить исходный текст?</string>
+    <string name="pdf_edit_confirm_body">Исходные глифы выбранной строки будут безвозвратно удалены из содержимого страницы, затем на их место встанет новый текст. Изображения и линии сохраняются, переноса строк нет. До сохранения копии действие можно отменить кнопкой «Отменить».</string>
+    <string name="pdf_edit_confirm_action">Удалить и заменить</string>
+
+    <string name="pdf_search_title">Поиск по документу</string>
+    <string name="pdf_search_field">Что найти</string>
+    <string name="pdf_search_run">Найти</string>
+    <string name="pdf_search_running">Ищем…</string>
+    <string name="pdf_search_none">Ничего не найдено</string>
+    <string name="pdf_search_hits">Найдено: %1$d</string>
+    <string name="pdf_search_position">%1$d из %2$d</string>
+    <string name="pdf_search_next">Следующее совпадение</string>
+    <string name="pdf_search_previous">Предыдущее совпадение</string>
+
+    <string name="pdf_forms_title">Поля формы</string>
+    <string name="pdf_forms_empty">В этом PDF нет полей формы</string>
+    <string name="pdf_form_apply">Записать значение</string>
+    <string name="pdf_flatten_forms">Свести форму в страницу</string>
+    <string name="pdf_flatten_warning">После сведения поля станут частью содержимого страницы: заполнять их будет нельзя. Действие необратимо, кроме кнопки «Отменить» до сохранения.</string>
+
+    <string name="pdf_pages_title">Страницы</string>
+    <string name="pdf_insert_page">Вставить пустую</string>
+    <string name="pdf_import_page">Импорт из PDF</string>
+    <string name="pdf_delete_page">Удалить</string>
+    <string name="pdf_rotate_page">Повернуть</string>
+    <string name="pdf_move_page_up">Выше</string>
+    <string name="pdf_move_page_down">Ниже</string>
+    <string name="pdf_pages_jump">Перейти к странице</string>
+    <string name="pdf_pages_note">Импортируется весь выбранный PDF; страницы вставляются после текущей. Исходный файл не изменяется.</string>
+
+    <string name="pdf_signatures_title">Подписи</string>
+    <string name="pdf_signatures_empty">В документе нет подписей</string>
+    <string name="pdf_signature_unknown_signer">Подписант не указан</string>
+    <string name="pdf_signature_valid">Целостность подписи подтверждена</string>
+    <string name="pdf_signature_digest_invalid">Подпись не совпадает с содержимым</string>
+    <string name="pdf_signature_not_trusted">Сертификат не подтверждён доверенным центром</string>
+    <string name="pdf_signature_unknown">Состояние подписи неизвестно</string>
+    <string name="pdf_signature_unsigned">Поле подписи не заполнено</string>
+    <string name="pdf_signature_signed">подписано</string>
+    <string name="pdf_drawn_signature_title">Нарисованная подпись</string>
+    <string name="pdf_drawn_signature_hint">Это рисунок чернилами поверх страницы, а не криптографическая подпись. Распишитесь в поле ниже и коснитесь страницы, чтобы поставить рисунок.</string>
+    <string name="pdf_drawn_signature_clear">Очистить</string>
+    <string name="pdf_drawn_signature_use">Поставить на страницу</string>
+    <string name="pdf_crypto_signature_title">Криптографическая подпись</string>
+    <string name="pdf_crypto_signature_hint">Нужен файл PKCS#12 (.p12/.pfx) с закрытым ключом и сертификатом. Пароль используется только для чтения ключа и не сохраняется.</string>
+    <string name="pdf_crypto_signature_action">Выбрать PKCS#12</string>
+    <string name="pdf_p12_title">Пароль PKCS#12</string>
+    <string name="pdf_p12_message">Введите пароль ключевого хранилища. Он нужен только для чтения ключа и не сохраняется в приложении.</string>
+    <string name="pdf_p12_field">Пароль</string>
+    <string name="pdf_p12_action">Подписать</string>
+
+    <string name="pdf_export_images_title">Экспорт страниц</string>
+    <string name="pdf_export_images_resolution">Разрешение</string>
+    <string name="pdf_export_images_format">Формат</string>
+    <string name="pdf_export_images_jpeg_note">JPEG не поддерживает прозрачность; страницы рендерятся на белом фоне</string>
+    <string name="pdf_export_images_action">Экспортировать</string>
+
+    <string name="pdf_password_title">Документ защищён паролем</string>
+    <string name="pdf_password_message">Введите пароль, чтобы открыть PDF. Пароль не сохраняется и не записывается в журналы.</string>
+    <string name="pdf_password_field">Пароль</string>
+    <string name="pdf_password_unlock">Открыть</string>
+    <string name="pdf_password_undo_title">Пароль для отмены</string>
+    <string name="pdf_password_undo_message">Документ защищён паролем. Чтобы вернуть предыдущую версию, введите пароль ещё раз: приложение его не хранит.</string>
+
+    <string name="pdf_read_only_banner">Только просмотр: владелец документа запретил изменение и пометки</string>
+
+    <string name="pdf_notice_copied">Текст скопирован</string>
+    <string name="pdf_notice_annotation_added">Пометка добавлена</string>
+    <string name="pdf_notice_text_replaced">Текст заменён. Сохраните копию, чтобы получить файл.</string>
+    <string name="pdf_notice_page_inserted">Пустая страница вставлена</string>
+    <string name="pdf_notice_page_imported">Страницы импортированы</string>
+    <string name="pdf_notice_page_deleted">Страница удалена</string>
+    <string name="pdf_notice_page_rotated">Страница повёрнута</string>
+    <string name="pdf_notice_forms_flattened">Форма сведена в страницу</string>
+    <string name="pdf_notice_signed">Документ подписан</string>
+    <string name="pdf_notice_drawn_signature_added">Рисунок подписи добавлен как пометка</string>
+    <string name="pdf_notice_saved_copy">Копия PDF сохранена</string>
+    <string name="pdf_notice_text_exported">Текст сохранён в UTF-8</string>
+    <string name="pdf_notice_images_exported">Страницы экспортированы</string>
+    <string name="pdf_notice_undo_done">Прошлая версия восстановлена</string>
+
+    <string name="pdf_error_too_large">Файл больше 100 МиБ и не будет открыт</string>
+    <string name="pdf_error_page_limit">Слишком много страниц для безопасного открытия</string>
+    <string name="pdf_error_object_limit">Слишком сложный PDF: превышен предел объектов</string>
+    <string name="pdf_error_not_pdf">Это не PDF-файл</string>
+    <string name="pdf_error_corrupt">PDF повреждён или не читается</string>
+    <string name="pdf_error_password_required">Нужен пароль документа</string>
+    <string name="pdf_error_wrong_password">Неверный пароль</string>
+    <string name="pdf_error_read_only">Документ разрешает только просмотр</string>
+    <string name="pdf_error_render">Не удалось отрисовать страницу</string>
+    <string name="pdf_error_no_text">На странице нет текстового слоя</string>
+    <string name="pdf_error_edit_failed">Не удалось изменить текст; страница не тронута</string>
+    <string name="pdf_error_edit_unsupported">Этот текст нельзя изменить безопасно</string>
+    <string name="pdf_error_save_failed">Не удалось записать рабочую копию</string>
+    <string name="pdf_error_export_failed">Не удалось сохранить файл в выбранное место</string>
+    <string name="pdf_error_import_failed">Не удалось импортировать страницы</string>
+    <string name="pdf_error_import_not_pdf">Выбранный файл не является PDF</string>
+    <string name="pdf_error_form_field">Поле формы не приняло значение</string>
+    <string name="pdf_error_sign_failed">Не удалось подписать документ</string>
+    <string name="pdf_error_sign_no_cert">В файле нет сертификата и закрытого ключа</string>
+    <string name="pdf_error_sign_wrong_password">Не удалось открыть PKCS#12: неверный пароль или формат</string>
+    <string name="pdf_error_sign_unsupported">Этот тип ключа не поддерживается для подписи</string>
+    <string name="pdf_error_annotation">Не удалось изменить пометку</string>
+    <string name="pdf_thumbnails_menu">Миниатюры</string>
+    <string name="pdf_page_thumbnail">Страница %1$d</string>
+</resources>

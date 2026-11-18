@@ -4,7 +4,10 @@ import android.content.Context
 import android.os.StatFs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,14 +32,16 @@ class InternalStorageManager @Inject constructor(
         if (totalBytes > maxBytes) {
             throw IllegalArgumentException("File is too large: $totalBytes bytes")
         }
-        if (totalBytes > 0 && totalBytes + MIN_FREE_BYTES > getAvailableSpace()) {
+        val available = getAvailableSpace()
+        if (totalBytes > 0 && (available < MIN_FREE_BYTES || totalBytes > available - MIN_FREE_BYTES)) {
             throw IllegalStateException("Not enough free space to save file")
         }
 
         val file = File(videosDir, File(fileName).name)
-        return try {
+        val part = File.createTempFile(".${file.name}.", ".part", videosDir)
+        try {
             inputStream.use { input ->
-                file.outputStream().use { output ->
+                part.outputStream().use { output ->
                     val buffer = ByteArray(COPY_BUFFER_SIZE)
                     var bytesCopied = 0L
                     var read: Int
@@ -62,33 +67,39 @@ class InternalStorageManager @Inject constructor(
                             }
                         }
                     }
-
-                    if (onProgress != null && totalBytes > 0) {
-                        onProgress(100) // Гарантированно отдаём 100% в конце
+                    if (totalBytes >= 0 && bytesCopied != totalBytes) {
+                        throw IOException("File size changed while reading: expected $totalBytes, got $bytesCopied")
                     }
+                    if (onProgress != null && totalBytes > 0) onProgress(100)
                 }
             }
-            file
-        } catch (e: Exception) {
-            file.delete()
-            throw e
+            Files.move(part.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            return file
+        } catch (failure: Throwable) {
+            // Never remove an existing destination when a replacement could not be completed.
+            part.delete()
+            throw failure
         }
     }
 
+    /** Returns a complete, uniquely named cover; the caller publishes it by updating the video row. */
     fun saveThumbnail(inputStream: InputStream, videoId: Long): String {
-        val fileName = "$videoId.jpg"
-        val file = File(thumbnailsDir, fileName)
-        inputStream.use { input ->
-            file.outputStream().use { output ->
-                input.copyTo(output)
-            }
+        val file = File.createTempFile("${videoId}_", ".jpg", thumbnailsDir)
+        try {
+            inputStream.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
+            return file.absolutePath
+        } catch (failure: Throwable) {
+            file.delete()
+            throw failure
         }
-        return file.absolutePath
     }
 
     fun delete(videoId: Long): Boolean {
-        val thumbnail = File(thumbnailsDir, "$videoId.jpg")
-        return thumbnail.delete()
+        var deleted = false
+        thumbnailsDir.listFiles()?.forEach { file ->
+            if (file.isThumbnailFor(videoId) && file.delete()) deleted = true
+        }
+        return deleted
     }
 
     fun deleteFile(filePath: String): Boolean {
@@ -119,7 +130,11 @@ class InternalStorageManager @Inject constructor(
     fun getThumbnailFile(videoId: Long): File? {
         val files = thumbnailsDir.listFiles() ?: return null
         return files.find { it.nameWithoutExtension == videoId.toString() }
+            ?: files.find { it.isThumbnailFor(videoId) }
     }
+
+    private fun File.isThumbnailFor(videoId: Long): Boolean =
+        nameWithoutExtension == videoId.toString() || nameWithoutExtension.startsWith("${videoId}_")
 
     fun getTotalSize(): Long {
         val videoSize = videosDir.listFiles()?.sumOf { it.length() } ?: 0L

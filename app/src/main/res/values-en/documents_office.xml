@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Office editor: only reachable after the build opt-in and a successful engine probe. -->
+    <string name="office_title">Office document</string>
+    <string name="office_preparing">Preparing the page…</string>
+    <string name="office_viewport_description">Document page. Zoom and navigation are the buttons below it.</string>
+    <string name="office_edited">Edited in this session</string>
+    <string name="office_read_only_badge">Read-only</string>
+
+    <!-- Gate states -->
+    <string name="office_gate_disabled_title">The Office editor is off in this build</string>
+    <string name="office_gate_disabled_body">The Office integration is not enabled. Imported files stay untouched; this build cannot open or change them here.</string>
+    <string name="office_gate_refused_title">This document is not opened here</string>
+    <string name="office_refused_unknown">The session format is not recognised.</string>
+    <string name="office_refused_not_office">PDFs and images open in their own editors, not in Office.</string>
+
+    <!-- Legacy .ppt: text-only, read-only, in file order -->
+    <string name="office_legacy_scope">Text only</string>
+    <string name="office_legacy_scope_body">This legacy .ppt is open read-only: slide text and notes are shown in file order. Images, layout and export are not available.</string>
+    <string name="office_legacy_slide">Slide %1$d</string>
+    <string name="office_legacy_hidden">Hidden slide</string>
+    <string name="office_legacy_table">Table</string>
+    <string name="office_legacy_notes">Notes</string>
+    <string name="office_legacy_loading">Extracting slide text…</string>
+    <string name="office_legacy_empty_title">This .ppt has no text</string>
+    <string name="office_legacy_empty_body">The engine found neither slide text nor notes. Images and layout are not shown for legacy .ppt: this build opens it as text only.</string>
+    <string name="office_legacy_failed_title">The text could not be extracted</string>
+    <string name="office_legacy_failed_body">The engine returned no slide text. The file is unchanged. Open it again, or convert it to .pptx outside Peachy.</string>
+
+    <string name="office_unavailable_title">The Office engine is unavailable</string>
+    <string name="office_unavailable_bridge_classes">This build has no engine Java bridge.</string>
+    <string name="office_unavailable_native_libraries">The engine native libraries are missing or failed to load.</string>
+    <string name="office_unavailable_engine_assets">The engine resource tree (program/unpack) is not packaged.</string>
+    <string name="office_unavailable_build_manifest">The pinned engine build manifest is missing or invalid.</string>
+    <string name="office_unavailable_tile_mode">This engine build does not use the verified pixel format, so rendering is refused.</string>
+    <string name="office_unavailable_initialisation">Engine initialisation failed.</string>
+    <string name="office_unavailable_macro_lock">The engine build does not declare the macro lock, so the engine is refused.</string>
+
+    <!-- Notices -->
+    <string name="office_notice_edits_memory">Edits live only in this session and are not written back to the working copy. The imported file is unchanged; export a copy to keep the result.</string>
+    <string name="office_notice_legacy">Legacy binary .doc: text and layout are approximate.</string>
+    <string name="office_notice_macro">Macros in this file are never executed and never saved into an export.</string>
+    <string name="office_notice_xlsb">XLSB is import-only: export writes XLSX, ODS, CSV, TSV or PDF.</string>
+    <string name="office_notice_read_only">Presentations open read-only. Export creates a copy.</string>
+
+    <!-- Navigation and zoom -->
+    <string name="office_page_previous">Previous page</string>
+    <string name="office_page_next">Next page</string>
+    <string name="office_page_of">Page %1$d of %2$d</string>
+    <string name="office_part_previous">Previous part</string>
+    <string name="office_part_next">Next part</string>
+    <string name="office_part_of">Sheet %1$d of %2$d</string>
+    <string name="office_slide_of">Slide %1$d of %2$d</string>
+    <string name="office_slides">Slides</string>
+    <string name="office_notes">Notes</string>
+    <string name="office_zoom_out">Zoom out</string>
+    <string name="office_zoom_in">Zoom in</string>
+    <string name="office_zoom_fit">Fit</string>
+    <string name="office_zoom_percent">%1$d%%</string>
+
+    <!-- Writer and Calc editing (only commands the adapter allowlists per family) -->
+    <string name="office_cmd_bold">Bold</string>
+    <string name="office_cmd_italic">Italic</string>
+    <string name="office_cmd_underline">Underline</string>
+    <string name="office_cmd_center">Centre</string>
+    <string name="office_cmd_justify">Justify</string>
+    <string name="office_cmd_bullets">Bulleted list</string>
+    <string name="office_cmd_numbering">Numbered list</string>
+    <string name="office_cmd_undo">Undo</string>
+    <string name="office_cmd_redo">Redo</string>
+    <string name="office_cmd_select_all">Select all</string>
+    <string name="office_cmd_delete">Delete</string>
+    <string name="office_cmd_row_above">Row above</string>
+    <string name="office_cmd_row_below">Row below</string>
+    <string name="office_cmd_column_before">Column left</string>
+    <string name="office_cmd_column_after">Column right</string>
+    <string name="office_cmd_delete_row">Delete row</string>
+    <string name="office_cmd_delete_column">Delete column</string>
+    <string name="office_cmd_merge">Merge</string>
+    <string name="office_cmd_split">Split</string>
+    <string name="office_key_backspace">Delete character before</string>
+    <string name="office_key_return">Return</string>
+    <string name="office_key_tab">Tab</string>
+    <string name="office_key_delete">Delete character after</string>
+    <string name="office_key_left">Left</string>
+    <string name="office_key_up">Up</string>
+    <string name="office_key_down">Down</string>
+    <string name="office_key_right">Right</string>
+    <string name="office_insert_label">Text to insert</string>
+    <string name="office_insert_action">Insert</string>
+    <string name="office_text_invalid">Too long, or it contains unsupported control characters.</string>
+
+    <!-- Export -->
+    <string name="office_export_copy">Export a copy</string>
+    <string name="office_export_title">Export a copy</string>
+    <string name="office_export_body">The copy is written through the system picker. The working copy and the imported file stay unchanged.</string>
+    <string name="office_export_active_sheet_only">Active sheet only</string>
+    <string name="office_busy_wait">Wait for the current operation to finish.</string>
+    <string name="office_notice_exported">Copy exported</string>
+
+    <!-- Leaving -->
+    <string name="office_leave_title">Leave with unsaved edits?</string>
+    <string name="office_leave_body">Edits live only in this session and the imported file is unchanged. Export a copy, discard the edits, or stay in the editor.</string>
+    <string name="office_leave_save">Save a copy</string>
+    <string name="office_leave_discard">Discard edits</string>
+    <string name="office_leave_cancel">Stay</string>
+
+    <!-- Errors: typed, never engine text or document content -->
+    <string name="office_error_engine_unavailable">The Office engine is unavailable.</string>
+    <string name="office_error_engine">The engine returned an error.</string>
+    <string name="office_error_busy">Another Office document is already open in this process.</string>
+    <string name="office_error_open">The document could not be opened.</string>
+    <string name="office_error_family">The document type does not match the format detected on import.</string>
+    <string name="office_error_document">The document size cannot be rendered.</string>
+    <string name="office_error_managed">The file is outside the session\'s private working directory.</string>
+    <string name="office_error_part">That part does not exist in this document.</string>
+    <string name="office_error_input">The engine rejected the input.</string>
+    <string name="office_error_read_only">This document cannot be edited here.</string>
+    <string name="office_error_command">That command is not allowed for this document family.</string>
+    <string name="office_error_render">The page could not be rendered.</string>
+    <string name="office_error_export">The export could not be created.</string>
+    <string name="office_error_export_invalid">The export failed its file validation.</string>
+    <string name="office_error_save">The copy could not be written to the chosen place.</string>
+    <string name="office_error_delete">The session files could not be deleted.</string>
+    <string name="office_error_not_open">The document is already closed.</string>
+</resources>

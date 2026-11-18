@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_recent_queries_expanded">Recent queries: panel expanded</string>
+    <string name="manga_recent_queries_collapsed">Recent queries: panel collapsed</string>
+    <string name="manga_recent_queries_toggle">Expand or collapse recent queries</string>
+</resources>

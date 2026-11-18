@@ -1,0 +1,449 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T01:57:12Z",
+  "title": "Design System: Peachy Android",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Brand Black",
+        "usage": "Window, status/navigation bars, splash and media ground."
+      },
+      "on-background": {
+        "role": "neutral",
+        "displayName": "Off-white",
+        "usage": "Primary text and icons on the brand black."
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "usage": "App bars and the authentication surface."
+      },
+      "on-surface": {
+        "role": "neutral",
+        "displayName": "Off-white",
+        "usage": "Text and icons on graphite surfaces."
+      },
+      "surface-variant": {
+        "role": "neutral",
+        "displayName": "Raised Graphite",
+        "usage": "Unselected wide cards and settings blocks."
+      },
+      "on-surface-variant": {
+        "role": "neutral",
+        "displayName": "Muted Lavender Grey",
+        "usage": "Metadata, hints, section labels and secondary icons."
+      },
+      "surface-container-low": {
+        "role": "neutral",
+        "displayName": "Deep Graphite",
+        "usage": "Recessed lists and drawer body."
+      },
+      "surface-container": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "usage": "Auth card, keypad delete key, translation panel."
+      },
+      "surface-container-high": {
+        "role": "neutral",
+        "displayName": "Card Graphite",
+        "usage": "Cards, neutral keys and the browser action row."
+      },
+      "surface-container-highest": {
+        "role": "neutral",
+        "displayName": "High Graphite",
+        "usage": "Tab thumbnails and raised local elements."
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Dusty Pink",
+        "usage": "Filled actions, selection, focus and the wordmark period."
+      },
+      "on-primary": {
+        "role": "primary",
+        "displayName": "Brand Black",
+        "usage": "Content on dusty-pink actions."
+      },
+      "primary-container": {
+        "role": "primary",
+        "displayName": "Deep Rose",
+        "usage": "Selected cards and the selection-mode top bar."
+      },
+      "on-primary-container": {
+        "role": "primary",
+        "displayName": "Pale Rose",
+        "usage": "Content on the deep-rose selection surface."
+      },
+      "secondary": {
+        "role": "secondary",
+        "displayName": "Muted Rose",
+        "usage": "Connected/idle device state."
+      },
+      "secondary-container": {
+        "role": "secondary",
+        "displayName": "Rose Shadow",
+        "usage": "Active browser tab card."
+      },
+      "on-secondary-container": {
+        "role": "secondary",
+        "displayName": "Rose Tint",
+        "usage": "Content on the active tab card where a container-relative colour is needed."
+      },
+      "tertiary": {
+        "role": "tertiary",
+        "displayName": "Lilac Haze",
+        "usage": "Active device state."
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Steel Outline",
+        "usage": "Interactive boundaries such as keypad keys."
+      },
+      "outline-variant": {
+        "role": "neutral",
+        "displayName": "Graphite Hairline",
+        "usage": "Decorative dividers only; never a control boundary."
+      },
+      "error": {
+        "role": "neutral",
+        "displayName": "Soft Red",
+        "usage": "Wrong password, failure and destructive actions."
+      },
+      "on-error": {
+        "role": "neutral",
+        "displayName": "Deep Red",
+        "usage": "Content on the error colour."
+      },
+      "error-container": {
+        "role": "neutral",
+        "displayName": "Error Red",
+        "usage": "Error surfaces where a filled error container is needed."
+      },
+      "on-error-container": {
+        "role": "neutral",
+        "displayName": "Pale Red",
+        "usage": "Content on the error container."
+      },
+      "inverse-surface": {
+        "role": "neutral",
+        "displayName": "Inverse Off-white",
+        "usage": "Material inverse surfaces such as inverse snackbars."
+      },
+      "inverse-on-surface": {
+        "role": "neutral",
+        "displayName": "Inverse Graphite",
+        "usage": "Content on inverse surfaces."
+      },
+      "inverse-primary": {
+        "role": "primary",
+        "displayName": "Deep Pink",
+        "usage": "Primary accent on inverse surfaces."
+      }
+    },
+    "typographyMeta": {
+      "display-large": {
+        "displayName": "Display Large",
+        "purpose": "Declared for completeness; not used by current screens."
+      },
+      "display-medium": {
+        "displayName": "Display Medium",
+        "purpose": "Declared for completeness; not used by current screens."
+      },
+      "display-small": {
+        "displayName": "Display Small",
+        "purpose": "Declared for completeness; not used by current screens."
+      },
+      "headline-large": {
+        "displayName": "Headline Large",
+        "purpose": "Full-screen headings when a future surface needs one."
+      },
+      "headline-medium": {
+        "displayName": "Headline Medium",
+        "purpose": "Onboarding welcome, keypad digits and the lockup exception."
+      },
+      "headline-small": {
+        "displayName": "Headline Small",
+        "purpose": "Settings drawer section titles and the empty-state title."
+      },
+      "title-large": {
+        "displayName": "Title Large",
+        "purpose": "Revealed password digits."
+      },
+      "title-medium": {
+        "displayName": "Title Medium",
+        "purpose": "Action labels."
+      },
+      "title-small": {
+        "displayName": "Title Small",
+        "purpose": "Browser sheet section headers."
+      },
+      "body-large": {
+        "displayName": "Body Large",
+        "purpose": "Onboarding feature rows and longer readable copy."
+      },
+      "body-medium": {
+        "displayName": "Body Medium",
+        "purpose": "Status and explanatory copy."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Gallery card titles and inline errors."
+      },
+      "label-large": {
+        "displayName": "Label Large",
+        "purpose": "Compact control labels."
+      },
+      "label-medium": {
+        "displayName": "Label Medium",
+        "purpose": "Small control labels and chips."
+      },
+      "label-small": {
+        "displayName": "Label Small",
+        "purpose": "Gallery metadata, chips and dense labels; the most-used label step."
+      }
+    },
+    "shapeMeta": {
+      "extra-small": {
+        "displayName": "Extra small",
+        "usage": "Chips, manga cover clips, tab-count badge and the browser close glyph."
+      },
+      "small": {
+        "displayName": "Small",
+        "usage": "List previews, thumbnails, queue cards, status pills and compact sheets."
+      },
+      "medium": {
+        "displayName": "Medium",
+        "usage": "Gallery/photo cards, browser tab cards, settings blocks and password digit rows."
+      },
+      "large": {
+        "displayName": "Large",
+        "usage": "Onboarding and empty-state primary actions and text actions."
+      },
+      "extra-large": {
+        "displayName": "Extra large",
+        "usage": "Auth card, reader settings sheet, password dialog and the translation panel's top corners."
+      },
+      "round": {
+        "displayName": "Circle",
+        "usage": "Keypad keys and circular icon controls."
+      }
+    },
+    "motion": [
+      {
+        "name": "player-controls",
+        "value": "Material 3 AnimatedVisibility with fadeOut() (library default; no custom duration or easing in source)",
+        "purpose": "Controls appear with the component default and fade after inactivity."
+      },
+      {
+        "name": "translation-panel",
+        "value": "Modifier.animateContentSize() (Compose default spring; no custom spec)",
+        "purpose": "Collapsed one-line panel grows to the expanded translation while keeping the page visible."
+      },
+      {
+        "name": "splash-handoff",
+        "value": "windowSplashScreenAnimationDuration 200 ms plus the existing pop/fade exit helper",
+        "purpose": "Splash mark hands off to the app without a separate brand animation."
+      },
+      {
+        "name": "drawer-and-sheets",
+        "value": "Material 3 ModalNavigationDrawer and ModalBottomSheet defaults",
+        "purpose": "Navigation surfaces use platform motion; the browser tab sheet changes only its initial expansion state."
+      }
+    ],
+    "layoutGates": [
+      {
+        "name": "onboarding-content-width",
+        "value": "480dp maximum"
+      },
+      {
+        "name": "auth-card-width",
+        "value": "420dp maximum"
+      },
+      {
+        "name": "keypad-compact",
+        "value": "56dp keys when height < 640dp or width < 360dp; otherwise 72dp"
+      },
+      {
+        "name": "wordmark-slot",
+        "value": "40dp + 96dp × fontScale of available title width"
+      },
+      {
+        "name": "verified-device",
+        "value": "1080x2400 px at density 420 (411dp), font scale 1.0 and 1.3, portrait and landscape"
+      }
+    ],
+    "elevation": {
+      "strategy": "tonal",
+      "shadows": "No drop shadows on app chrome; Material components keep their own default tonal states. Black/white scrims appear only over media.",
+      "tonalOrder": [
+        "{colors.surface-container-low}",
+        "{colors.surface-container}",
+        "{colors.surface-container-high}",
+        "{colors.surface-container-highest}"
+      ],
+      "explicitTonalElevation": [
+        {
+          "name": "translation-panel",
+          "value": "3dp",
+          "colorToken": "{colors.surface-container}",
+          "purpose": "Panel overlays page art and needs separation without a shadow."
+        }
+      ]
+    },
+    "launcher": {
+      "adaptiveCanvas": "108dp",
+      "markHeight": "56dp",
+      "markWidth": "47.85dp",
+      "furthestPointFromCentre": "30.9dp",
+      "safeRadius": "33dp (66dp adaptive safe zone)",
+      "legacyRasters": "48/72/96/144/192 px; rounded-square tile radius 22.5%, mark at 50% of tile height; round icon mark at 46%",
+      "canonicalVector": "app/src/main/res/drawable/ic_peachy_mark.xml",
+      "provenance": ".impeccable/brand-assets-provenance.json"
+    },
+    "evidence": {
+      "runtimeReview": ".impeccable/review/android-runtime-review.md",
+      "buildLog": ".impeccable/review/native-build-final.txt",
+      "exercise": "Phone runtime verified at 1080x2400/density 420, portrait and landscape, font scale 1.0 and 1.3, gesture and three-button navigation.",
+      "limits": [
+        "Manga reader, translation panel and photo viewer reviewed in code only; the live catalogue is adult content.",
+        "Russian layout exercised in the player top bar, settings drawer and browser tab sheet; initial broader screen captures are en-US.",
+        "No tablet class, security audit or full regression suite claimed.",
+        "16 KB page-size compatibility warning for bundled native libraries remains an observed packaging limit."
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "action-primary",
+      "description": "Filled dusty-pink action, one per screen (onboarding set-password instance shown). VISUAL PREVIEW ONLY of the native Compose Button, not app implementation.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Set password</button>",
+      "css": ".ds-btn-primary { box-sizing: border-box; min-height: 56px; padding: 0 24px; border: 0; border-radius: 20px; background: #E7A7BE; color: #0B0B0D; font: 500 16px/24px 'Roboto', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.15px; cursor: pointer; transition: filter 120ms ease, transform 120ms ease; } .ds-btn-primary:hover { filter: brightness(1.05); } .ds-btn-primary:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 3px; } .ds-btn-primary:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Keypad key",
+      "kind": "custom",
+      "refersTo": "key-neutral",
+      "description": "Circular neutral key: surface-container-high fill, 1dp outline boundary, headlineMedium digit. VISUAL PREVIEW ONLY; native size is 72dp (56dp on compact screens).",
+      "html": "<button class=\"ds-key\" type=\"button\">5</button>",
+      "css": ".ds-key { box-sizing: border-box; width: 72px; height: 72px; border-radius: 50%; background: #1C1F24; color: #F4F4F5; border: 1px solid #6F737D; font: 400 28px/36px 'Roboto', 'Helvetica Neue', Arial, sans-serif; cursor: pointer; transition: background 120ms ease; } .ds-key:hover { background: #23262C; } .ds-key:focus-visible { outline: 2px solid #E7A7BE; outline-offset: 2px; } .ds-key:active { background: #262A31; }"
+    },
+    {
+      "name": "Browser tab card — active and inactive",
+      "kind": "card",
+      "refersTo": "card-tab",
+      "description": "Inactive tab on surface-container-high with a 1dp hairline; active tab on secondary-container with a 2dp primary border. VISUAL PREVIEW ONLY of the native tab grid card.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-tab-active\" type=\"button\" role=\"tab\" aria-selected=\"true\">Active tab</button><button class=\"ds-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\">Tab</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 12px; } .ds-tab { box-sizing: border-box; width: 160px; min-height: 112px; padding: 12px; border-radius: 12px; background: #1C1F24; color: #F4F4F5; border: 1px solid #2A2D33; font: 500 12px/16px 'Roboto', 'Helvetica Neue', Arial, sans-serif; text-align: left; cursor: pointer; } .ds-tab-active { background: #3A2C33; border: 2px solid #E7A7BE; } .ds-tab:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Brand lockup",
+      "kind": "custom",
+      "refersTo": "brand-lockup",
+      "description": "Geometric P mark with the live 'peachy.' wordmark and dusty-pink period, as used in the auth card, drawer and player top bar. VISUAL PREVIEW ONLY; the app draws live text with PeachyBrand.",
+      "html": "<div class=\"ds-brand\"><svg class=\"ds-brand-mark\" viewBox=\"0 0 135 158\" width=\"27.34\" height=\"32\" role=\"img\" aria-label=\"Peachy\"><path fill=\"#F4F4F5\" d=\"M60,0C111,0 134,27 134,44V60C134,62 131,112 57,112V128.5C57,144.24 44.24,157 28.5,157C12.76,157 0,144.24 0,128.5V68C0,32 40,0 60,0Z\"/><path fill=\"#E7A7BE\" d=\"M65,1H103C114.05,1 123,9.95 123,21V42C123,53.05 114.05,62 103,62H65C53.95,62 45,53.05 45,42V21C45,9.95 53.95,1 65,1Z\"/></svg><span class=\"ds-brand-word\">peachy<span class=\"ds-brand-period\">.</span></span></div>",
+      "css": ".ds-brand { display: inline-flex; align-items: center; gap: 10px; background: #0B0B0D; padding: 8px 4px; } .ds-brand-mark { display: block; width: 27.34px; height: 32px; } .ds-brand-word { color: #F4F4F5; font: 600 28px/36px 'Roboto', 'Helvetica Neue', Arial, sans-serif; letter-spacing: -0.5px; } .ds-brand-period { color: #E7A7BE; }"
+    },
+    {
+      "name": "Selected media card",
+      "kind": "card",
+      "refersTo": "card-media-selected",
+      "description": "Gallery card in selection state: primary-container surface with on-primary-container content and a small-radius preview. VISUAL PREVIEW ONLY of the native selectable card.",
+      "html": "<div class=\"ds-card-media-selected\"><div class=\"ds-card-thumb\"></div><span class=\"ds-card-title\">Sample clip</span></div>",
+      "css": ".ds-card-media-selected { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; width: 168px; padding: 12px; border-radius: 12px; background: #3A2430; color: #F7DCE7; font: 400 14px/20px 'Roboto', 'Helvetica Neue', Arial, sans-serif; } .ds-card-thumb { width: 128px; aspect-ratio: 16 / 9; border-radius: 8px; background: #23262C; } .ds-card-title { font-weight: 500; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Private Graphite Workspace",
+    "overview": "Peachy is an existing native Android media workspace, not a marketing site. The visual system keeps that topology and restyles it through Material 3: full color roles, the standard type scale, the shared shape scale, native navigation and system Back. Depth comes from tonal surfaces, not chrome. Real media stays the loudest thing on every screen; the brand speaks through graphite ground, off-white text, dusty-pink actions and the geometric P lockup rather than through decorative cards, gradients or web landing patterns.\n\nThe scheme is dark only and deliberate. Dynamic Color is not used: a wallpaper-derived scheme would replace the brand and can produce light surfaces the app was never verified against. Every role is set explicitly, including containers, inverse pairs and error, so no default Material purple or the previous amber palette survives. The same components serve English and Russian copy; layout is phone-first and must survive a 1.3 font scale, landscape and both gesture and three-button navigation.",
+    "keyCharacteristics": [
+      "Complete explicit Material 3 dark color scheme; no dynamic color and no light theme.",
+      "Roboto from the platform, full Material type scale in sp; no bundled display face.",
+      "Tonal layering on black/graphite; no drop shadows on app chrome.",
+      "Dusty pink reserved for actions, selection, focus and the wordmark period.",
+      "Native components and system Back; icon-only or mark-only fallbacks before any clipping.",
+      "Black media stages and scrims where honest contrast over video and page art matters."
+    ],
+    "rules": [
+      {
+        "name": "The One Pink Voice Rule",
+        "section": "colors",
+        "body": "primary marks actions, selection and state, and nothing else. Informational section labels use on-surface-variant, body copy uses on-surface or on-background, because a screen where everything is pink has no primary action left."
+      },
+      {
+        "name": "The Hairline Boundary Rule",
+        "section": "colors",
+        "body": "outline-variant draws dividers and nothing interactive. Any control edge — keypad key, outlined button, count badge that needs a border — uses outline so the boundary keeps a perceivable contrast on both the auth card and higher-tonal dialogs."
+      },
+      {
+        "name": "The Dark-Only Rule",
+        "section": "colors",
+        "body": "Do not add a light scheme, dynamicColorScheme, or a per-screen background override. Both platform night mode and the app resolve to the same brand black."
+      },
+      {
+        "name": "The System Face Rule",
+        "section": "typography",
+        "body": "Roboto only. Do not bundle a display font, apply a custom FontFamily, or use letter-spacing as a substitute for hierarchy. Brand voice is color, mark and spacing."
+      },
+      {
+        "name": "The sp Rule",
+        "section": "typography",
+        "body": "Every size, line height and letter spacing stays in sp so the system font-size setting applies. Fixed px text or fixed-height text containers that cannot grow are defects."
+      },
+      {
+        "name": "The Inset Rule",
+        "section": "layout",
+        "body": "The bottom-most interactive content clears navigationBars ∪ mandatorySystemGestures, verified for both navigation modes. Insets are applied once: per surface, never nested a second time."
+      },
+      {
+        "name": "The Back Rule",
+        "section": "layout",
+        "body": "A modal surface consumes Back before the activity does. Predictive-back animation is not claimed as verified; the dismissal contract is."
+      },
+      {
+        "name": "The Tonal-Only Rule",
+        "section": "elevation",
+        "body": "No drop shadows on app chrome. If a surface must separate from its background, move it one tonal step or add a 1 dp outline; do not add blur, glow or elevation animation for decoration."
+      },
+      {
+        "name": "The Media Exception Rule",
+        "section": "elevation",
+        "body": "Scrims exist only where real media makes contrast unknowable. Do not reuse the black scrim treatment for cards, sheets or dialogs."
+      },
+      {
+        "name": "The Shape-of-the-Theme Rule",
+        "section": "shapes",
+        "body": "Use the named shape step that matches the component's role. Do not invent a radius per screen or per state; the only allowed derivative is the translation panel's documented top-only shape."
+      },
+      {
+        "name": "The One Primary Action Rule",
+        "section": "components",
+        "body": "Each screen or sheet has at most one filled primary action. A second competing action becomes a text or outlined control; a dialog confirmation may be the single primary for that dialog."
+      },
+      {
+        "name": "The Mark-Only Fallback Rule",
+        "section": "components",
+        "body": "When a slot cannot hold the wordmark, show the mark alone. Never wrap, clip, shrink below the type scale or drop the wordmark's period to make it fit."
+      }
+    ],
+    "dos": [
+      "Do consume MaterialTheme.colorScheme, MaterialTheme.typography and MaterialTheme.shapes in every screen and keep the explicit palette private to the theme.",
+      "Do keep the app dark only, with system bars, splash and window background on the same brand black.",
+      "Do give every touch target at least 48 dp and keep the keypad at its 56/72 dp measured sizes.",
+      "Do apply window insets once per surface, including mandatorySystemGestures for bottom content on gesture navigation.",
+      "Do keep the wordmark on one line via the mark-only fallback and let text grow in sp.",
+      "Do keep real media, queue cards and page art unthemed; use black/white scrims only there.",
+      "Do describe screens from actual captures and reports, and name what was not exercised."
+    ],
+    "donts": [
+      "Don't add Dynamic Color, a light scheme or a wallpaper-derived scheme.",
+      "Don't use primary for informational labels, body emphasis or decoration; selection and actions only.",
+      "Don't add drop shadows, blur, gradient chrome or custom elevation animation to app surfaces.",
+      "Don't hand-pick corner radii or copy raw colors such as Color.DarkGray, Color.Red or platform green/amber into UI chrome.",
+      "Don't restyle the player stage, reader, photo viewer or browser fullscreen away from black.",
+      "Don't port the website's landing-page composition, marketing cards or hero blocks into the app; native Material topology and system Back come first.",
+      "Don't claim the reader, translation panel or Russian locale were runtime-reviewed when the captures do not cover them."
+    ]
+  }
+}

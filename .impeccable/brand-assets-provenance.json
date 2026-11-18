@@ -1,0 +1,126 @@
+{
+  "schema": "peachy-brand-assets/1",
+  "generated": "2026-11-17",
+  "generated_by": "omp native refinement worker (task_e063ac49e306 typography/logo, task_4f8e46be2049 final-mark sync); no image-generation model used",
+  "brand_authority": {
+    "source": "user-supplied exact logo raster and brand concept boards",
+    "paths": [
+      "../peachy-web/изображения/сам логотип.png",
+      "../peachy-web/изображения/концепт стилей.png",
+      "../peachy-web/изображения/концепт сайта.png"
+    ],
+    "source_dimensions_px": "1254x1254 (exact logo reference), 1448x1086 (style board), 1536x1024 (site concept)",
+    "license": "user-provided artwork for this product; not third-party stock",
+    "usage": "the exact logo raster is reproduced without tinting, flattening or re-vectorisation; boards inform palette and wordmark direction only"
+  },
+  "tokens": {
+    "black": "#0B0B0D",
+    "graphite": "#15171B",
+    "off_white": "#F4F4F5",
+    "dusty_pink": "#E7A7BE",
+    "muted_rose": "#C97A9B",
+    "accent_lilac": "#D6B6C8",
+    "border": "#2A2D33"
+  },
+  "assets": [
+    {
+      "path": "../peachy-web/public/assets/peachy-mark.png",
+      "kind": "canonical transparent mark, supplied asset worker",
+      "size_px": "585x748",
+      "format": "PNG RGBA, straight alpha, 8 px transparent safe edges, alpha bbox 8,8-577,740",
+      "sha256": "8896e605c7f26ca3c3d3e3050fd1ac49f63777f29871f7e7ac2d9bf89fd666c8",
+      "background": "transparent"
+    },
+    {
+      "path": "repo/logo.png",
+      "kind": "README/source raster export of the exact mark",
+      "size_px": "585x748",
+      "format": "PNG RGBA",
+      "sha256": "8896e605c7f26ca3c3d3e3050fd1ac49f63777f29871f7e7ac2d9bf89fd666c8",
+      "derivation": "byte-identical copy of the canonical transparent PNG, safe edges preserved",
+      "background": "transparent"
+    },
+    {
+      "path": "repo/banner.png",
+      "kind": "README banner, English",
+      "size_px": "2400x1350",
+      "format": "PNG RGB",
+      "sha256": "36afeacb7c171db85656a169df2bb0ca7d9f4947ba92c3c50946b3df2848e75c",
+      "derivation": "two-column brand layout rebuilt locally with the exact mark and Onest; previous banner subtitle and six feature lines carried over verbatim",
+      "visual_content": "Onest SemiBold wordmark, exact mark in lockup and in a graphite panel; no app screenshots"
+    },
+    {
+      "path": "repo/banner_ru.png",
+      "kind": "README banner, Russian",
+      "size_px": "2400x1350",
+      "format": "PNG RGB",
+      "sha256": "8bcd45c1af7f2168b900c860de48e9f5918e3611ba2471830af487f7790d6086",
+      "derivation": "same generator and layout as banner.png; Russian subtitle and six feature lines carried over verbatim, set in Onest"
+    },
+    {
+      "path": "app/src/main/res/drawable-*/ic_peachy_mark.png",
+      "kind": "in-app lockup raster",
+      "sizes_px": "25x32 (mdpi), 37x48, 50x64, 75x96, 100x128 (xxxhdpi)",
+      "format": "PNG RGBA",
+      "derivation": "density resamples of the exact transparent mark; 32 dp tall, intrinsic aspect used by PeachyBrand"
+    },
+    {
+      "path": "app/src/main/res/drawable-*/ic_peachy_foreground.png",
+      "kind": "adaptive-icon foreground",
+      "size_dp": "108 x 108",
+      "format": "PNG RGBA",
+      "geometry": "exact mark 50 dp tall (about 39 dp wide), centred; furthest point 31.7 dp from centre, inside the 66 dp safe zone radius 33 dp"
+    },
+    {
+      "path": "app/src/main/res/drawable-*/ic_launcher_monochrome.png",
+      "kind": "themed (monochrome) icon",
+      "size_dp": "108 x 108",
+      "format": "PNG RGBA",
+      "derivation": "true outer silhouette of the exact source: alpha >= 50%, holes filled, single white layer the launcher tints"
+    },
+    {
+      "path": "app/src/main/res/drawable-*/ic_launcher_foreground.png",
+      "kind": "notification small-icon glyph (consumed by playback services)",
+      "size_dp": "24 x 24",
+      "format": "PNG RGBA",
+      "geometry": "white silhouette 20 dp tall, centred; same alpha-derived outline as the monochrome layer"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_peachy_launcher_background.xml",
+      "kind": "adaptive-icon background",
+      "size_dp": "108 x 108",
+      "geometry": "flat #0B0B0D, same value as @color/splash_background"
+    },
+    {
+      "path": "app/src/main/res/mipmap-*/ic_launcher.webp",
+      "kind": "legacy launcher raster, rounded-square tile",
+      "sizes_px": "48, 72, 96, 144, 192",
+      "derivation": "black #0B0B0D tile, 22.5% corner radius, exact mark at 56% of tile height, lossless WEBP"
+    },
+    {
+      "path": "app/src/main/res/mipmap-*/ic_launcher_round.webp",
+      "kind": "legacy launcher raster, circular tile",
+      "sizes_px": "48, 72, 96, 144, 192",
+      "derivation": "black circle, exact mark at 52% of tile height, lossless WEBP"
+    }
+  ],
+  "fonts": [
+    {
+      "family": "Onest",
+      "usage": "all 15 Material type roles in the app and the README banner text; three static instances bundled at res/font/onest_regular.ttf (400), onest_medium.ttf (500), onest_semibold.ttf (600)",
+      "source": "official Google Fonts repository, ofl/onest variable Onest[wght].ttf (wght 100-900); upstream simpals/onest 2.001, commit 8739b1910618a15335e4cc48842052d0ee739ade; static instances produced locally with fontTools",
+      "license": "SIL Open Font License 1.1 (license text staged for the website at ../peachy-web/public/assets/onest-license.txt)",
+      "verified": "cmap covers full Russian Cyrillic including ё, Latin, digits and UI punctuation; OS/2 usWeightClass 400/500/600; 876 glyphs per instance"
+    }
+  ],
+  "adaptations": [
+    "The exact supplied mark is reproduced as-is: graphite body and dusty-pink inset, with its own lighting and soft edges. The app and launcher keep the brand-black ground; no recolouring or vector reinterpretation was applied.",
+    "The wordmark 'peachy.' is live Material text at headlineMedium in Onest SemiBold 600 with a primary-coloured period; the banners set the same wordmark in Onest SemiBold.",
+    "Legacy mipmap rasters remain for older launchers only; minSdk 26 resolves the adaptive layers in mipmap-anydpi-v26."
+  ],
+  "unverified": [
+    "No Gradle build, lint, test or formatter was run in these slices (the parent compiles).",
+    "Launcher masking was reasoned from the 66dp safe-zone rule, not observed on an emulator.",
+    "Banner rasters were checked as local images at 2400x1350, not inside the GitHub README renderer."
+  ]
+}

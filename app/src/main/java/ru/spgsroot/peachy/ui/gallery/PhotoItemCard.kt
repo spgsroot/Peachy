@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -47,18 +49,26 @@ fun PhotoItemCard(
     if (layout == GalleryLayout.List) {
         Card(
             modifier = Modifier.fillMaxWidth().then(click),
-            colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant)
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurface
+            )
         ) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(imageData, photo.title, Modifier.width(128.dp).aspectRatio(16f / 9f),
+                AsyncImage(imageData, photo.title, Modifier.width(128.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small),
                     contentScale = ContentScale.Crop)
                 Column(Modifier.weight(1f)) {
                     PhotoTitle(photo.title)
                     Icon(Icons.Default.Image, stringResource(R.string.gallery_photo), modifier = Modifier.size(16.dp))
-                    Text(android.text.format.Formatter.formatShortFileSize(LocalContext.current, photo.fileSize),
-                        style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        android.text.format.Formatter.formatShortFileSize(LocalContext.current, photo.fileSize),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (isSelected) Checkbox(true, null)
                 else PhotoMenu(onRename, onDelete, onMove, MaterialTheme.colorScheme.onSurfaceVariant)
@@ -69,14 +79,18 @@ fun PhotoItemCard(
             Card(
                 modifier = Modifier.fillMaxWidth()
                     .aspectRatio(if (layout == GalleryLayout.Large) 0.7f else 16f / 9f).then(click),
-                colors = CardDefaults.cardColors(containerColor = Color.DarkGray),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
             ) {
                 Box(Modifier.fillMaxSize()) {
                     AsyncImage(imageData, photo.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     Icon(Icons.Default.Image, stringResource(R.string.gallery_photo), tint = Color.White,
                         modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(20.dp)
-                            .background(Color.Black.copy(alpha = 0.6f)))
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            .padding(2.dp))
                     if (isSelected) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))) {
                             Checkbox(true, null, Modifier.align(Alignment.TopEnd).padding(4.dp))
@@ -87,8 +101,11 @@ fun PhotoItemCard(
                 }
             }
             PhotoTitle(photo.title)
-            Text(android.text.format.Formatter.formatShortFileSize(LocalContext.current, photo.fileSize),
-                style = MaterialTheme.typography.labelSmall)
+            Text(
+                android.text.format.Formatter.formatShortFileSize(LocalContext.current, photo.fileSize),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -116,7 +133,7 @@ private fun PhotoMenu(onRename: () -> Unit, onDelete: () -> Unit, onMove: () -> 
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.menu_delete)) },
                 onClick = { open = false; onDelete() },
-                leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
             )
         }
     }

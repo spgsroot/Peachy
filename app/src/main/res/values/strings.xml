@@ -28,7 +28,7 @@
     <string name="btn_device_connect">Подключить устройство</string>
 
     <!-- Support -->
-    <string name="support_title">Поддержка</string>
+    <string name="support_title">Открытый код · Локальные данные</string>
     <string name="support_sol">Sol:</string>
     <string name="support_github">GitHub · Peachy</string>
 
@@ -39,10 +39,10 @@
     <string name="language_system">Системный</string>
 
     <!-- Onboarding -->
-    <string name="welcome_title">Добро пожаловать в Peachy</string>
-    <string name="onboarding_step_1">1. Добавьте видео из галереи или по URL</string>
-    <string name="onboarding_step_2">2. Подключите устройство через Intiface Central</string>
-    <string name="onboarding_step_3">3. Настройте таймер и скорость</string>
+    <string name="welcome_title">Ваш контент. Ваше пространство.</string>
+    <string name="onboarding_step_1">Галерея, плеер и браузер в одном рабочем пространстве Android.</string>
+    <string name="onboarding_step_2">Добавленные медиа хранятся в библиотеке приложения на вашем телефоне.</string>
+    <string name="onboarding_step_3">Приватность должна быть нормой, а не привилегией.</string>
     <string name="btn_start">Начать</string>
 
     <!-- Gallery -->
@@ -212,7 +212,7 @@
     <string name="btn_open_webview">Открыть</string>
 
     <!-- Auth Screen -->
-    <string name="auth_enter_password">Введите пароль</string>
+    <string name="auth_enter_password">Приватное медиапространство. Введите пароль.</string>
     <string name="auth_wrong_password">Неверный пароль</string>
     <string name="btn_login">Войти</string>
     <string name="auth_delete_digit">Стереть цифру</string>
@@ -228,9 +228,9 @@
     <string name="content_description_more">Ещё</string>
 
     <!-- Empty State -->
-    <string name="empty_playlist">Плейлист пуст</string>
+    <string name="empty_playlist">Пока нечего воспроизводить. Ваш контент остаётся в вашем пространстве.</string>
     <string name="empty_add_first">Добавить первое видео</string>
-    <string name="empty_gallery">В галерее пока нет видео и фото</string>
+    <string name="empty_gallery">Библиотека пуста. Добавьте медиа — оно останется в вашем пространстве.</string>
     <string name="manga_haptic">Сила импульса при листании</string>
     <string name="manga_saved">Сохранённые</string>
     <string name="manga_results">Результаты поиска</string>

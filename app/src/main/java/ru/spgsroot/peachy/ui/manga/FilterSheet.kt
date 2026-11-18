@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -23,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +42,10 @@ import ru.spgsroot.peachy.manga.customUploadedRange
 import ru.spgsroot.peachy.manga.nextTagMode
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.delay
+
+/** A keystroke burst in the date or page fields settles before a request is sent. */
+internal const val FILTER_SETTLE_MS = 250L
 
 private val datePresets = listOf(
     "uploaded:>2h" to R.string.manga_date_2h,
@@ -67,6 +71,87 @@ private val sorts = listOf(
     SortKey.PopularMonth to R.string.manga_sort_month
 )
 
+/**
+ * The editable filter sheet state. Every add, remove, cycle and reset goes through this draft, and the
+ * debounced request is built from it, so all filter changes travel the same path.
+ */
+internal data class CatalogFilterDraft(
+    val tags: List<TagFilter> = emptyList(),
+    val sort: SortKey = SortKey.Date,
+    val preset: String = "",
+    val start: String = "",
+    val end: String = "",
+    val minPages: String = "",
+    val maxPages: String = "",
+    val exactPages: String = ""
+) {
+    val datesValid: Boolean get() = validDate(start) && validDate(end)
+    val reversed: Boolean get() = datesValid && start.isNotBlank() && end.isNotBlank() && end < start
+
+    /** The search text stays outside the sheet, so a changed field is never searched as stale text. */
+    fun toQuery(text: String = ""): CatalogQuery = CatalogQuery(
+        text = text,
+        tags = tags,
+        sort = sort,
+        uploaded = if (preset.isNotEmpty()) preset else customUploadedRange(start, end),
+        pages = PagesFilter(minPages.toIntOrNull(), maxPages.toIntOrNull(), exactPages.toIntOrNull())
+    )
+
+    /** Include, then exclude, then remove; every step is a new draft and therefore a new request. */
+    fun cycleTag(type: String, name: String): CatalogFilterDraft {
+        val mode = nextTagMode(tags.find { it.type == type && it.name == name }?.mode)
+        return copy(
+            tags = tags.filterNot { it.type == type && it.name == name } +
+                if (mode == null) emptyList() else listOf(TagFilter(type, name, mode))
+        )
+    }
+
+    fun addTag(type: String, name: String): CatalogFilterDraft =
+        if (tags.any { it.type == type && it.name == name }) this
+        else copy(tags = tags + TagFilter(type, name, TagMode.Include))
+
+    /** The reset button clears every sheet-owned filter; the search text is not part of the sheet. */
+    fun reset(): CatalogFilterDraft = CatalogFilterDraft()
+
+    companion object {
+        fun from(query: CatalogQuery): CatalogFilterDraft {
+            val preset = query.uploaded.takeIf { value -> datePresets.any { it.first == value } }.orEmpty()
+            return CatalogFilterDraft(
+                tags = query.tags,
+                sort = query.sort,
+                preset = preset,
+                start = if (preset.isEmpty()) {
+                    query.uploaded.split(' ').find { it.startsWith("uploaded:>") }?.removePrefix("uploaded:>").orEmpty()
+                } else {
+                    ""
+                },
+                end = query.uploaded.split(' ').find { it.startsWith("uploaded:<") }?.removePrefix("uploaded:<").orEmpty(),
+                minPages = query.pages.min?.toString().orEmpty(),
+                maxPages = query.pages.max?.toString().orEmpty(),
+                exactPages = query.pages.exact?.toString().orEmpty()
+            )
+        }
+    }
+}
+
+/**
+ * Submits a filter draft once it has settled: waits [FILTER_SETTLE_MS] so a keystroke burst sends one
+ * request, and refuses invalid or reversed dates and a draft that is already shown. The caller's effect
+ * restarts on every edit, so a cancelled wait never submits and only the newest draft wins.
+ */
+internal suspend fun settledFilterQuery(
+    draft: CatalogQuery,
+    datesValid: Boolean,
+    reversed: Boolean,
+    applied: CatalogQuery,
+    onApplied: (CatalogQuery) -> Unit
+): CatalogQuery? {
+    if (!datesValid || reversed || draft == applied) return null
+    delay(FILTER_SETTLE_MS)
+    onApplied(draft)
+    return draft
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FilterSheet(
@@ -78,32 +163,24 @@ fun FilterSheet(
     onBlockName: (String) -> Unit,
     onUnblockName: (String) -> Unit,
     onDismiss: () -> Unit,
-    onApply: (CatalogQuery) -> Unit
+    onQueryChange: (CatalogQuery) -> Unit
 ) {
-    var tags by remember { mutableStateOf(query.tags) }
+    var draft by remember { mutableStateOf(CatalogFilterDraft.from(query)) }
     var tagType by remember { mutableStateOf("tag") }
     var tagName by remember { mutableStateOf("") }
-    var sort by remember { mutableStateOf(query.sort) }
-    var preset by remember { mutableStateOf(query.uploaded.takeIf { value -> datePresets.any { it.first == value } }.orEmpty()) }
-    var start by remember {
-        mutableStateOf(if (preset.isEmpty()) query.uploaded.split(' ').find { it.startsWith("uploaded:>") }?.removePrefix("uploaded:>").orEmpty() else "")
-    }
-    var end by remember {
-        mutableStateOf(query.uploaded.split(' ').find { it.startsWith("uploaded:<") }?.removePrefix("uploaded:<").orEmpty())
-    }
-    var minPages by remember { mutableStateOf(query.pages.min?.toString().orEmpty()) }
-    var maxPages by remember { mutableStateOf(query.pages.max?.toString().orEmpty()) }
-    var exactPages by remember { mutableStateOf(query.pages.exact?.toString().orEmpty()) }
     var blockedName by remember { mutableStateOf("") }
     var blockedId by remember { mutableStateOf("") }
-    val datesValid = validDate(start) && validDate(end)
-    val reversed = datesValid && start.isNotBlank() && end.isNotBlank() && end < start
+    val draftQuery = draft.toQuery(query.text)
+    // The query the screen already shows, so opening the panel never repeats a request.
+    var applied by remember { mutableStateOf(draftQuery) }
+    LaunchedEffect(draftQuery, draft.datesValid, draft.reversed) {
+        // A half-typed or reversed range leaves the previous results alone until it is valid again.
+        settledFilterQuery(draftQuery, draft.datesValid, draft.reversed, applied) { applied = it }
+            ?.let(onQueryChange)
+    }
 
     fun cycleTag(type: String, name: String) {
-        val old = tags.find { it.type == type && it.name == name }
-        val mode = nextTagMode(old?.mode)
-        tags = tags.filterNot { it.type == type && it.name == name } +
-            if (mode == null) emptyList() else listOf(TagFilter(type, name, mode))
+        draft = draft.cycleTag(type, name)
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -125,13 +202,12 @@ fun FilterSheet(
                             OutlinedTextField(value = tagName, onValueChange = { tagName = it }, singleLine = true,
                                 label = { Text(stringResource(R.string.manga_tag_name)) }, modifier = Modifier.weight(1f))
                             TextButton(enabled = tagName.isNotBlank(), onClick = {
-                                val name = tagName.trim()
-                                if (tags.none { it.type == tagType && it.name == name }) tags = tags + TagFilter(tagType, name, TagMode.Include)
+                                draft = draft.addTag(tagType, tagName.trim())
                                 tagName = ""
                             }) { Text(stringResource(R.string.manga_add_tag)) }
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            tags.forEach { tag ->
+                            draft.tags.forEach { tag ->
                                 FilterChip(selected = tag.mode == TagMode.Include, onClick = { cycleTag(tag.type, tag.name) }, label = {
                                     Text(stringResource(if (tag.mode == TagMode.Include) R.string.manga_tag_included else R.string.manga_tag_excluded, "${tag.type}:${TagNames.display(tag.type, tag.name, tagLanguage())}"))
                                 })
@@ -143,7 +219,7 @@ fun FilterSheet(
                     FilterSection(R.string.manga_language) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             languages.forEach { (name, label) ->
-                                val mode = tags.find { it.type == "language" && it.name == name }?.mode
+                                val mode = draft.tags.find { it.type == "language" && it.name == name }?.mode
                                 FilterChip(selected = mode != null, onClick = { cycleTag("language", name) }, label = {
                                     val language = stringResource(label)
                                     Text(when (mode) {
@@ -160,7 +236,7 @@ fun FilterSheet(
                     FilterSection(R.string.manga_sort) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             sorts.forEach { (key, label) ->
-                                FilterChip(selected = sort == key, onClick = { sort = key }, label = { Text(stringResource(label)) })
+                                FilterChip(selected = draft.sort == key, onClick = { draft = draft.copy(sort = key) }, label = { Text(stringResource(label)) })
                             }
                         }
                     }
@@ -169,29 +245,31 @@ fun FilterSheet(
                     FilterSection(R.string.manga_uploaded) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             datePresets.forEach { (value, label) ->
-                                FilterChip(selected = preset == value, onClick = {
-                                    preset = if (preset == value) "" else value
-                                    start = ""
-                                    end = ""
+                                FilterChip(selected = draft.preset == value, onClick = {
+                                    draft = draft.copy(
+                                        preset = if (draft.preset == value) "" else value,
+                                        start = "",
+                                        end = ""
+                                    )
                                 }, label = { Text(stringResource(label)) })
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(value = start, onValueChange = { start = it; preset = "" }, singleLine = true,
-                                label = { Text(stringResource(R.string.manga_date_start), maxLines = 1) }, isError = !validDate(start), modifier = Modifier.weight(1f))
-                            OutlinedTextField(value = end, onValueChange = { end = it; preset = "" }, singleLine = true,
-                                label = { Text(stringResource(R.string.manga_date_end), maxLines = 1) }, isError = !validDate(end), modifier = Modifier.weight(1f))
+                            OutlinedTextField(value = draft.start, onValueChange = { draft = draft.copy(start = it, preset = "") }, singleLine = true,
+                                label = { Text(stringResource(R.string.manga_date_start), maxLines = 1) }, isError = !validDate(draft.start), modifier = Modifier.weight(1f))
+                            OutlinedTextField(value = draft.end, onValueChange = { draft = draft.copy(end = it, preset = "") }, singleLine = true,
+                                label = { Text(stringResource(R.string.manga_date_end), maxLines = 1) }, isError = !validDate(draft.end), modifier = Modifier.weight(1f))
                         }
-                        if (!datesValid) Text(stringResource(R.string.manga_date_invalid), color = MaterialTheme.colorScheme.error)
-                        if (reversed) Text(stringResource(R.string.manga_date_reversed), color = MaterialTheme.colorScheme.error)
+                        if (!draft.datesValid) Text(stringResource(R.string.manga_date_invalid), color = MaterialTheme.colorScheme.error)
+                        if (draft.reversed) Text(stringResource(R.string.manga_date_reversed), color = MaterialTheme.colorScheme.error)
                     }
                 }
                 item {
                     FilterSection(R.string.manga_pages_filter) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PageField(minPages, { minPages = it }, R.string.manga_pages_min, Modifier.weight(1f))
-                            PageField(maxPages, { maxPages = it }, R.string.manga_pages_max, Modifier.weight(1f))
-                            PageField(exactPages, { exactPages = it }, R.string.manga_pages_exact, Modifier.weight(1f))
+                            PageField(draft.minPages, { draft = draft.copy(minPages = it) }, R.string.manga_pages_min, Modifier.weight(1f))
+                            PageField(draft.maxPages, { draft = draft.copy(maxPages = it) }, R.string.manga_pages_max, Modifier.weight(1f))
+                            PageField(draft.exactPages, { draft = draft.copy(exactPages = it) }, R.string.manga_pages_exact, Modifier.weight(1f))
                         }
                     }
                 }
@@ -227,26 +305,11 @@ fun FilterSheet(
             }
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = {
-                    tags = emptyList()
+                    draft = draft.reset()
                     tagType = "tag"
                     tagName = ""
-                    sort = SortKey.Date
-                    preset = ""
-                    start = ""
-                    end = ""
-                    minPages = ""
-                    maxPages = ""
-                    exactPages = ""
                 }) { Text(stringResource(R.string.manga_reset_filters)) }
-                Button(enabled = datesValid, onClick = {
-                    onApply(CatalogQuery(
-                        text = query.text,
-                        tags = tags,
-                        sort = sort,
-                        uploaded = preset.ifEmpty { customUploadedRange(start, end) },
-                        pages = PagesFilter(minPages.toIntOrNull(), maxPages.toIntOrNull(), exactPages.toIntOrNull())
-                    ))
-                }) { Text(stringResource(R.string.manga_apply_filters)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_close)) }
             }
         }
     }

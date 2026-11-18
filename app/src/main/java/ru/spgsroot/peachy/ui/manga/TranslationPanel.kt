@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -59,10 +59,16 @@ fun TranslationPanel(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val maxExpanded = (LocalConfiguration.current.screenHeightDp * 0.5f).dp
+    val sheet = MaterialTheme.shapes.extraLarge
     Surface(
         modifier,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        // Foundation 1.7 has no RoundedCornerShape overload taking four CornerSizes, so copy the
+        // theme's large shape and zero the bottom corners; the Dp overload cannot take CornerSize.
+        shape = sheet.copy(
+            bottomEnd = CornerSize(0.dp),
+            bottomStart = CornerSize(0.dp)
+        ),
+        color = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 3.dp
     ) {

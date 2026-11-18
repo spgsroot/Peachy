@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission tools:node="removeAll" />
+    <application android:label="Peachy performance QA" android:allowBackup="false" />
+    <instrumentation android:name=".QaRunner" android:targetPackage="ru.spgsroot.peachy.perfqa" />
+</manifest>

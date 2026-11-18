@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash Screen Colors - Light Theme -->
-    <color name="splash_background_light">#FFFFFF</color>
-    <color name="splash_icon_background_light">#FFFFFF</color>
-    
-    <!-- Splash Screen Colors - Dark Theme -->
-    <color name="splash_background_dark">#1C1B1F</color>
-    <color name="splash_icon_background_dark">#1C1B1F</color>
+    <!-- Brand black behind the splash icon; the app is dark only. -->
+    <color name="splash_background">#FF0B0B0D</color>
 </resources>

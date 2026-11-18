@@ -6,8 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import net.sqlcipher.database.SQLiteDatabase
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_5_6
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_6_7
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_9_10
@@ -19,15 +18,17 @@ import ru.spgsroot.peachy.data.notes.NoteMigrations.MIGRATION_8_9
 import ru.spgsroot.peachy.data.db.PhotoMigrations.MIGRATION_11_12
 import ru.spgsroot.peachy.data.db.AlbumMigrations.MIGRATION_12_13
 import ru.spgsroot.peachy.data.db.VideoHashMigrations.MIGRATION_13_14
+import ru.spgsroot.peachy.data.db.DocumentMigrations.MIGRATION_14_15
 
 @Database(
     entities = [
         VideoEntity::class, SettingsEntity::class, PlaybackStateEntity::class, LibraryGalleryEntity::class,
         ReadHistoryEntity::class, SearchHistoryEntity::class, TagBlacklistEntity::class, GalleryMemoryEntity::class,
         BookmarkEntity::class, BrowserHistoryEntity::class, AllowlistEntity::class, NoteEntity::class,
-        SavedPageEntity::class, PageTranslationEntity::class, PhotoEntity::class, AlbumEntity::class
+        SavedPageEntity::class, PageTranslationEntity::class, PhotoEntity::class, AlbumEntity::class,
+        DocumentSessionEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -47,9 +48,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun savedPageDao(): SavedPageDao
     abstract fun pageTranslationDao(): PageTranslationDao
+    abstract fun documentSessionDao(): DocumentSessionDao
 
     companion object {
-        private const val DB_NAME = "peachy.db"
+        internal const val DB_NAME = "peachy.db"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
@@ -84,15 +86,15 @@ abstract class AppDatabase : RoomDatabase() {
 
 
         fun create(context: Context, passphrase: ByteArray): AppDatabase {
-            val factory = SupportFactory(passphrase)
+            System.loadLibrary("sqlcipher")
+            val factory = SupportOpenHelperFactory(passphrase)
             return Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
                 .openHelperFactory(factory)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14
+                    MIGRATION_13_14, MIGRATION_14_15
                 )
-                .fallbackToDestructiveMigration()
                 .build()
         }
     }

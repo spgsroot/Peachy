@@ -61,4 +61,7 @@ object DatabaseModule {
 
     @Provides
     fun providePageTranslationDao(database: AppDatabase): PageTranslationDao = database.pageTranslationDao()
+
+    @Provides
+    fun provideDocumentSessionDao(database: AppDatabase): DocumentSessionDao = database.documentSessionDao()
 }

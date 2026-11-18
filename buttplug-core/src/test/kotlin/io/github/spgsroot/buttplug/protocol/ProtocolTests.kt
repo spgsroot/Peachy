@@ -790,8 +790,7 @@ class ProtocolTests {
             reconnectDelayMs = 5000L,
             maxReconnectAttempts = 5,
             pingIntervalMs = 10000L,
-            requestTimeoutMs = 15000L,
-            bypassCertVerify = false
+            requestTimeoutMs = 15000L
         )
 
         assertEquals("wss://example.com:12345", config.serverUrl)
@@ -801,7 +800,6 @@ class ProtocolTests {
         assertEquals(5, config.maxReconnectAttempts)
         assertEquals(10000L, config.pingIntervalMs)
         assertEquals(15000L, config.requestTimeoutMs)
-        assertFalse(config.bypassCertVerify)
     }
 
     @Test

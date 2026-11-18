@@ -2,7 +2,6 @@ package ru.spgsroot.peachy.data.vault
 
 import android.content.Context
 import android.net.Uri
-import android.provider.DocumentsContract
 import androidx.room.withTransaction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +14,7 @@ import ru.spgsroot.peachy.data.db.AllowlistEntity
 import ru.spgsroot.peachy.data.db.AppDatabase
 import ru.spgsroot.peachy.data.db.BookmarkDao
 import ru.spgsroot.peachy.data.db.BrowserHistoryDao
+import ru.spgsroot.peachy.data.db.LibraryGalleryEntity
 import ru.spgsroot.peachy.data.db.GalleryMemoryDao
 import ru.spgsroot.peachy.data.db.LibraryGalleryDao
 import ru.spgsroot.peachy.data.db.PageTranslationDao
@@ -82,7 +82,7 @@ class VaultManager @Inject constructor(
 ) {
     /**
      * Writes the vault to [target], a document the user created. [onProgress] gets (done, total)
-     * file entries. A vault that fails halfway is deleted rather than left looking complete.
+     * file entries. A failed SAF write may remain incomplete, but is never mistaken for a valid import.
      */
     suspend fun export(
         target: Uri,
@@ -106,7 +106,14 @@ class VaultManager @Inject constructor(
                 entity.id to entity.thumbnailPath?.let(::File)?.takeIf { it.isFile }
             }
             val galleries = libraryDao.getAll()
-            val pages = galleries.associate { it.id to mangaFiles.listFiles(it.id).filter { f -> VaultArchive.isSafeName(f.name) } }
+            val pages = galleries.associate { gallery ->
+                gallery.id to mangaEntryNames(gallery).map { entryName ->
+                    val file = mangaFiles.pageFile(gallery.id, entryName.substringAfterLast('/'))
+                        ?.takeIf { it.isFile }
+                        ?: throw IOException("Saved manga entry is missing: $entryName")
+                    entryName to file
+                }
+            }
             val notes = noteDao.getAll()
             val entryCount = videos.size + thumbnails.values.count { it != null } + pages.values.sumOf { it.size } +
                 photos.size + photoThumbnails.values.count { it != null }
@@ -174,10 +181,10 @@ class VaultManager @Inject constructor(
                         step()
                     }
                 }
-                for ((galleryId, files) in pages) {
-                    for (file in files) {
+                for ((_, files) in pages) {
+                    for ((entryName, file) in files) {
                         currentCoroutineContext().ensureActive()
-                        file.inputStream().use { writer.add("manga/$galleryId/${file.name}", file.length(), it) }
+                        file.inputStream().use { writer.add(entryName, file.length(), it) }
                         step()
                     }
                 }
@@ -185,8 +192,8 @@ class VaultManager @Inject constructor(
             }
             VaultExportResult(videos.size, galleries.size, notes.size, photos = photos.size)
         } catch (e: Throwable) {
-            // A half-written vault would look like a real one; remove it.
-            runCatching { DocumentsContract.deleteDocument(resolver, target) }
+            // CreateDocument can return a pre-existing target. SAF has no general atomic replacement
+            // or safe ownership check, so a failed export must not delete that user's document.
             throw e
         }
     }
@@ -202,16 +209,17 @@ class VaultManager @Inject constructor(
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): VaultImportResult = withContext(Dispatchers.IO) {
         val raw = context.contentResolver.openInputStream(source) ?: throw IOException("Could not open the file")
-        val createdVideos = mutableListOf<Long>()
         val createdFiles = mutableListOf<File>()
         val photoDao = database.photoDao()
-        val createdPhotos = mutableListOf<Long>()
         val createdPhotoFiles = mutableListOf<String>()
         val createdPhotoThumbnails = mutableListOf<String>()
+        var committed = false
+        var archivedTags: String? = null
         val operationContext = currentCoroutineContext()
         try {
-            raw.use { rawIn ->
-                val reader = VaultArchiveReader(VaultCrypto.decrypt(BufferedInputStream(rawIn), password))
+            // Room rolls back rows together. The caller's Job still controls cancellation until commit.
+            val result = withContext(NonCancellable) { database.withTransaction {
+                val reader = VaultArchiveReader(VaultCrypto.decrypt(BufferedInputStream(raw), password))
                 val first = reader.next()
                 if (first == null || first.name != DATA_ENTRY) throw VaultException(VaultError.CORRUPT, "Vault has no data document")
                 val data = VaultData.fromJson(String(first.readBytes(MAX_DATA_BYTES), Charsets.UTF_8))
@@ -222,7 +230,10 @@ class VaultManager @Inject constructor(
                 val added = HashMap<Long, VideoEntity>()
                 var skipped = 0
                 var done = 0
-                val pageGalleries = data.galleries.map { it.id }.toSet()
+                val remainingPages = data.galleries.flatMap(::mangaEntryNames).toMutableSet()
+                val seenEntries = HashSet<String>()
+                val seenVideos = HashSet<Long>()
+                val seenVideoThumbnails = HashSet<Long>()
                 val photoMeta = data.photos.associateBy { it.id }
                 val knownPhotos = photoDao.getAllNow().associateBy {
                     VaultMerge.photoKey(it.title, it.width, it.height, it.fileSize)
@@ -234,44 +245,52 @@ class VaultManager @Inject constructor(
                 var photosSkipped = 0
 
                 while (true) {
-                    currentCoroutineContext().ensureActive()
+                    operationContext.ensureActive()
                     val entry = reader.next() ?: break
                     val name = entry.name
+                    if (!seenEntries.add(name)) throw VaultException(VaultError.CORRUPT, "Duplicate vault entry")
                     when {
                         name.startsWith("video/") -> {
                             val meta = videoMeta[videoIdOf(name)]
-                            if (meta != null && name == meta.entryName) {
-                                val existing = known[VaultMerge.videoKey(meta.title, meta.duration, meta.fileSize)]
-                                if (existing != null) {
-                                    idMap[meta.id] = existing.id
-                                    skipped++
-                                } else {
-                                    val file = storage.save(
-                                        entry.stream, "vault_${System.nanoTime()}.${meta.extension}",
-                                        totalBytes = entry.size, maxBytes = Long.MAX_VALUE
-                                    )
-                                    createdFiles += file
-                                    val entity = VideoEntity(
-                                        title = meta.title, filePath = file.absolutePath, duration = meta.duration,
-                                        thumbnailPath = null, addedAt = meta.addedAt, fileSize = file.length(),
-                                        isCorrupted = meta.isCorrupted
-                                    )
-                                    val id = videoDao.insert(entity)
-                                    createdVideos += id
-                                    idMap[meta.id] = id
-                                    added[meta.id] = entity.copy(id = id)
-                                }
+                            if (meta == null || name != meta.entryName || entry.size != meta.fileSize ||
+                                !seenVideos.add(meta.id)
+                            ) throw VaultException(VaultError.CORRUPT, "Invalid video entry")
+                            val existing = known[VaultMerge.videoKey(meta.title, meta.duration, meta.fileSize)]
+                            if (existing != null) {
+                                idMap[meta.id] = existing.id
+                                skipped++
+                            } else {
+                                val file = storage.save(
+                                    cancellableInput(entry.stream, operationContext),
+                                    "vault_${System.nanoTime()}.${meta.extension}",
+                                    totalBytes = entry.size,
+                                    maxBytes = Long.MAX_VALUE
+                                )
+                                createdFiles += file
+                                val entity = VideoEntity(
+                                    title = meta.title, filePath = file.absolutePath, duration = meta.duration,
+                                    thumbnailPath = null, addedAt = meta.addedAt, fileSize = file.length(),
+                                    isCorrupted = meta.isCorrupted
+                                )
+                                val id = videoDao.insert(entity)
+                                idMap[meta.id] = id
+                                added[meta.id] = entity.copy(id = id)
                             }
                         }
                         name.startsWith("thumb/") -> {
                             val oldId = name.removePrefix("thumb/").toLongOrNull()
-                            val entity = oldId?.let(added::get)
-                            if (entity != null && videoMeta[oldId]?.hasThumbnail == true) {
-                                val path = storage.saveThumbnail(entry.stream, entity.id)
+                            val meta = videoMeta[oldId]
+                            if (meta == null || !meta.hasThumbnail || entry.size <= 0 ||
+                                name != meta.thumbnailEntryName || meta.id !in seenVideos ||
+                                !seenVideoThumbnails.add(meta.id)
+                            ) throw VaultException(VaultError.CORRUPT, "Invalid video thumbnail entry")
+                            val entity = added[meta.id]
+                            if (entity != null) {
+                                val path = storage.saveThumbnail(cancellableInput(entry.stream, operationContext), entity.id)
                                 createdFiles += File(path)
                                 val updated = entity.copy(thumbnailPath = path)
                                 videoDao.update(updated)
-                                added[oldId] = updated
+                                added[meta.id] = updated
                             }
                         }
                         name.startsWith("photo/") -> {
@@ -293,12 +312,7 @@ class VaultManager @Inject constructor(
                                     title = meta.title, filePath = file.absolutePath, thumbnailPath = null,
                                     addedAt = meta.addedAt, fileSize = file.length(), width = meta.width, height = meta.height
                                 )
-                                // Track the committed row even if cancellation arrives as insert returns.
-                                val restored = withContext(NonCancellable) {
-                                    val id = photoDao.insert(entity)
-                                    createdPhotos += id
-                                    entity.copy(id = id)
-                                }
+                                val restored = entity.copy(id = photoDao.insert(entity))
                                 addedPhotos[meta.id] = restored
                                 knownPhotos[key] = restored
                                 operationContext.ensureActive()
@@ -309,6 +323,7 @@ class VaultManager @Inject constructor(
                             val meta = photoMeta[oldId]
                             if (meta == null || name != meta.thumbnailEntryName || !meta.hasThumbnail ||
                                 meta.id !in seenPhotos || !seenPhotoThumbnails.add(meta.id)
+                                || entry.size <= 0
                             ) throw VaultException(VaultError.CORRUPT, "Invalid photo thumbnail entry")
                             // A skipped duplicate keeps its existing thumbnail, including a missing one.
                             val entity = addedPhotos[meta.id]
@@ -323,22 +338,27 @@ class VaultManager @Inject constructor(
                             }
                         }
                         name.startsWith("manga/") -> {
-                            val parts = name.removePrefix("manga/").split('/')
-                            val galleryId = parts.firstOrNull()?.toIntOrNull()
-                            if (parts.size == 2 && galleryId != null && galleryId in pageGalleries) {
-                                mangaFiles.restore(galleryId, parts[1], entry.stream)?.let { createdFiles += it }
+                            if (remainingPages.remove(name)) {
+                                if (entry.size <= 0) throw VaultException(VaultError.CORRUPT, "Empty manga page")
+                                val galleryId = name.substringAfter('/').substringBefore('/').toInt()
+                                mangaFiles.restore(
+                                    galleryId, name.substringAfterLast('/'), cancellableInput(entry.stream, operationContext)
+                                )?.let { createdFiles += it }
                             }
                         }
                     }
                     onProgress(++done, data.entryCount)
                 }
                 operationContext.ensureActive()
-                if (seenPhotos.size != photoMeta.size ||
-                    seenPhotoThumbnails.size != data.photos.count { it.hasThumbnail }
+                if (remainingPages.isNotEmpty() ||
+                    seenVideos.size != videoMeta.size || seenVideoThumbnails.size != data.videos.count { it.hasThumbnail } ||
+                    seenPhotos.size != photoMeta.size || seenPhotoThumbnails.size != data.photos.count { it.hasThumbnail }
                 ) throw VaultException(VaultError.CORRUPT, "Vault entries do not match its metadata")
 
                 // The stream has been authenticated to its end; only now touch the rest of the database.
                 applyData(data, idMap, added.mapValues { it.value.id }, addedPhotos.mapValues { it.value.id })
+                archivedTags = data.tagLibrary
+                operationContext.ensureActive()
                 VaultImportResult(
                     videosAdded = added.size,
                     videosSkipped = skipped,
@@ -347,12 +367,15 @@ class VaultManager @Inject constructor(
                     photosAdded = addedPhotos.size,
                     photosSkipped = photosSkipped
                 )
+            }.also { committed = true } }
+            archivedTags?.let { rawTags ->
+                val incoming = TagLibrary.fromJson(rawTags)
+                tagPreferences.update { VaultMerge.tagLibrary(it, incoming) }
             }
+            result
         } catch (e: Throwable) {
+            if (committed) throw e
             withContext(NonCancellable) {
-                createdPhotos.forEach { id ->
-                    runCatching { photoDao.deleteById(id) }.exceptionOrNull()?.let(e::addSuppressed)
-                }
                 createdPhotoThumbnails.forEach { path ->
                     runCatching {
                         if (!photoStorage.deleteThumbnail(path)) throw IOException("Could not roll back photo thumbnail")
@@ -363,11 +386,15 @@ class VaultManager @Inject constructor(
                         if (!photoStorage.deleteFile(path)) throw IOException("Could not roll back photo")
                     }.exceptionOrNull()?.let(e::addSuppressed)
                 }
-                createdVideos.forEach { runCatching { videoDao.deleteById(it) } }
-                createdFiles.forEach { it.delete() }
+                createdFiles.forEach { file ->
+                    runCatching {
+                        if (!file.delete() && file.exists()) throw IOException("Could not roll back vault file")
+                    }.exceptionOrNull()?.let(e::addSuppressed)
+                }
             }
             throw e
         }
+        finally { raw.close() }
     }
 
     private suspend fun applyData(data: VaultData, idMap: Map<Long, Long>, newVideos: Map<Long, Long>, newPhotos: Map<Long, Long>) {
@@ -429,11 +456,14 @@ class VaultManager @Inject constructor(
             val toWrite = VaultMerge.translations(haveTranslations, incoming)
             if (toWrite.isNotEmpty()) pageTranslationDao.upsertAll(toWrite)
         }
-        data.tagLibrary?.let { raw ->
-            val incoming = TagLibrary.fromJson(raw)
-            tagPreferences.update { VaultMerge.tagLibrary(it, incoming) }
-        }
     }
+
+    private fun mangaEntryNames(gallery: LibraryGalleryEntity): List<String> =
+        gallery.pagePaths.lineSequence().filter(String::isNotBlank).map { path ->
+            val file = mangaFiles.pageFile(gallery.id, path)
+                ?: throw VaultException(VaultError.CORRUPT, "Invalid manga page name")
+            "manga/${gallery.id}/${file.name}"
+        }.distinct().toList()
 
     private fun videoIdOf(entryName: String): Long? =
         entryName.removePrefix("video/").substringBefore('.').toLongOrNull()

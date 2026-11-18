@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.browser.FoundVideo
 import ru.spgsroot.peachy.browser.MediaKind
 import ru.spgsroot.peachy.browser.MediaSniffer
-import ru.spgsroot.peachy.browser.adblock.FilterEngine
 import ru.spgsroot.peachy.data.browser.AdblockService
 import ru.spgsroot.peachy.data.browser.BrowserStore
 import ru.spgsroot.peachy.data.db.BookmarkEntity
@@ -40,11 +39,22 @@ class BrowserViewModel @Inject constructor(
     val allowedHosts: StateFlow<Set<String>> = store.allowedHosts
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-    val engine: StateFlow<FilterEngine> = adblock.engine
-
-    init {
-        viewModelScope.launch { adblock.ensureLoaded() }
+    val engine get() = adblock.engine
+    val subscriptions = adblock.subscriptions
+    val profile = adblock.profile
+    val mode = adblock.mode
+    val refreshFailed = adblock.refreshFailed
+    fun setMode(next: AdblockService.Mode) = adblock.setMode(next)
+    fun applyProfile(ids: Set<String>, custom: ru.spgsroot.peachy.data.browser.PrivateFilterProfile, done: (Result<Int>) -> Unit) {
+        viewModelScope.launch { done(adblock.update(ids, custom = custom, edit = true)) }
     }
+    val blocked = adblock.blocked
+    suspend fun prepareBlocker() {
+        adblock.ensureLoaded()
+        viewModelScope.launch { adblock.update(ifDue = true) }
+    }
+    fun countBlock() = adblock.countBlock()
+    fun saveBlockCount() = adblock.saveCount()
 
     fun allowedNow(): Set<String> = allowedHosts.value
 
@@ -87,8 +97,8 @@ class BrowserViewModel @Inject constructor(
     }
 
     /** Fetches newer filter lists; [onDone] gets the number of rules on success. */
-    fun updateFilters(onDone: (Result<Int>) -> Unit) {
-        viewModelScope.launch { onDone(adblock.update()) }
+    fun updateFilters(ids: Set<String> = subscriptions.value, onDone: (Result<Int>) -> Unit) {
+        viewModelScope.launch { onDone(adblock.update(ids)) }
     }
 
     /**

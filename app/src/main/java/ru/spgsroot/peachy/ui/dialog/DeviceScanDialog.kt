@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
@@ -101,7 +100,7 @@ fun DeviceScanDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -212,7 +211,7 @@ fun DeviceScanDialog(
                         Text(
                             stringResource(R.string.found_devices),
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -226,12 +225,15 @@ fun DeviceScanDialog(
                                         onDeviceSelected(device.index)
                                         onDismiss()
                                     },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = MaterialTheme.shapes.small,
                                 color = if (isSelected)
                                     MaterialTheme.colorScheme.primaryContainer
                                 else
                                     MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = if (isSelected) 4.dp else 0.dp
+                                contentColor = if (isSelected)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -243,7 +245,7 @@ fun DeviceScanDialog(
                                         imageVector = if (isSelected) Icons.Default.BluetoothConnected
                                         else Icons.Default.Bluetooth,
                                         contentDescription = null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                                         else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(Modifier.width(12.dp))
@@ -264,7 +266,7 @@ fun DeviceScanDialog(
                                         Icon(
                                             Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
                                     }
                                 }

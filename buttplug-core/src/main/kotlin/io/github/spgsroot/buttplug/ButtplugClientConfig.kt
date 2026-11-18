@@ -11,8 +11,7 @@ data class ButtplugClientConfig(
     val reconnectDelayMs: Long = 3000L,
     val maxReconnectAttempts: Int = 3,
     val pingIntervalMs: Long = 5000L,
-    val requestTimeoutMs: Long = 10_000L,
-    val bypassCertVerify: Boolean = true // for self-signed certs on Intiface
+    val requestTimeoutMs: Long = 10_000L
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }

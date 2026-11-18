@@ -70,15 +70,19 @@ class GalleryDetailViewModel @Inject constructor(
     }
 
     private var loadedId: Int? = null
+    private val resumeProgress = GalleryResumeProgress(catalogStore.history)
 
     fun load(id: Int) {
         if (loadedId == id) return
         loadedId = id
         _state.value = DetailState()
+        // The reader writes the durable page while this screen sits on the back stack, so the label
+        // follows the same history row instead of a snapshot taken once at load time.
+        resumeProgress.track(viewModelScope, id) { page ->
+            if (loadedId == id) _state.update { it.copy(savedPage = page) }
+        }
         viewModelScope.launch {
-            val savedPage = withContext(Dispatchers.IO) { catalogStore.getHistory(id)?.page }
             val saved = library.observe().first().find { it.id == id && it.pagePaths.isNotEmpty() }
-            _state.update { it.copy(savedPage = savedPage) }
             if (saved != null) {
                 _state.update {
                     it.copy(detail = GalleryDetail(saved.id, saved.title, saved.thumbnailPath, saved.pagePaths), loading = false)

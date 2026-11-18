@@ -1,14 +1,18 @@
 package ru.spgsroot.peachy.ui.gallery
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.data.db.AlbumEntity
@@ -21,21 +25,44 @@ fun AlbumBrowser(albums: List<AlbumEntity>, items: List<GalleryItem>, onOpen: (L
     var deleting by remember { mutableStateOf<AlbumEntity?>(null) }
     val counts = remember(items) { items.groupingBy { it.albumId }.eachCount() }
     Column(Modifier.fillMaxSize()) {
-        TextButton(onClick = { create = true }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(stringResource(R.string.album_create)) }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(8.dp)) {
-            item { TextButton(onClick = { onOpen(0) }, modifier = Modifier.fillMaxWidth()) { Text("${stringResource(R.string.album_unassigned)} · ${counts[null] ?: 0}") } }
+        TextButton(onClick = { create = true }, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.album_create))
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 4.dp)) {
+            item {
+                AlbumRow(
+                    name = stringResource(R.string.album_unassigned),
+                    count = counts[null] ?: 0,
+                    onOpen = { onOpen(0) }
+                )
+                HorizontalDivider(
+                    Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
             items(albums, key = { it.id }) { album ->
                 var menu by remember { mutableStateOf(false) }
-                Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { onOpen(album.id) }, modifier = Modifier.weight(1f)) { Text("${album.name} · ${counts[album.id] ?: 0}") }
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.content_description_more)) }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename)) }, onClick = { menu = false; edit = album })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete)) }, onClick = { menu = false; deleting = album })
+                AlbumRow(
+                    name = album.name,
+                    count = counts[album.id] ?: 0,
+                    onOpen = { onOpen(album.id) },
+                    trailing = {
+                        Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.content_description_more)) }
+                            DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.menu_rename)) }, onClick = { menu = false; edit = album })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.menu_delete)) }, onClick = { menu = false; deleting = album })
+                            }
                         }
                     }
-                }
+                )
+                HorizontalDivider(
+                    Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
             }
         }
     }
@@ -48,6 +75,32 @@ fun AlbumBrowser(albums: List<AlbumEntity>, items: List<GalleryItem>, onOpen: (L
         title = { Text(album.name) }, text = { Text(stringResource(R.string.album_delete_explanation)) },
         confirmButton = { TextButton(onClick = { onDelete(album.id); deleting = null }) { Text(stringResource(R.string.menu_delete)) } },
         dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.btn_cancel)) } }) }
+}
+
+@Composable
+private fun AlbumRow(
+    name: String,
+    count: Int,
+    onOpen: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(start = 16.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "$name · $count",
+            modifier = Modifier.weight(1f).padding(vertical = 16.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        trailing?.invoke()
+    }
 }
 
 @Composable

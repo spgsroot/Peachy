@@ -1,0 +1,35 @@
+name: Set up Android build toolchain
+description: Install the JDK, Android SDK and native adblock build requirements.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: temurin
+        cache: gradle
+
+    - name: Install Android SDK and NDK
+      shell: bash
+      run: |
+        ndk_version=28.2.13676358
+        # AGP 8.11 defaults to Build Tools 35; use 36 for release signing and alignment.
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+          'platforms;android-36' 'build-tools;35.0.0' 'build-tools;36.0.0' "ndk;$ndk_version"
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ndk_version" >> "$GITHUB_ENV"
+        echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
+
+    - name: Install Rust and Android targets
+      shell: bash
+      run: |
+        # build.py requires exactly this rustc on PATH and invokes cargo through PATH.
+        rust_version=1.99.1
+        rustup toolchain install "$rust_version" --profile minimal \
+          --target aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+        echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
+
+    - name: Grant execute permission for gradlew
+      shell: bash
+      run: chmod +x gradlew

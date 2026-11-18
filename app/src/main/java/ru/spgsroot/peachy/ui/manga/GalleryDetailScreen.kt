@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
@@ -63,6 +62,7 @@ import ru.spgsroot.peachy.manga.GalleryComment
 import ru.spgsroot.peachy.manga.GalleryDetail
 import ru.spgsroot.peachy.manga.GalleryTag
 import ru.spgsroot.peachy.manga.NhentaiCdn
+import ru.spgsroot.peachy.manga.ReaderPageJump
 import ru.spgsroot.peachy.manga.TagFilter
 import ru.spgsroot.peachy.manga.TagMode
 import ru.spgsroot.peachy.ui.dialog.NoteDialog
@@ -156,6 +156,7 @@ fun GalleryDetailScreen(
                     }
                 }
                 pagePreviewRows(detail) { page ->
+                    ReaderPageJump.mark(galleryId, page)
                     navController.navigate("manga/$galleryId/read?page=$page")
                 }
                 item(key = "related") {
@@ -220,7 +221,7 @@ private fun LazyListScope.pagePreviewRows(detail: GalleryDetail, onOpenPage: (In
                     modifier = Modifier
                         .weight(1f)
                         .aspectRatio(COVER_RATIO)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(MaterialTheme.shapes.extraSmall)
                         .clickable { onOpenPage(page) },
                     contentScale = ContentScale.Crop
                 )
@@ -236,7 +237,7 @@ private fun Header(detail: GalleryDetail) {
         AsyncImage(
             model = NhentaiCdn.thumb(detail.thumbnailPath),
             contentDescription = null,
-            modifier = Modifier.width(120.dp).aspectRatio(COVER_RATIO).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.width(120.dp).aspectRatio(COVER_RATIO).clip(MaterialTheme.shapes.small),
             contentScale = ContentScale.Crop
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -273,7 +274,7 @@ private fun Actions(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Button(onClick = onRead, enabled = detail.pagePaths.isNotEmpty(), modifier = Modifier.weight(1f)) {
-            val resume = savedPage?.takeIf { it in detail.pagePaths.indices && it > 0 }
+            val resume = resumePage(savedPage, detail.pagePaths.size)
             Text(
                 if (resume == null) stringResource(R.string.manga_detail_read)
                 else stringResource(R.string.manga_detail_continue, resume + 1),
@@ -328,7 +329,7 @@ private fun TagGroup(type: String, tags: List<GalleryTag>, onTag: (GalleryTag) -
             tags.forEach { tag ->
                 Surface(
                     onClick = { onTag(tag) },
-                    shape = RoundedCornerShape(6.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

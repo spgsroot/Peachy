@@ -12,8 +12,18 @@ object RequestKinds {
     private val FONT_EXT = setOf("woff", "woff2", "ttf", "otf", "eot")
     private val MEDIA_EXT = setOf("mp4", "m4v", "webm", "mkv", "mov", "mp3", "m4a", "ogg", "wav", "m3u8", "mpd", "ts", "m4s")
 
-    fun guess(url: String, headers: Map<String, String>?, isMainFrame: Boolean): Int {
+    fun guess(url: String, headers: Map<String, String>?, isMainFrame: Boolean): String {
         if (isMainFrame) return ResourceType.SUBDOCUMENT
+        when (headers?.entries?.firstOrNull { it.key.equals("Sec-Fetch-Dest", true) }?.value) {
+            "script", "worker", "sharedworker", "serviceworker" -> return ResourceType.SCRIPT
+            "iframe", "frame" -> return ResourceType.SUBDOCUMENT
+            "style" -> return ResourceType.STYLESHEET
+            "image" -> return ResourceType.IMAGE
+            "font" -> return ResourceType.FONT
+            "audio", "video", "track" -> return ResourceType.MEDIA
+            "object", "embed" -> return ResourceType.OBJECT
+            "empty" -> return ResourceType.XHR
+        }
         val ext = url.substringBefore('#').substringBefore('?').substringAfterLast('/')
             .substringAfterLast('.', "").lowercase()
         when {
@@ -29,6 +39,7 @@ object RequestKinds {
         return when {
             accept.startsWith("text/css") -> ResourceType.STYLESHEET
             accept.startsWith("image/") -> ResourceType.IMAGE
+            accept.startsWith("audio/") || accept.startsWith("video/") -> ResourceType.MEDIA
             requestedWith -> ResourceType.XHR
             accept.startsWith("text/html") -> ResourceType.SUBDOCUMENT
             else -> ResourceType.OTHER

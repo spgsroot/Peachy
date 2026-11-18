@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pdf_loading">Opening PDF…</string>
+    <string name="pdf_close">Close</string>
+    <string name="pdf_back">Back</string>
+    <string name="pdf_more">More</string>
+    <string name="pdf_undo">Undo</string>
+    <string name="pdf_apply">Apply</string>
+    <string name="pdf_cancel">Cancel</string>
+
+    <string name="pdf_page_indicator">Page %1$d of %2$d</string>
+    <string name="pdf_previous_page">Previous page</string>
+    <string name="pdf_next_page">Next page</string>
+
+    <string name="pdf_tool_text">Text</string>
+    <string name="pdf_tool_search">Search</string>
+    <string name="pdf_tool_annotate">Marks</string>
+    <string name="pdf_tool_pages">Pages</string>
+    <string name="pdf_tool_forms">Forms</string>
+
+    <string name="pdf_menu_save_copy">Save a copy</string>
+    <string name="pdf_menu_export_text">Export text</string>
+    <string name="pdf_menu_export_images">Export pages</string>
+    <string name="pdf_menu_signatures">Signatures</string>
+    <string name="pdf_menu_rotate">Rotate page</string>
+
+    <string name="pdf_copy">Copy</string>
+    <string name="pdf_edit_text">Edit text</string>
+    <string name="pdf_highlight">Highlight</string>
+    <string name="pdf_underline">Underline</string>
+    <string name="pdf_strikeout">Strike through</string>
+    <string name="pdf_clear_selection">Clear selection</string>
+    <string name="pdf_delete_annotation">Delete annotation</string>
+    <string name="pdf_annotation">Annotation</string>
+
+    <string name="pdf_hint_ink">Drag on the page to add a stroke</string>
+    <string name="pdf_hint_note">Tap the page to place a note</string>
+    <string name="pdf_hint_textbox">Tap the page to insert a text box</string>
+    <string name="pdf_hint_place_signature">Tap the page to place the signature</string>
+
+    <string name="pdf_annotations_title">Annotations</string>
+    <string name="pdf_annotations_select_hint">Pick a tool and work on the page. Your own annotations can be tapped to select and dragged to move.</string>
+    <string name="pdf_annotations_empty">No annotations of yours on this page yet</string>
+    <string name="pdf_note">Note</string>
+    <string name="pdf_note_title">Text note</string>
+    <string name="pdf_note_label">Note text</string>
+    <string name="pdf_note_hint">The note is stored inside the PDF and is visible to readers of the document</string>
+    <string name="pdf_ink">Ink</string>
+    <string name="pdf_textbox">Text box</string>
+    <string name="pdf_textbox_title">Text on the page</string>
+    <string name="pdf_textbox_label">Text</string>
+    <string name="pdf_textbox_hint">The text stays vector: it is an annotation over the page, not a change to the original text</string>
+
+    <string name="pdf_edit_title">Replace text in place</string>
+    <string name="pdf_edit_field">New text</string>
+    <string name="pdf_edit_preview">Preview inside the original box</string>
+    <string name="pdf_edit_overflow">The text is about %1$d pt wider than the original box and may overlap its neighbour</string>
+    <string name="pdf_edit_refused">This text cannot be edited safely:</string>
+    <string name="pdf_edit_refuse_rotated">the page is rotated, so text and content coordinates differ</string>
+    <string name="pdf_edit_refuse_offset">the page has a shifted coordinate origin</string>
+    <string name="pdf_edit_refuse_vertical">the text is written vertically</string>
+    <string name="pdf_edit_refuse_empty">the new text is empty</string>
+    <string name="pdf_edit_refuse_unchanged">the text did not change</string>
+    <string name="pdf_edit_refuse_multiline">one line is replaced without reflow</string>
+    <string name="pdf_edit_refuse_long">the text is too long for a single line</string>
+    <string name="pdf_edit_refuse_glyphs">the embedded font has no glyphs for these characters</string>
+    <string name="pdf_edit_refuse_line">the line was not found</string>
+    <string name="pdf_edit_signed_warning">This change may invalidate or remove existing digital signatures in this PDF.</string>
+    <string name="pdf_edit_confirm_title">Remove the original text?</string>
+    <string name="pdf_edit_confirm_body">The selected line’s original glyphs are permanently removed from the page content, then the new text is written in their place. Images and line art are preserved and there is no reflow. The action can be undone with Undo until a copy is saved.</string>
+    <string name="pdf_edit_confirm_action">Remove and replace</string>
+
+    <string name="pdf_search_title">Search the document</string>
+    <string name="pdf_search_field">Find</string>
+    <string name="pdf_search_run">Search</string>
+    <string name="pdf_search_running">Searching…</string>
+    <string name="pdf_search_none">Nothing found</string>
+    <string name="pdf_search_hits">Matches: %1$d</string>
+    <string name="pdf_search_position">%1$d of %2$d</string>
+    <string name="pdf_search_next">Next match</string>
+    <string name="pdf_search_previous">Previous match</string>
+
+    <string name="pdf_forms_title">Form fields</string>
+    <string name="pdf_forms_empty">This PDF has no form fields</string>
+    <string name="pdf_form_apply">Write value</string>
+    <string name="pdf_flatten_forms">Flatten form into the page</string>
+    <string name="pdf_flatten_warning">After flattening the fields become part of the page content and can no longer be filled. The action is irreversible except for Undo before saving.</string>
+
+    <string name="pdf_pages_title">Pages</string>
+    <string name="pdf_insert_page">Insert blank</string>
+    <string name="pdf_import_page">Import from PDF</string>
+    <string name="pdf_delete_page">Delete</string>
+    <string name="pdf_rotate_page">Rotate</string>
+    <string name="pdf_move_page_up">Move up</string>
+    <string name="pdf_move_page_down">Move down</string>
+    <string name="pdf_pages_jump">Go to page</string>
+    <string name="pdf_pages_note">The whole selected PDF is imported; pages are inserted after the current one. The source file is not modified.</string>
+
+    <string name="pdf_signatures_title">Signatures</string>
+    <string name="pdf_signatures_empty">The document has no signatures</string>
+    <string name="pdf_signature_unknown_signer">Signer not named</string>
+    <string name="pdf_signature_valid">Signature integrity verified</string>
+    <string name="pdf_signature_digest_invalid">Signature does not match the content</string>
+    <string name="pdf_signature_not_trusted">Certificate is not trusted by a certificate authority</string>
+    <string name="pdf_signature_unknown">Signature state is unknown</string>
+    <string name="pdf_signature_unsigned">Signature field is empty</string>
+    <string name="pdf_signature_signed">signed</string>
+    <string name="pdf_drawn_signature_title">Drawn signature</string>
+    <string name="pdf_drawn_signature_hint">This is an ink drawing over the page, not a cryptographic signature. Draw below, then tap the page to place it.</string>
+    <string name="pdf_drawn_signature_clear">Clear</string>
+    <string name="pdf_drawn_signature_use">Place on page</string>
+    <string name="pdf_crypto_signature_title">Cryptographic signature</string>
+    <string name="pdf_crypto_signature_hint">A PKCS#12 file (.p12/.pfx) with a private key and certificate is required. The password is used only to read the key and is not stored.</string>
+    <string name="pdf_crypto_signature_action">Choose PKCS#12</string>
+    <string name="pdf_p12_title">PKCS#12 password</string>
+    <string name="pdf_p12_message">Enter the key store password. It is used only to read the key and is not stored by the app.</string>
+    <string name="pdf_p12_field">Password</string>
+    <string name="pdf_p12_action">Sign</string>
+
+    <string name="pdf_export_images_title">Export pages</string>
+    <string name="pdf_export_images_resolution">Resolution</string>
+    <string name="pdf_export_images_format">Format</string>
+    <string name="pdf_export_images_jpeg_note">JPEG has no transparency; pages are rendered onto white</string>
+    <string name="pdf_export_images_action">Export</string>
+
+    <string name="pdf_password_title">The document is password protected</string>
+    <string name="pdf_password_message">Enter the password to open the PDF. It is not stored and is not written to logs.</string>
+    <string name="pdf_password_field">Password</string>
+    <string name="pdf_password_unlock">Open</string>
+    <string name="pdf_password_undo_title">Password for undo</string>
+    <string name="pdf_password_undo_message">The document is password protected. To restore the previous version, enter the password again: the app does not keep it.</string>
+
+    <string name="pdf_read_only_banner">View only: the document owner disallowed changes and annotations</string>
+
+    <string name="pdf_notice_copied">Text copied</string>
+    <string name="pdf_notice_annotation_added">Annotation added</string>
+    <string name="pdf_notice_text_replaced">Text replaced. Save a copy to get the file.</string>
+    <string name="pdf_notice_page_inserted">Blank page inserted</string>
+    <string name="pdf_notice_page_imported">Pages imported</string>
+    <string name="pdf_notice_page_deleted">Page deleted</string>
+    <string name="pdf_notice_page_rotated">Page rotated</string>
+    <string name="pdf_notice_forms_flattened">Form flattened into the page</string>
+    <string name="pdf_notice_signed">Document signed</string>
+    <string name="pdf_notice_drawn_signature_added">Signature drawing added as an annotation</string>
+    <string name="pdf_notice_saved_copy">PDF copy saved</string>
+    <string name="pdf_notice_text_exported">Text saved as UTF-8</string>
+    <string name="pdf_notice_images_exported">Pages exported</string>
+    <string name="pdf_notice_undo_done">Previous version restored</string>
+
+    <string name="pdf_error_too_large">The file is larger than 100 MiB and will not be opened</string>
+    <string name="pdf_error_page_limit">Too many pages to open safely</string>
+    <string name="pdf_error_object_limit">The PDF is too complex: the object limit was exceeded</string>
+    <string name="pdf_error_not_pdf">This is not a PDF file</string>
+    <string name="pdf_error_corrupt">The PDF is damaged or cannot be read</string>
+    <string name="pdf_error_password_required">The document password is required</string>
+    <string name="pdf_error_wrong_password">Wrong password</string>
+    <string name="pdf_error_read_only">The document allows viewing only</string>
+    <string name="pdf_error_render">The page could not be rendered</string>
+    <string name="pdf_error_no_text">The page has no text layer</string>
+    <string name="pdf_error_edit_failed">Text could not be edited; the page was left untouched</string>
+    <string name="pdf_error_edit_unsupported">This text cannot be edited safely</string>
+    <string name="pdf_error_save_failed">The working copy could not be written</string>
+    <string name="pdf_error_export_failed">The file could not be saved to the chosen location</string>
+    <string name="pdf_error_import_failed">Pages could not be imported</string>
+    <string name="pdf_error_import_not_pdf">The selected file is not a PDF</string>
+    <string name="pdf_error_form_field">The form field rejected the value</string>
+    <string name="pdf_error_sign_failed">The document could not be signed</string>
+    <string name="pdf_error_sign_no_cert">The file has no certificate and private key</string>
+    <string name="pdf_error_sign_wrong_password">PKCS#12 could not be opened: wrong password or format</string>
+    <string name="pdf_error_sign_unsupported">This key type is not supported for signing</string>
+    <string name="pdf_error_annotation">The annotation could not be changed</string>
+    <string name="pdf_thumbnails_menu">Thumbnails</string>
+    <string name="pdf_page_thumbnail">Page %1$d</string>
+</resources>

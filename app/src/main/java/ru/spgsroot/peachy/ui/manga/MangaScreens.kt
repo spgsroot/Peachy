@@ -79,7 +79,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -161,7 +160,7 @@ private fun Cover(path: String) {
     AsyncImage(
         model = NhentaiCdn.thumb(path),
         contentDescription = null,
-        modifier = Modifier.size(72.dp).clip(RoundedCornerShape(8.dp)),
+        modifier = Modifier.size(72.dp).clip(MaterialTheme.shapes.small),
         contentScale = ContentScale.Crop
     )
 }
