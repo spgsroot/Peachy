@@ -1,117 +1,44 @@
-<p align="center"><img src="repo/banner.png" alt="Peachy: private player and gallery with device sync, manga reader, page translation, browser"/></p>
+![Peachy — private media workspace for Android](repo/banner.png)
 
 # Peachy
 
-Private player and gallery for adult content: videos, image galleries and hentai manga in one app. It syncs playback with devices through the Buttplug protocol (Intiface Central). Native Android, Jetpack Compose. Version in this tree: `3.6.0` (`versionCode` 12). [Русская версия](README_RU.md).
+Peachy is an open-source, local-first media workspace for Android. Organize photos and videos into albums, play videos without leaving your library, and browse the web in the same app. Imported media stays in the app's private storage on your phone. The interface is available in English and Russian.
 
-Screenshots use sample clips. Catalog covers and titles are pixelated, and the reader shot shows its settings dialog over a pixelated page.
+**[Download for Android](https://github.com/spgsroot/Peachy/releases/latest)** · [Peachy website](https://peachyproject.org/) · [Русский](README_RU.md)
 
-## Overview
+## Install
 
-| Area | What you get |
-|---|---|
-| Player and devices | Local video on Media3 ExoPlayer, with playback speed and a timer that switches videos. Audio amplitude goes through one DSP path (bass range, smoothing, threshold, power boost) and drives vibration, oscillation, rotation or position on devices connected through Intiface Central. |
-| Library | Mixed photo/video gallery with swipeable tabs, albums, header search, name/size sorting, size filters and adjustable tiles. Rename/delete either type and zoom photos full-screen. Videos also support cover replacement, folder export, single/batch HEVC/H.264 compression and private notes. |
-| Browser | Opens from a button in the top bar. Tabs with a thumbnail overview, bookmarks, history and an ad and tracker blocker. Moving to another site and new windows open only after confirmation. It lists the video files a page loads and saves a chosen one to the library; HLS and DASH streams cannot be saved. A page's audio can drive haptics. |
-| Manga | nhentai in a native app: a catalog with tag filters, a tag browser with favorites and collections, a For you tab computed on the device, history, saved galleries, and a native reader with zoom, a thumbnail strip and saved pages. Tag names are shown in Russian when the interface is Russian. |
-| Privacy and backup | A non-empty password of any length with a growing wait after failures; SQLCipher database and `FLAG_SECURE` windows. Rotation preserves an unlocked session; Home, Recents, screen off and a restart lock it. Exception: leaving to Home during a system file picker, returning and cancelling the picker leaves the app unlocked. Export/import the library as a password-protected `.peachy` file. |
-| Updates | Check GitHub Releases, download the verified APK inside the app, then confirm installation in Android. Optional daily checks are off by default. |
-| Languages | Russian and English, dark interface. |
+Peachy runs on **Android 8.0 or later**. Open the [latest release](https://github.com/spgsroot/Peachy/releases/latest), download the `.apk` under **Assets**, and open it on your phone. Android may ask you to allow installs from the app that opened the file. The `.aab` is not for direct installation.
 
-## Screenshots
+To check for an update from Peachy, open **Settings → Peachy updates**. Android still asks you to confirm installation.
 
-### Player and library
+## What you can do
 
-| Onboarding | Password | Player |
+- **Library.** Import photos and videos from Android's share menu, organize them into albums, and search or sort your collection. Open photos full-screen, or compress and export videos.
+- **Player.** Play local videos with a queue, playback speed controls, and a timer that switches clips. Optionally drive compatible haptic devices from player or browser audio through Intiface Central.
+- **Browser.** Open HTTPS sites with tabs, bookmarks, history, and an ad and tracker blocker. Save supported video files to your library; HLS and DASH streams cannot be saved.
+- **Manga.** Browse the adult nhentai catalog, read and save galleries and pages, and optionally translate pages with a provider you configure. See the [manga reader guide](docs/manga-reader.md).
+
+| Library | Player | Browser |
 |:---:|:---:|:---:|
-| <img src="repo/screens/onboarding.png" width="180" alt="Onboarding"/> | <img src="repo/screens/auth.png" width="180" alt="Password entry"/> | <img src="repo/screens/player.png" width="180" alt="Player with local clip and playback queue"/> |
+| <img src="repo/screens/gallery.png" width="180" alt="Gallery with sample videos"> | <img src="repo/screens/player.png" width="180" alt="Video playback with a queue"> | <img src="repo/screens/browser-start.png" width="180" alt="Browser start page with bookmarks and history"> |
 
-| Settings | Device | Add video |
-|:---:|:---:|:---:|
-| <img src="repo/screens/settings.png" width="180" alt="Settings"/> | <img src="repo/screens/device.png" width="180" alt="Intiface dialog"/> | <img src="repo/screens/add-video.png" width="180" alt="Add video: gallery, URL, list, browser"/> |
+Screenshots are from an earlier interface. See the [website](https://peachyproject.org/) for the new Peachy design.
 
-| Gallery | Compress | Note |
-|:---:|:---:|:---:|
-| <img src="repo/screens/gallery.png" width="180" alt="Gallery with two sample clips"/> | <img src="repo/screens/compress.png" width="180" alt="Compression presets and custom settings"/> | <img src="repo/screens/note.png" width="180" alt="Private note on a clip"/> |
+## What stays on your phone
 
-| Gallery layout | Download | More settings |
-|:---:|:---:|:---:|
-| <img src="repo/screens/gallery-layout.png" width="180" alt="Cover style, tile size and sort"/> | <img src="repo/screens/download.png" width="180" alt="Download in the app or with another app"/> | <img src="repo/screens/settings-more.png" width="180" alt="Language, page translation, backup"/> |
+The app lock controls access to Peachy's interface. The database is encrypted; imported media files are not individually encrypted by Peachy and rely on Android's app sandbox and device encryption. You can export an encrypted `.peachy` backup protected by a separate password. Files exported individually are not encrypted by Peachy.
 
-### Browser and backup
+The browser contacts the sites you open, and the manga catalog contacts nhentai. Optional page translation sends page images or text recognized on the phone, depending on the mode, to the provider you configure after you approve that host. Peachy is not an anonymity tool.
 
-| Start page | Page videos | Backup |
-|:---:|:---:|:---:|
-| <img src="repo/screens/browser-start.png" width="180" alt="Browser start page with bookmarks and history"/> | <img src="repo/screens/browser-videos.png" width="180" alt="Video files found on a page, with a save button"/> | <img src="repo/screens/backup.png" width="180" alt="Export library dialog with a password"/> |
+## Build from source
 
-| Browser menu |
-|:---:|
-| <img src="repo/screens/browser-menu.png" width="180" alt="Browser menu: tabs, bookmarks, ad blocker"/> |
+Use **JDK 17** and the **Android SDK Platform 36**. The app is written in Kotlin with Jetpack Compose.
 
-### Manga
-
-| Catalog | Menu | Tags | Reader |
-|:---:|:---:|:---:|:---:|
-| <img src="repo/screens/catalog.png" width="180" alt="Catalog, covers pixelated"/> | <img src="repo/screens/drawer.png" width="180" alt="Manga navigation drawer"/> | <img src="repo/screens/tags.png" width="180" alt="Tag browser"/> | <img src="repo/screens/reader.png" width="180" alt="Reader settings dialog over a pixelated page"/> |
-
-| Page translation provider |
-|:---:|
-| <img src="repo/screens/provider.png" width="180" alt="Provider dialog with presets, key hidden"/> |
-
-## Details
-
-- Plays local video with Media3 ExoPlayer. A thumbnail carousel shows the actual playback queue and highlights the selected clip; each card shows the clip length to the left of the file size. Swipe the video horizontally to switch to the next or previous clip (seek with the seek bar); double-tap the left/right half for −10/+10 seconds. Vertical swipes on the left/right edge adjust window brightness/media volume. Pinch to zoom, drag while zoomed to pan, and long-press to reset zoom. Carousel drags only scroll the queue.
-- Search sits in the gallery and manga catalog headers, not in the player. Media title search ignores case; sorting supports newest, name and file size in both directions. Inclusive size bounds are entered in MiB. Player filters change the queue. Manga search keeps gallery-ID navigation.
-- Gallery tabs (All, Videos, Photos, Albums) support horizontal swipes. Cards show stored file sizes. Rename/delete either media type, including a mixed selection; photo tiles open an EXIF-aware pinch-zoom/pan viewer, never the player. Compression and folder export remain video-only.
-- A photo or video belongs to at most one album. Create/rename albums and move individual or mixed selected media, including back to “Not in an album”. Deleting an album leaves all its files in the library.
-- Receives one or several photos or videos through Android Share. Photos are copied into private internal storage, checked by decoding image bounds, and given downscaled thumbnails. Each photo is limited to 100 MiB, including when the sharing app reports no size; invalid images are rejected. Missing or unusual display names do not become storage paths.
-- The gallery layout menu remembers the cover style and a discrete tile-size setting of 1–5 columns. The setting applies immediately to grid layouts; One and List stay single-column without discarding the grid setting.
-- Downloads a video from an `http` or `https` URL into the app library.
-- Acts as a downloader: "Download with" in a browser or another app offers Peachy for a video link (a `VIEW` intent for `http`/`https` with a video type), and Share accepts a link or text containing one. The download runs in the background and the video goes straight into the library. Peachy is never offered as a web browser.
-- Detects duplicates by SHA-256 of the file content. A video already in the gallery is not added silently: the in-app import shows a "Skip / Add anyway" dialog, the browser and shared links report it. A same-sized file is hashed only when needed; existing videos get their hash on first comparison.
-- Player: a tap on the video toggles the control panel (queue strip, seek bar, device status). It also fades after a few seconds without a touch. A horizontal swipe longer than 20% of the width switches to the next or previous video; seeking stays on the seek bar. Each video keeps its position and play/pause state until the app process ends; a video that came back paused keeps the timer off.
-- Imports videos from file-host links: an album or a single file on Bunkr, Cyberdrop, Turbo, Pixeldrain or Filester, or a findr.to album page (imported from the album it points to). An album link brings every video in it; images and archives are skipped. Only public links work: password albums, GoFile and FileDitch are not supported. Turbo's CDN could not be reached from the test machine, so Turbo downloads are untested.
-- Exports selected gallery videos to a folder you choose. The app gets access to that folder only, and a failed copy is removed instead of left half-written.
-- Compresses a single video from its menu, selected videos, or the current filtered gallery videos with Media3 Transformer. Four presets or custom codec, bitrate, height, frame rate and audio; a size estimate appears before starting. Unsupported HEVC output falls back to H.264. The original is replaced only when the result is smaller and passes size/duration/audio checks. Cancellation leaves originals untouched.
-- Opens an HTTPS page in a WebView and uses that page's audio for haptics. The window is marked `FLAG_SECURE`. Non-HTTPS pages are rejected.
-- Has a built-in browser with tabs, bookmarks, history and an ad and tracker blocker; its button sits in the main screen's top bar. The blocker uses EasyList, EasyPrivacy and an adult list bundled in the app; "Update filter lists" in the menu fetches fresh copies. Blocking can be turned off per site. The browser lists the video files a page loads and saves a chosen one to the library; HLS and DASH streams cannot be saved.
-- The browser loads pages over HTTPS only: an `http` address is upgraded to `https`, `file:`, `content:`, `intent:` and other non-web links do not open, a `javascript:` address typed in the address bar is refused, and a page with a certificate error does not load. A `javascript:` link on a page runs as that page's own script. Sites get no camera, microphone, location or file chooser, third-party cookies are off, and WebView debugging is disabled. A link or redirect to another site opens only after a confirmation naming the site; declining keeps the current page. The address bar, bookmarks and history open the address directly. Windows a page opens without a tap are refused; a window opened by a tap becomes a new tab only after confirmation.
-- The tab overview shows page thumbnails in a two-column grid: tap to switch, the cross closes a tab, a button adds one. Up to 10 tabs stay open, each thumbnail at most 320×640. Only tabs that have been shown have a thumbnail; video may be black in it.
-- Protection limits: the blocker relies on filter lists and does not catch every ad. Android does not pass form submissions (POST) to the check, so they move without confirmation. Subdomains of one site and shared hosts such as `*.github.io` count as one site. An `about:blank` window is blocked even if the site then writes content into it.
-- Translates a manga page in the native reader with a vision-language model of your choice, over an OpenAI-compatible `chat/completions` API (the default points at OpenCode Go with `glm-5.3-flash`; one tap fills in the address and a cheap model for OpenCode Go, OpenAI, Google Gemini, OpenRouter or Mistral; set the address, model and key in Settings, "Page translation", or from the panel). A button in the reader header sends the current page; the result shows in a panel over the bottom of the page: each line with its translation, original and sound-effect markers. The mode is set in the reader settings: on request, on every page turn, or the whole gallery with progress and Cancel. The language is the app language (the device language if it is set to System). Translations are cached per gallery, page and language in the encrypted database and travel in the `.peachy` file, so a page is paid for once. A 401, 403 or 429 stops a batch instead of retrying. The reader settings also choose the source language (Auto, Japanese, Chinese, Korean, English), the target language (the app language by default) and the text detection: the model finds the text itself (best with a strong vision model), or ML Kit finds it on the device and only the recognised text goes to the provider (Latin, Japanese, Chinese and Korean; adds about 15-30 MB). "Show on the page" draws each line on a white plate over its original text, and the plates move with zoom and pan.
-- On arm64-v8a, the on-device YOLO26n text detector groups ML Kit blocks and retries empty regions; the original Task 1 universal debug APK grew by 11.6 MB, and a separate clean-build comparison measured another 770,048 bytes for exception-enabled ONNX Runtime ([measurements and limits](docs/reports/2026-11-15-phase2-results.md)).
-- The provider dialog's **Models** dropdown lists image support and input/output prices when supplied, with name, equal-token price and measured-speed sorting. The model field stays editable. A per-model speed check asks before spending tokens on a tiny synthetic image; it sends no page, and keeps only timestamped host/model timings in the local cache.
-- Sends page images to the provider address you entered, and nowhere else, only after you accept a prompt that names the host. Changing the host asks again. Plain `http` is accepted only for localhost and private networks. The key is kept encrypted on the phone (`EncryptedSharedPreferences`), is never written to the database, the `.peachy` file or a backup, and is not logged. Adult content is sent as it is: a provider may refuse some pages, and the panel says so.
-- Keeps a private note on a video, a saved gallery or a browser page. Notes live in the encrypted database and are never sent anywhere.
-- Exports/imports the library as a password-protected `.peachy` file: media and thumbnails, albums, saved manga/pages, histories, tags/blacklist, notes, browser data and cached translations. AES-256-GCM with a PBKDF2-SHA256 key; files stream in blocks. Format 3 reads formats 1 and 2. Album IDs are remapped; matching names and creation times are paired one-to-one, so distinct same-name albums stay separate. Duplicate local media keeps its existing album. Import adds rather than deletes; newer notes/translations win. Photo duplicates use title, pixel dimensions and file size. App password, device settings and provider key stay on the device. A forgotten vault password cannot be recovered.
-- Connects to Intiface Central over a WebSocket. The default address is `ws://127.0.0.1:12345`. The app does not scan Bluetooth itself; Intiface does that.
-- Maps audio amplitude through one DSP path: bass range, smoothing, threshold, and power boost. The same settings apply to the player and the WebView.
-- Sends commands only to actuators that can follow an audio level, such as vibration, oscillation, rotation, and position.
-- Switches videos on a timer and changes playback speed.
-- Locks with any non-empty digit password, entered on an in-screen keypad, without trimming or a fixed length; existing numeric PINs continue to work. A password that contains letters cannot be typed on that keypad. Change it from Settings. Repeated failures increase the wait. Lock, setup and change screens scroll and fit landscape. Configuration changes keep the live unlocked session; a genuine background transition locks it.
-- Speaks Russian and English. The interface is dark.
-- Browses nhentai in a drawer-based hub: Catalog, Downloads, Favorites, History, Tags, Characters, and Random gallery. The catalog is a two-column cover grid with tag chips, filters by tag (include or exclude), date, and page count, and sorting by date or popularity. The tag browser lists tags, artists, characters, parodies, groups, categories, and languages by popularity; tags can be marked favorite, put into named collections kept on the device, and sent to the catalog as a search. A gallery page shows titles, page count, favorite count, upload date, tags grouped by type, related galleries, and read-only comments loaded on demand. Posting comments needs an nhentai account and is not available. Galleries open in a native Compose reader and can be saved on the device and marked favorite. Page images are requested from `i1.nhentai.net` and `t1.nhentai.net` without rewriting the path returned by the API. Turning a page sends a short pulse. Page-turn strength is configured in the reader settings sheet, not with a slider on the page.
-- In the catalog the Filters button sits in the title bar and shows how many tags are active. Tapping a tag on a card cycles it through include, exclude, and removed, the same order as the chips under the search field; a long press marks the tag as a favorite and highlights it on every card. The next page is appended while you scroll toward the end of the list, and a failed page shows a Retry button instead of reloading by itself.
-- With the Russian interface, tags, categories, and gallery languages are shown in Russian: a built-in dictionary covers the tags used by at least 500 galleries, and any other name stays in English. Search, filters, favorites, and tag collections always use the English names the API uses, so switching the language changes only what is drawn.
-- Recommends galleries in a For you tab, computed on the device. It learns from the galleries you open, read, save, and favorite, from your favorite tags and tag collections, and from "Not interested" taps, with older signals fading over time. Candidates come from nhentai searches by your top tags and from the related lists of galleries you liked; each pick shows the tags that earned it a place. Until there is some taste to go on, the tab shows what is popular. The upload date appears on a card only for galleries whose page the app has already opened, because search results do not carry it. History uses the same large cards as the catalog. A gallery page shows a grid of page previews under the tags, and a tap opens the reader at that page.
-- The native reader turns pages by tapping the left or right third of the screen (or the top and bottom third in vertical paged mode; the continuous strip keeps left and right); the middle shows the title bar, a strip of page thumbnails, and the settings sheet. Settings: reading direction (vertical or horizontal), image fit (whole page or full width), continuous scroll, tap navigation with a left/right swap for one-handed use, zoom buttons, and hiding the tap hints that show when the reader opens. Pinch, double tap and the zoom buttons enlarge a page up to 6x, and the next three pages load in advance. The reader resumes at the last page you read. The bookmark button in the title bar keeps a single page; the Saved pages tab lists those pages, opens the reader on one, and exports or deletes a selection. Exported pages go to a folder you choose, and the app gets access to that folder only.
-
-- Settings → Peachy updates shows the installed version and checks the latest stable [GitHub release](https://github.com/spgsroot/Peachy/releases/latest) without a GitHub token. Automatic checks are off by default and run at most once a day while the app is open and unlocked; they do not open a modal over playback. Download starts only when you press Download APK and continues through Android DownloadManager. Size, GitHub SHA-256, app identity, versionCode and minimum Android version are checked before installation. Android verifies the signature and asks for confirmation; allow installs from Peachy if prompted, return, unlock and press Install again. Closing the installer keeps the downloaded APK. You can cancel/reset a download or discard a ready APK. Version 3.3.0 and earlier need one manual APK installation to gain this updater; subsequent updates use these controls.
-- Support in Settings copies the Sol address `FB4B37LCd52dgVED5fR7Vj7CDttsa74CQyBc647agQP7`; the GitHub button opens [spgsroot/Peachy](https://github.com/spgsroot/Peachy). `repo/logo.svg` is the logo source for the banners. The launcher icon and splash screen use the same peach as one vector (`res/drawable/ic_peach.xml`), scaled so the whole peach, leaf included, stays inside the 66dp adaptive-icon safe zone; the splash peach pops and fades out into the app when it is ready. If the logo changes, redo that vector from the SVG.
-- Verification and emulator limitations: [manual usability report](docs/reports/2026-11-14-usability.md).
-
-The nhentai key is compiled into the client and sent only in the `Authorization` header. It is in the public source and can be read from the APK. Minify is off in the release build type.
-
-## Requirements
-
-- minSdk 26, targetSdk 36
-- JDK 17 and an Android SDK for a local build
-- Intiface Central, if a device should move
-
-## Build
-
-```bash
+```sh
 ./gradlew :app:assembleDebug
 ```
 
-`assembleRelease` produces an unsigned APK. The GitHub Actions workflow `.github/workflows/release.yml` signs the release with repository secrets. It runs on a `v*` tag or when started by hand. The project is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
+On Windows, use `.\gradlew.bat :app:assembleDebug`. The debug APK is written to `app/build/outputs/apk/debug/`.
+
+Peachy is licensed under the [GNU Affero General Public License v3.0](LICENSE).
