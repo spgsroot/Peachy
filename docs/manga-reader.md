@@ -156,5 +156,5 @@ and [release notes](https://developers.google.com/ml-kit/release-notes). ML Kit 
 the app retains minSdk 26. In the measured universal debug APK, ML Kit adds one
 `libmlkit_google_ocr_pipeline.so` per ABI. Its arm64-v8a and x86_64 ELF load segments are 16 KB
 aligned; its armeabi-v7a and x86 segments are 4 KB aligned. APK ZIP alignment passes
-`zipalign -c -P 16 4`. SQLCipher's existing 4 KB ELF alignment is unchanged; these OCR dependencies
-add no further 64-bit ELF alignment issue. The 16.0.1 release notes announce 16 KB page-size support.
+`zipalign -c -P 16 4`. In the 3.7.0 release APK, all 64-bit native libraries, including SQLCipher,
+pass the 16 KiB ELF alignment check. This is a packaging check, not a device startup test.

@@ -308,7 +308,7 @@
         "Manga reader, translation panel and photo viewer reviewed in code only; the live catalogue is adult content.",
         "Russian layout exercised in the player top bar, settings drawer and browser tab sheet; initial broader screen captures are en-US.",
         "No tablet class, security audit or full regression suite claimed.",
-        "16 KB page-size compatibility warning for bundled native libraries remains an observed packaging limit."
+        "The rebrand test observed a 16 KB compatibility warning on an earlier build. The 3.7.0 APK passes 64-bit ELF and ZIP alignment checks; these do not test device startup."
       ]
     }
   },
