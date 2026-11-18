@@ -1,4 +1,4 @@
-<p align="center"><a href="repo/banner.png"><img src="repo/banner.png" alt="Peachy — your content, your space"/></a></p>
+![Peachy — the Android gallery and player](https://raw.githubusercontent.com/spgsroot/Peachy/6507c3e221dcb11c47e221a2e569a2867673ad61/repo/banner.png)
 
 # Peachy
 

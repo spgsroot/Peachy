@@ -1,4 +1,4 @@
-<p align="center"><a href="repo/banner_ru.png"><img src="repo/banner_ru.png" alt="Peachy — ваши файлы, ваше пространство"/></a></p>
+![Peachy — галерея и плеер на Android](https://raw.githubusercontent.com/spgsroot/Peachy/6507c3e221dcb11c47e221a2e569a2867673ad61/repo/banner_ru.png)
 
 # Peachy
 
