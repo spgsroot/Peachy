@@ -353,7 +353,7 @@ internal fun GalleryMetaLine(tags: List<GalleryTag>, pages: Int, uploadedAt: Lon
         ?.let { TagNames.display(it, tagLanguage()) }
     val parts = listOfNotNull(
         language,
-        stringResource(R.string.manga_page_count, pages),
+        pages.takeIf { it > 0 }?.let { stringResource(R.string.manga_page_count, it) },
         uploadedAt?.let(::formatUploadDate)
     )
     Text(

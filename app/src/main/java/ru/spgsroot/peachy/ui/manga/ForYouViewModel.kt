@@ -33,7 +33,9 @@ data class ForYouState(
     val loading: Boolean = false,
     val failed: Boolean = false,
     val loaded: Boolean = false,
-    /** False until the user has read, saved or favourited something; the list is then just what is popular. */
+    val savingFeedback: Boolean = false,
+    val feedbackErrorId: Int? = null,
+    /** False when there are no positively weighted taste tags yet. */
     val hasTaste: Boolean = true,
     val items: List<Recommendation> = emptyList()
 )
@@ -61,8 +63,9 @@ class ForYouViewModel @Inject constructor(
     }
 
     fun refresh() {
+        if (_state.value.savingFeedback) return
         job?.cancel()
-        _state.update { it.copy(loading = true, failed = false) }
+        _state.update { it.copy(loading = true, failed = false, feedbackErrorId = null) }
         job = viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { build() }
@@ -75,10 +78,25 @@ class ForYouViewModel @Inject constructor(
         }
     }
 
-    /** Takes the gallery off the list at once and teaches the profile to steer away from its tags. */
-    fun notInterested(gallery: GallerySummary) {
-        _state.update { current -> current.copy(items = current.items.filterNot { it.gallery.id == gallery.id }) }
-        viewModelScope.launch(Dispatchers.IO) { memory.dismiss(gallery) }
+    fun markRead(gallery: GallerySummary) = recordFeedback(gallery.id) { memory.markRead(gallery) }
+
+    fun notInterested(gallery: GallerySummary) = recordFeedback(gallery.id) { memory.dismiss(gallery) }
+
+    private fun recordFeedback(id: Int, save: suspend () -> Unit) {
+        if (_state.value.loading || _state.value.savingFeedback) return
+        _state.update { it.copy(savingFeedback = true, feedbackErrorId = null) }
+        viewModelScope.launch {
+            try {
+                save()
+                _state.update { state -> state.copy(items = state.items.filterNot { it.gallery.id == id }) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(feedbackErrorId = id) }
+            } finally {
+                _state.update { it.copy(savingFeedback = false) }
+            }
+        }
     }
 
     private suspend fun build(): ForYouState {
@@ -90,10 +108,9 @@ class ForYouViewModel @Inject constructor(
 
         val signals = remembered.map { gallery ->
             val read = history[gallery.id]
-            val fraction = if (read != null && read.pageCount > 0) (read.page + 1).toDouble() / read.pageCount else 0.0
             Recommender.signalFor(
                 gallery = gallery,
-                readFraction = fraction,
+                readFraction = read?.readFraction ?: 0.0,
                 readAt = read?.readAt,
                 saved = saved.containsKey(gallery.id),
                 favorite = saved[gallery.id]?.favorite == true

@@ -1,9 +1,11 @@
 package ru.spgsroot.peachy.data.manga
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import ru.spgsroot.peachy.data.db.GalleryMemoryDao
+import ru.spgsroot.peachy.data.db.AppDatabase
 import ru.spgsroot.peachy.data.db.GalleryMemoryEntity
+import ru.spgsroot.peachy.data.db.ReadHistoryEntity
 import ru.spgsroot.peachy.manga.GalleryDetail
 import ru.spgsroot.peachy.manga.GallerySummary
 import ru.spgsroot.peachy.manga.RememberedGallery
@@ -13,7 +15,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class GalleryMemoryStore @Inject constructor(private val dao: GalleryMemoryDao) {
+class GalleryMemoryStore @Inject constructor(private val database: AppDatabase) {
+    private val dao = database.galleryMemoryDao()
     val all: Flow<List<RememberedGallery>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
 
     /** Upload dates of every gallery whose page has been opened; search results do not carry one. */
@@ -29,7 +32,51 @@ class GalleryMemoryStore @Inject constructor(private val dao: GalleryMemoryDao) 
     /** Hides [gallery] from recommendations for good and teaches the profile to avoid its tags. */
     suspend fun dismiss(gallery: GallerySummary, now: Long = System.currentTimeMillis()) {
         val known = dao.getById(gallery.id)
-        dao.upsert((known ?: gallery.toRemembered(now).toEntity()).copy(dismissed = true))
+        dao.upsert((known ?: gallery.toRemembered(now).toEntity()).copy(dismissed = true, seenAt = now))
+    }
+
+    /**
+     * Records completion and the card metadata together, so history also excludes this gallery.
+     * Detailed metadata wins over a sparse catalog card; zero pages means the count is unknown.
+     */
+    suspend fun markRead(gallery: GallerySummary, now: Long = System.currentTimeMillis()) {
+        database.withTransaction {
+            val known = dao.getById(gallery.id)
+            val historyDao = database.readHistoryDao()
+            val history = historyDao.getById(gallery.id)
+            val pageCount = known?.numPages?.takeIf { it > 0 }
+                ?: history?.pageCount?.takeIf { it > 0 }
+                ?: gallery.numPages.coerceAtLeast(0)
+            val title = known?.title?.takeIf { it.isNotBlank() }
+                ?: history?.title?.takeIf { it.isNotBlank() }
+                ?: gallery.title
+            val thumbnail = known?.thumbnailPath?.takeIf { it.isNotBlank() }
+                ?: history?.thumbnailPath?.takeIf { it.isNotBlank() }
+                ?: gallery.thumbnailPath
+            dao.upsert(
+                GalleryMemoryEntity(
+                    galleryId = gallery.id,
+                    title = title,
+                    thumbnailPath = thumbnail,
+                    numPages = pageCount,
+                    tags = known?.tags?.takeIf { it.isNotBlank() } ?: TagCodec.encode(gallery.tags),
+                    uploadedAt = known?.uploadedAt,
+                    numFavorites = known?.numFavorites ?: gallery.numFavorites,
+                    seenAt = known?.seenAt ?: now,
+                    dismissed = false
+                )
+            )
+            historyDao.upsert(
+                ReadHistoryEntity(
+                    galleryId = gallery.id,
+                    title = title,
+                    thumbnailPath = thumbnail,
+                    page = pageCount - 1,
+                    pageCount = pageCount,
+                    readAt = now
+                )
+            )
+        }
     }
 }
 

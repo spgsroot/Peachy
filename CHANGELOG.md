@@ -3,6 +3,14 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 0.9.0
+
+- **Manga recommendations.** In **For you**, **Already read** adds a gallery to reading history
+  and counts it as a completed read for future picks. **Not interested** now ranks similar
+  galleries lower even before you have marked anything you like.
+- **Version numbering.** This release follows 3.7.1. The Android version code increases from
+  14 to 15; install the signed APK over the old app once to switch to the new numbering.
+
 ## 3.7.1
 
 - **Browser navigation.** Android Back walks the current page history first. At its root, Back

@@ -3,6 +3,8 @@ package ru.spgsroot.peachy.ui.manga
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +58,7 @@ fun ForYouScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = viewModel::refresh, enabled = !state.loading) {
+                TextButton(onClick = viewModel::refresh, enabled = !state.loading && !state.savingFeedback) {
                     Text(stringResource(R.string.manga_for_you_refresh))
                 }
             }
@@ -98,13 +100,32 @@ fun ForYouScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                TextButton(
-                    onClick = { viewModel.notInterested(gallery) },
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(stringResource(R.string.manga_for_you_not_interested), style = MaterialTheme.typography.labelMedium)
+                RecommendationActions(
+                    enabled = !state.loading && !state.savingFeedback,
+                    onRead = { viewModel.markRead(gallery) },
+                    onDismiss = { viewModel.notInterested(gallery) }
+                )
+                if (state.feedbackErrorId == gallery.id) {
+                    Text(
+                        stringResource(R.string.manga_for_you_feedback_error),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun RecommendationActions(enabled: Boolean, onRead: () -> Unit, onDismiss: () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = onRead, enabled = enabled, contentPadding = PaddingValues(0.dp)) {
+            Text(stringResource(R.string.manga_for_you_read), style = MaterialTheme.typography.labelMedium)
+        }
+        TextButton(onClick = onDismiss, enabled = enabled, contentPadding = PaddingValues(0.dp)) {
+            Text(stringResource(R.string.manga_for_you_not_interested), style = MaterialTheme.typography.labelMedium)
         }
     }
 }

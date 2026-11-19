@@ -9,8 +9,8 @@ import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.data.db.ReadHistoryEntity
 
 /**
- * The reader owns the durable read history; a gallery detail only displays it. The detail stays on
- * the back stack while the reader writes, so a one-shot read goes stale. One collector per opened
+ * The reader and explicit completion actions own durable history; a gallery detail only displays it.
+ * The detail stays on the back stack while history changes, so a one-shot read goes stale. One collector per opened
  * gallery keeps the "Continue from page N" label in sync without reloading the gallery, and a
  * gallery change cancels the previous collector so an older row cannot land in the new state.
  */
@@ -29,7 +29,7 @@ internal class GalleryResumeProgress(private val history: Flow<List<ReadHistoryE
 }
 
 internal fun List<ReadHistoryEntity>.pageOf(galleryId: Int): Int? =
-    firstOrNull { it.galleryId == galleryId }?.page
+    firstOrNull { it.galleryId == galleryId }?.page?.takeIf { it >= 0 }
 
 /**
  * Stored pages are zero-based, the label is one-based. Index 0 is the first page, which reads

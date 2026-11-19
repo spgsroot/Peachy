@@ -8,6 +8,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.spgsroot.peachy.data.db.ReadHistoryEntity
+import ru.spgsroot.peachy.manga.ReaderPosition
+import ru.spgsroot.peachy.manga.readerStart
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GalleryResumeProgressTest {
@@ -72,6 +74,15 @@ class GalleryResumeProgressTest {
         assertNull(resumePage(0, pageCount))
         assertNull(resumePage(5, 0))
         assertNull(resumePage(null, pageCount))
+    }
+
+    @Test
+    fun unknownLengthCompletionDoesNotOfferANegativeResumePage() {
+        val completed = row(gallery, page = -1).copy(pageCount = 0)
+        assertNull(listOf(completed).pageOf(gallery))
+        assertNull(resumePage(completed.page, pageCount))
+        assertEquals(1.0, completed.readFraction, 0.0)
+        assertEquals(ReaderPosition(0), readerStart(null, ReaderPosition(completed.page), pageCount))
     }
 
     private fun row(id: Int, page: Int) = ReadHistoryEntity(

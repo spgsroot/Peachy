@@ -119,7 +119,8 @@ object Recommender {
 
     /**
      * Picks up to [limit] galleries. [excluded] are ids the user already has (read, saved, dismissed)
-     * or must not see. Without any positive taste the list is simply the most popular candidates.
+     * or must not see. Without feedback the list is simply the most popular candidates; negative-only
+     * feedback lowers overlapping candidates without excluding them or claiming a positive match.
      */
     fun rank(
         candidates: List<GallerySummary>,
@@ -129,36 +130,46 @@ object Recommender {
     ): List<Recommendation> {
         val seen = HashSet<Int>()
         val pool = candidates.filter { it.id !in excluded && seen.add(it.id) }
-        if (!profile.hasTaste) {
+        val hasTaste = profile.hasTaste
+        if (!hasTaste && profile.tagWeights.values.none { it < 0.0 }) {
             return pool.sortedByDescending { it.numFavorites ?: 0 }.take(limit).map { Recommendation(it, emptyList()) }
         }
-        val scored = pool.mapNotNull { score(it, profile) }.sortedByDescending { it.total }
+        val scored = pool.mapNotNull { score(it, profile, requireMatch = hasTaste) }.sortedByDescending { it.total }
+        if (!hasTaste) return scored.take(limit).map { Recommendation(it.gallery, emptyList()) }
         if (scored.isEmpty()) return emptyList()
         val best = scored.first().total
         val chosen = ArrayList<Scored>()
         val remaining = scored.toMutableList()
         while (chosen.size < limit && remaining.isNotEmpty()) {
             val next = remaining.maxBy { candidate ->
-                val overlap = chosen.maxOfOrNull { jaccard(candidate.refs, it.refs) } ?: 0.0
-                DIVERSITY * (candidate.total / best) - (1.0 - DIVERSITY) * overlap
+                DIVERSITY * (candidate.total / best) - (1.0 - DIVERSITY) * candidate.maxOverlap
             }
             remaining.remove(next)
             chosen += next
+            if (chosen.size < limit) {
+                for (candidate in remaining) {
+                    candidate.maxOverlap = max(candidate.maxOverlap, jaccard(candidate.refs, next.refs))
+                }
+            }
         }
         return chosen.map { Recommendation(it.gallery, because(it.refs, profile)) }
     }
 
-    private class Scored(val gallery: GallerySummary, val refs: List<TagRef>, val total: Double)
+    private class Scored(val gallery: GallerySummary, val refs: List<TagRef>, val total: Double) {
+        var maxOverlap = 0.0
+    }
 
-    /** Null when the gallery has no tag the user likes: a popular or same-language gallery alone is no evidence. */
-    private fun score(gallery: GallerySummary, profile: TasteProfile): Scored? {
+    /** With positive taste, popularity or language alone cannot earn a recommendation. */
+    private fun score(gallery: GallerySummary, profile: TasteProfile, requireMatch: Boolean): Scored? {
         val refs = gallery.tags.filter { typeFactor(it.type) > 0.0 }.map(::ref).distinct()
-        if (refs.isEmpty()) return null
-        val evidence = refs.sumOf { profile.tagWeights[it] ?: 0.0 } / sqrt(refs.size.toDouble())
-        if (evidence <= 0.0) return null
-        val language = gallery.tags.language()?.let { profile.languageShare[it] } ?: 0.0
-        val popularity = gallery.numFavorites?.let { min(1.0, ln(1.0 + it) / ln(1.0 + POPULARITY_SCALE)) } ?: 0.0
-        return Scored(gallery, refs, evidence + LANGUAGE_WEIGHT * language + POPULARITY_WEIGHT * popularity)
+        val evidence = if (refs.isEmpty()) 0.0
+            else refs.sumOf { profile.tagWeights[it] ?: 0.0 } / sqrt(refs.size.toDouble())
+        if (requireMatch && evidence <= 0.0) return null
+        val language = if (requireMatch) gallery.tags.language()?.let { profile.languageShare[it] } ?: 0.0 else 0.0
+        val popularity = gallery.numFavorites?.let { ln(1.0 + it) / ln(1.0 + POPULARITY_SCALE) } ?: 0.0
+        // Cold-start popularity stays uncapped so unrelated candidates keep their popularity order.
+        val popularityBoost = POPULARITY_WEIGHT * if (requireMatch) min(1.0, popularity) else popularity
+        return Scored(gallery, refs, evidence + LANGUAGE_WEIGHT * language + popularityBoost)
     }
 
     private fun because(refs: List<TagRef>, profile: TasteProfile): List<String> = refs

@@ -4,9 +4,9 @@
 
 Your photos, videos and reading, in one Android app. Peachy combines a local media library, a player, an HTTPS browser and an adult manga reader, with optional device sync through Intiface Central.
 
-**Android 8.0+ · v3.7.1 (versionCode 14) · English / Русский · AGPL-3.0**
+**Android 8.0+ · v0.9.0 (versionCode 15) · English / Русский · AGPL-3.0**
 
-Capabilities below describe the **3.7.1 source**, not a claim about every older APK.
+Capabilities below describe the **0.9.0 source**, not a claim about every older APK.
 
 [Download APK](https://github.com/spgsroot/Peachy/releases/latest) · [Website](https://peachyproject.org/) · [Русский](README_RU.md) · [Privacy](#privacy-and-network) · [Build](#build)
 
@@ -81,7 +81,9 @@ JPEG export composites transparency without a full-image `IntArray`, avoiding th
 
 A `.peachy` library export uses its **own password**, AES-256-GCM and a PBKDF2-SHA256 key. It includes media/thumbnails, albums, saved manga/pages, histories, tags, notes, browser data and cached translations. Format 3 reads formats 1 and 2; import adds rather than deletes, and newer notes/translations win. App password, device settings and provider key are excluded. This is a library backup, not a promise to back up document working sessions. A forgotten archive password cannot be recovered. Separately exported files are not encrypted by Peachy.
 
-**Settings → Peachy updates** checks the latest stable GitHub release and downloads its APK on request. Automatic daily checks are **off by default** and run only while Peachy is open and unlocked. The updater checks size, GitHub SHA-256, app identity, versionCode and minimum Android version; Android verifies the signature and asks before installing. Version 3.3.0 and earlier need one manual installation to gain the updater.
+**Settings → Peachy updates** checks the latest stable GitHub release and downloads its APK on request. Automatic daily checks are **off by default** and run only while Peachy is open and unlocked. The updater checks size, GitHub SHA-256, app identity, versionCode and minimum Android version; Android verifies the signature and asks before installing.
+
+**Moving from Peachy 3.x to 0.9.0:** download the [signed APK from the release](https://github.com/spgsroot/Peachy/releases/download/v0.9.0/app-release-unsigned-signed.apk) and install it over the existing app. Do not uninstall Peachy. The old updater does not offer lower version names, but Android recognizes the higher `versionCode` (15).
 
 More: [manga reader](docs/manga-reader.md) · [detector runtime and limits](docs/detector-runtime.md) · [recorded usability checks](docs/reports/2026-11-14-usability.md) · [changelog](CHANGELOG.md).
 

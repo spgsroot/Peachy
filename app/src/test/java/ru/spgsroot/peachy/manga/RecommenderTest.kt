@@ -121,7 +121,7 @@ class RecommenderTest {
     }
 
     @Test
-    fun withoutPositiveTasteTheMostPopularCandidatesComeFirst() {
+    fun withoutFeedbackTheMostPopularCandidatesComeFirst() {
         val result = Recommender.rank(
             listOf(card(1, glasses, favorites = 5), card(2, glasses, favorites = 900), card(3, glasses)),
             profile(),
@@ -138,6 +138,83 @@ class RecommenderTest {
         assertFalse(onlyDislikes.hasTaste)
         val result = Recommender.rank(listOf(card(1, netorare, favorites = 10)), onlyDislikes, emptySet(), 5)
         assertEquals(listOf(1), result.map { it.gallery.id })
+    }
+
+    @Test
+    fun withoutFeedbackPopularityIsNotCappedOrDiversified() {
+        val landscape = tag(20, "landscape")
+        val result = Recommender.rank(
+            listOf(
+                card(1, landscape, favorites = 200_000),
+                card(2, landscape, favorites = 100_000),
+                card(3, landscape, favorites = 300_000),
+                card(4)
+            ),
+            profile(),
+            emptySet(),
+            4
+        )
+        assertEquals(listOf(3, 1, 2, 4), result.map { it.gallery.id })
+        assertTrue(result.all { it.because.isEmpty() })
+    }
+
+    @Test
+    fun negativeOnlyFeedbackDemotesOverlappingTagsWithoutRemovingCandidates() {
+        val urban = tag(20, "urban")
+        val rural = tag(21, "rural")
+        val landscape = tag(22, "landscape")
+        val p = profile(
+            signal(urban, weight = -1.0),
+            signal(rural, weight = Recommender.DISMISSED, id = 101)
+        )
+        val result = Recommender.rank(
+            listOf(
+                card(1, urban, favorites = 50),
+                card(2, rural, favorites = 50),
+                card(3, landscape, favorites = 50)
+            ),
+            p,
+            emptySet(),
+            10
+        )
+        assertFalse(p.hasTaste)
+        assertEquals(listOf(3, 1, 2), result.map { it.gallery.id })
+        assertTrue(result.all { it.because.isEmpty() })
+    }
+
+    @Test
+    fun aPopularDislikedCandidateFallsBehindAnUnknownCandidateButIsNotBlacklisted() {
+        val urban = tag(20, "urban")
+        val p = profile(signal(urban, weight = Recommender.DISMISSED))
+        val result = Recommender.rank(
+            listOf(card(1, urban, favorites = 100_000), card(2)),
+            p,
+            emptySet(),
+            10
+        )
+        assertEquals(listOf(2, 1), result.map { it.gallery.id })
+        assertTrue(result.all { it.because.isEmpty() })
+    }
+
+    @Test
+    fun negativeOnlyFeedbackPreservesPopularityOutsideItsTagsAndRespectsExclusionsAndLimit() {
+        val urban = tag(20, "urban")
+        val landscape = tag(21, "landscape")
+        val p = profile(signal(urban, weight = Recommender.DISMISSED))
+        val result = Recommender.rank(
+            listOf(
+                card(1, landscape, favorites = 100_000),
+                card(2, landscape, favorites = 300_000),
+                card(2, landscape, favorites = 300_000),
+                card(3, landscape, favorites = 200_000),
+                card(4, landscape, favorites = 400_000)
+            ),
+            p,
+            excluded = setOf(4),
+            limit = 2
+        )
+        assertEquals(listOf(2, 3), result.map { it.gallery.id })
+        assertTrue(result.all { it.because.isEmpty() })
     }
 
     @Test
@@ -225,6 +302,21 @@ class RecommenderTest {
             3
         )
         assertEquals(listOf(1, 3, 2), result.map { it.gallery.id })
+    }
+
+    @Test
+    fun diversityRemembersAllPreviouslyChosenGalleries() {
+        val forest = tag(20, "forest")
+        val ocean = tag(21, "ocean")
+        val desert = tag(22, "desert")
+        val p = profile(explicit = mapOf(ref(forest) to 4.0, ref(ocean) to 4.0, ref(desert) to 4.0))
+        val result = Recommender.rank(
+            listOf(card(1, forest), card(2, forest), card(3, ocean), card(4, ocean), card(5, desert)),
+            p,
+            emptySet(),
+            5
+        )
+        assertEquals(listOf(1, 3, 5, 2, 4), result.map { it.gallery.id })
     }
 
     @Test

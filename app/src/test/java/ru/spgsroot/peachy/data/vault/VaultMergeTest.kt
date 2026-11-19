@@ -104,7 +104,10 @@ class VaultMergeTest {
             entryCount = 4,
             videos = listOf(VaultVideo(3, "Clip \"q\"\n", 1000, 5, 99, false, "mp4", true)),
             galleries = listOf(LibraryGalleryEntity(7, "G", "t.jpg", "1.jpg\n2.jpg", true, 4)),
-            readHistory = listOf(ReadHistoryEntity(7, "G", "t.jpg", 2, 9, 11)),
+            readHistory = listOf(
+                ReadHistoryEntity(7, "G", "t.jpg", 2, 9, 11),
+                ReadHistoryEntity(8, "Unknown length", "u.jpg", -1, 0, 12)
+            ),
             searches = listOf(SearchHistoryEntity("мама", 3)),
             blacklist = emptyList(),
             memory = listOf(
