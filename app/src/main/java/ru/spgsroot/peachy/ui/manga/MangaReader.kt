@@ -84,11 +84,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -194,9 +197,13 @@ private fun NativeReader(
     var chrome by rememberSaveable { mutableStateOf(false) }
     var sheet by rememberSaveable { mutableStateOf(false) }
     val translation: TranslationViewModel = hiltViewModel()
-    val pageStates by translation.pages.collectAsStateWithLifecycle()
-    val batch by translation.batch.collectAsStateWithLifecycle()
-    val needsConsent by translation.needsConsent.collectAsStateWithLifecycle()
+    val locales = androidx.compose.ui.platform.LocalConfiguration.current.locales
+    val translationChoice = remember(gallery.id, settings, locales) { translation.choice(gallery.id, settings) }
+    val translationState by translation.state.collectAsStateWithLifecycle()
+    val currentTranslation = translationState?.forChoice(translationChoice)
+    val pageStates = currentTranslation?.pages.orEmpty()
+    val batch = currentTranslation?.batch
+    val needsConsent = currentTranslation?.needsConsent == true
     val provider by translation.provider.collectAsStateWithLifecycle()
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var providerDialog by rememberSaveable { mutableStateOf(false) }
@@ -228,8 +235,8 @@ private fun NativeReader(
         viewModel.setIntensity(prefs.getFloat("intensity", PageTurnHaptic.DEFAULT_INTENSITY))
     }
     // The gate ignores the page the reader opens on, and a mode change leaves the current page unsettled.
-    LaunchedEffect(gallery.id, settings.translateMode, settings.engine, settings.sourceLanguage, settings.targetLanguage) {
-        translation.open(gallery.id, gallery.pagePaths)
+    LaunchedEffect(translationChoice, settings.translateMode) {
+        translation.open(translationChoice, gallery.pagePaths)
         translation.onPageSettled(currentPage, settings)
     }
     LaunchedEffect(chrome, currentPage) {
@@ -254,6 +261,10 @@ private fun NativeReader(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val bubbleLines = remember(translationChoice, provider.baseUrl, provider.model) {
+        mutableStateMapOf<Int, List<TranslatedLine>>()
+    }
+
     // Mode-local states start at the current page when the layout changes.
     key(settings.continuous, settings.orientation) {
         val startFraction = offsetFraction(currentFraction)
@@ -274,6 +285,21 @@ private fun NativeReader(
                 if (stripMode) strip.centeredPage().takeIf { it >= 0 } ?: currentPage
                 else pager.currentPage
             }
+        }
+        val bubbleMode = settings.translateMode == TranslateMode.Bubble
+        val bubbles = if (bubbleMode) key(visiblePage, translationChoice, provider.baseUrl, provider.model) {
+            val pageScope = rememberCoroutineScope()
+            val latestProvider by rememberUpdatedState(provider)
+            remember {
+                BubbleTapSession(pageScope, bubbleLines,
+                    recognize = { translation.bubbleBlocks(translationChoice, it) },
+                    translate = { page, block -> translation.translateBubble(translationChoice, page, block) },
+                    needsConsent = { latestProvider.isConfigured && !latestProvider.consented })
+            }
+        } else null
+        LaunchedEffect(bubbles) { bubbles?.prepare(visiblePage) }
+        bubbles?.afterConsent?.let { approve ->
+            TranslateConsentDialog(provider.baseUrl, { translation.grantProviderConsent(); approve() }, bubbles::dismiss)
         }
         var jumpPage by remember { mutableIntStateOf(-1) }
         var jumpAt by remember { mutableIntStateOf(0) }
@@ -392,6 +418,16 @@ private fun NativeReader(
             val viewportHeight = maxHeight
             val scrollable = !zoom.zoomed
             val page: @Composable (Int, Boolean, Modifier) -> Unit = { index, inStrip, modifier ->
+                val wholePageLines = (pageStates[index] as? PageState.Done)?.translation?.lines.orEmpty()
+                val partial = if (bubbleMode) bubbleLines[index].orEmpty() else emptyList()
+                val overlayLines = remember(settings.overlay, wholePageLines, partial) {
+                    when {
+                        !settings.overlay -> emptyList()
+                        partial.isEmpty() -> wholePageLines
+                        wholePageLines.isEmpty() -> partial
+                        else -> wholePageLines + partial.filterNot { line -> wholePageLines.any { it.box == line.box } }
+                    }
+                }
                 ReaderPage(
                     model = remember(gallery.id, gallery.pagePaths[index]) {
                         viewModel.pageModel(gallery.id, gallery.pagePaths[index])
@@ -415,8 +451,13 @@ private fun NativeReader(
                         }
                     },
                     onStripMeasured = { height -> stripHeights[index] = height },
-                    lines = (pageStates[index] as? PageState.Done)
-                        ?.takeIf { settings.overlay }?.translation?.lines.orEmpty(),
+                    lines = overlayLines,
+                    onBubbleTap = if (bubbles == null) null else { at, miss ->
+                        panelOpen = false
+                        bubbles.tap(index, at, wholePageLines, { settings.overlay }, miss)
+                    },
+                    selectedLine = if (settings.overlay) bubbles?.selection?.takeIf { it.first == index }?.second else null,
+                    onSelectionOmitted = { line -> bubbles?.showOmitted(index, line) },
                     onTap = onTap
                 )
             }
@@ -483,6 +524,7 @@ private fun NativeReader(
                     },
                     actions = {
                         IconButton(onClick = {
+                            bubbles?.dismiss()
                             panelOpen = true
                             if (settings.translateMode == TranslateMode.Whole) translation.startWhole(settings)
                             else translation.translateNow(visiblePage, settings)
@@ -509,17 +551,19 @@ private fun NativeReader(
                 )
             }
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                if (panelOpen) {
+                val bubblePanel = bubbles?.panel
+                if (panelOpen || bubblePanel != null) {
                     TranslationPanel(
-                        state = pageStates[visiblePage] ?: PageState.Idle,
-                        batch = batch,
-                        onAgain = {
+                        state = bubblePanel ?: pageStates[visiblePage] ?: PageState.Idle,
+                        bubble = bubblePanel != null,
+                        batch = if (bubblePanel == null) batch else null,
+                        onAgain = if (bubblePanel != null) null else ({
                             // Only a finished translation is paid for again; a missing or failed one is just tried.
                             translation.translateNow(visiblePage, settings, force = pageStates[visiblePage] is PageState.Done)
-                        },
+                        }),
                         onProvider = { providerDialog = true },
                         onCancelBatch = translation::cancelWhole,
-                        onHide = { panelOpen = false },
+                        onHide = { bubbles?.dismiss(); panelOpen = false },
                         modifier = Modifier.fillMaxWidth()
                             .then(if (chrome) Modifier else Modifier.navigationBarsPadding())
                     )
@@ -642,6 +686,7 @@ private fun NativeReader(
                                 stringResource(
                                     when (settings.translateMode) {
                                         TranslateMode.Manual -> R.string.translate_mode_manual
+                                        TranslateMode.Bubble -> R.string.translate_mode_bubble
                                         TranslateMode.OnTurn -> R.string.translate_mode_on_turn
                                         TranslateMode.Whole -> R.string.translate_mode_whole
                                     }
@@ -766,7 +811,7 @@ private fun LazyListState.offsetFractionOf(page: Int): Float {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReaderPage(
+internal fun ReaderPage(
     model: Any?,
     page: Int,
     active: Boolean,
@@ -782,6 +827,9 @@ private fun ReaderPage(
     onScroll: (Float, Boolean) -> Unit,
     onStripMeasured: (Int) -> Unit,
     lines: List<TranslatedLine>,
+    onBubbleTap: ((Offset, () -> Unit) -> Unit)?,
+    selectedLine: TranslatedLine? = null,
+    onSelectionOmitted: (TranslatedLine) -> Unit = {},
     onTap: (Float, Float) -> Unit
 ) {
     var aspect by remember(model) { mutableFloatStateOf(0.7f) }
@@ -796,6 +844,9 @@ private fun ReaderPage(
     val latestPageHeight by rememberUpdatedState(pageHeight)
     val latestStripMeasured by rememberUpdatedState(onStripMeasured)
     val latestTap by rememberUpdatedState(onTap)
+    val latestBubbleTap by rememberUpdatedState(onBubbleTap)
+    var frameCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var imageCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val transform = rememberTransformableState { zoomChange, panChange, _ ->
         if (active) zoom.transform(zoomChange, panChange)
     }
@@ -864,10 +915,23 @@ private fun ReaderPage(
     Box(
         modifier.clipToBounds()
             .onSizeChanged { frame = it }
-            .pointerInput(tapOnY) {
+            .then(if (onBubbleTap != null) Modifier.onGloballyPositioned { frameCoordinates = it } else Modifier)
+            .pointerInput(tapOnY, active) {
                 detectTapGestures(
-                    onTap = {
-                        if (tapOnY) latestTap(it.y, size.height.toFloat()) else latestTap(it.x, size.width.toFloat())
+                    onTap = { tap ->
+                        val position = if (tapOnY) tap.y else tap.x
+                        val extent = (if (tapOnY) size.height else size.width).toFloat()
+                        val handler = latestBubbleTap
+                        val image = imageCoordinates
+                        val source = frameCoordinates
+                        val at = if (handler != null && aspectReady && image?.isAttached == true && source?.isAttached == true) {
+                            // Compose inverts the actual scroll, placement and graphics-layer transform.
+                            val local = image.localPositionOf(source, tap)
+                            val rect = fittedPage(image.size.width.toFloat(), image.size.height.toFloat(), aspect)
+                            if (rect.contains(local)) Offset((local.x - rect.left) / rect.width, (local.y - rect.top) / rect.height) else null
+                        } else null
+                        if (handler != null && at != null) handler(at) { latestTap(position, extent) }
+                        else latestTap(position, extent)
                     },
                     onDoubleTap = { if (active) zoom.doubleTap(it) }
                 )
@@ -895,7 +959,8 @@ private fun ReaderPage(
                 AsyncImage(
                     model = model,
                     contentDescription = stringResource(R.string.manga_jump_page, page + 1),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize()
+                        .then(if (onBubbleTap != null) Modifier.onGloballyPositioned { imageCoordinates = it } else Modifier),
                     contentScale = if (fillWidth) ContentScale.FillWidth else ContentScale.Fit,
                     onSuccess = {
                         val drawable = it.result.drawable
@@ -907,7 +972,9 @@ private fun ReaderPage(
                     },
                     onError = { aspectKnown = true }
                 )
-                TranslationOverlay(lines, aspect)
+                key(model, page) {
+                    TranslationOverlay(lines, aspect, selectedLine = selectedLine, onSelectionOmitted = onSelectionOmitted)
+                }
             }
         }
     }

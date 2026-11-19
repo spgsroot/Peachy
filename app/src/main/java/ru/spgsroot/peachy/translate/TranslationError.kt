@@ -14,6 +14,9 @@ sealed interface TranslationError {
     /** No connection, a timeout, or a broken transfer. */
     object Network : TranslationError
 
+    /** No hit test is possible because the local text scan could not read the page. */
+    object Recognition : TranslationError
+
     /** The provider answered, but not with a usable translation, even after one more try. */
     object BadResponse : TranslationError
 

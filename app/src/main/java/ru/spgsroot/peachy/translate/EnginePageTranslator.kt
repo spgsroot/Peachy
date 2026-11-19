@@ -2,9 +2,11 @@ package ru.spgsroot.peachy.translate
 
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 const val SECOND_PASS_SCORE = 0.5f
 const val SECOND_PASS_LIMIT = 8
@@ -15,7 +17,8 @@ class EnginePageTranslator internal constructor(
     private val ocr: PageOcr,
     private val detector: BubbleDetector,
     private val ocrCache: OcrCache,
-    private val pageSize: (ByteArray) -> Pair<Int, Int>
+    private val pageSize: (ByteArray) -> Pair<Int, Int>,
+    private val crop: (ByteArray, Box) -> ByteArray = PageImage::crop
 ) : PageTranslator {
     @Inject constructor(client: TranslationClient, ocr: PageOcr, detector: BubbleDetector, ocrCache: OcrCache) :
         this(client, ocr, detector, ocrCache, PageDecode::size)
@@ -24,9 +27,7 @@ class EnginePageTranslator internal constructor(
         when (request.engine) {
             TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, page, request, image) }
             TranslateEngine.MlKit -> {
-                val scan = ocrCache.get(galleryId, page, request.source)
-                    ?: scanPage(galleryId, page, image(), request.source)
-                val blocks = mergeBlocks(scan)
+                val blocks = bubbleBlocks(galleryId, page, request.source, image)
                 val source = if (request.source == "auto") "" else request.source
                 if (blocks.isEmpty()) {
                     PageTranslation(source, emptyList())
@@ -46,6 +47,44 @@ class EnginePageTranslator internal constructor(
                 }
             }
         }
+
+    /** Finds selectable text locally, reusing the same scan and merge as whole-page ML Kit translation. */
+    suspend fun bubbleBlocks(
+        galleryId: Int,
+        page: Int,
+        source: String,
+        image: suspend () -> ByteArray
+    ): List<OcrBlock> {
+        val scan = ocrCache.get(galleryId, page, source)
+            ?: scanPage(galleryId, page, image(), source)
+        return mergeBlocks(scan)
+    }
+
+    /** Translates only [block]; its original text and page box remain authoritative. Never stores a page translation. */
+    suspend fun translateBubble(
+        galleryId: Int,
+        page: Int,
+        request: TranslateRequest,
+        block: OcrBlock,
+        image: suspend () -> ByteArray
+    ): TranslatedLine = when (request.engine) {
+        TranslateEngine.MlKit -> {
+            val translation = traced("translate.net") {
+                client.translateBlocks(galleryId, listOf(block), request.source, request.target)
+            }.firstOrNull { it.index == 0 } ?: throw TranslationException(TranslationError.BadResponse)
+            TranslatedLine(translation.kind, block.text, translation.translation, block.box)
+        }
+        TranslateEngine.Model -> {
+            val result = traced("translate.net") {
+                client.translate(galleryId, page, request) {
+                    val bytes = image()
+                    withContext(Dispatchers.Default) { crop(bytes, block.box) }
+                }
+            }
+            val first = result.lines.firstOrNull() ?: throw TranslationException(TranslationError.BadResponse)
+            TranslatedLine(first.kind, block.text, result.lines.joinToString("\n") { it.translation }, block.box)
+        }
+    }
 
     private suspend fun scanPage(galleryId: Int, page: Int, image: ByteArray, source: String): PageScan = coroutineScope {
         val recognition = async { ocr.recognize(image, source) }

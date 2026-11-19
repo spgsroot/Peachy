@@ -13,6 +13,8 @@
     <string name="translate_provider_link">Настроить провайдера</string>
     <string name="translate_mode">Перевод</string>
     <string name="translate_mode_manual">По кнопке</string>
+    <string name="translate_mode_bubble">По нажатию на текст</string>
+    <string name="translate_bubble">Перевод реплики</string>
     <string name="translate_mode_on_turn">При листании</string>
     <string name="translate_mode_whole">Вся галерея</string>
     <string name="translate_error_not_configured">Провайдер не настроен: нужен ключ и адрес</string>
@@ -20,11 +22,12 @@
     <string name="translate_error_rate_limit">Слишком много запросов, подождите немного</string>
     <string name="translate_error_rate_limit_after">Слишком много запросов, подождите %1$d с</string>
     <string name="translate_error_network">Нет связи с провайдером или страницей</string>
+    <string name="translate_error_recognition">Не удалось распознать текст на странице</string>
     <string name="translate_error_bad_response">Провайдер ответил не тем, чего мы ждали</string>
     <string name="translate_error_refused">Модель отказалась читать эту страницу</string>
     <string name="translate_error_server">Ошибка провайдера: %1$d</string>
     <string name="provider_title">Перевод страниц</string>
-    <string name="provider_hint">Страницы манги уходят на сервис с моделью, которая читает картинки. Ключ ваш собственный, он хранится в зашифрованном виде на телефоне.</string>
+    <string name="provider_hint">ML Kit распознаёт текст на устройстве. Для перевода провайдер получает распознанный текст или изображение, в зависимости от выбранного режима. Ваш ключ хранится на телефоне в зашифрованном виде.</string>
     <string name="provider_base_url">Адрес API</string>
     <string name="provider_url_rejected">Нужен https; http допустим только для localhost и локальной сети</string>
     <string name="provider_model">Модель</string>
@@ -35,8 +38,8 @@
     <string name="provider_test">Проверить</string>
     <string name="provider_testing">Проверяю…</string>
     <string name="provider_test_ok">Провайдер ответил</string>
-    <string name="consent_title">Отправлять страницы?</string>
-    <string name="consent_text">Для перевода картинка страницы уходит на %1$s, и больше никуда. Ключ остаётся на телефоне и передаётся только как заголовок запроса. Содержимое сторонний сервис может обрабатывать по своим правилам.</string>
+    <string name="consent_title">Разрешить перевод через провайдера?</string>
+    <string name="consent_text">Разрешить отправку данных на %1$s для этого и следующих переводов? ML Kit отправляет распознанный текст. В режиме модели отправляется изображение: фрагмент при нажатии на реплику или вся страница при переводе страницы. Провайдер обрабатывает данные по своим правилам.</string>
     <string name="consent_accept">Разрешить</string>
     <string name="consent_decline">Не разрешать</string>
     <string name="settings_translation_row">Перевод страниц</string>

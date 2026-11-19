@@ -7,6 +7,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import java.io.IOException
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** Decodes original page bytes; strip fallback bounds the whole-page working bitmap. */
 object PageDecode {
@@ -26,12 +28,38 @@ object PageDecode {
             ?: throw unreadable()
     }
 
-    @Suppress("DEPRECATION")
     fun decodeTile(image: ByteArray, tile: PageTile, maxSide: Int, useRegionDecoder: Boolean = true): Bitmap {
         require(maxSide > 0)
         val (width, height) = size(image)
-        require(tile.top >= 0 && tile.top < tile.bottom && tile.bottom <= height)
-        val sample = PageImage.sampleSize(width, tile.bottom - tile.top, maxSide)
+        return decodeRegion(image, PixelRect(0, tile.top, width, tile.bottom), width, height, maxSide, useRegionDecoder)
+    }
+
+    internal fun decodeRegion(image: ByteArray, box: Box, maxSide: Int, useRegionDecoder: Boolean = true): Bitmap {
+        require(maxSide > 0)
+        require(box.left >= 0f && box.top >= 0f && box.right <= 1f && box.bottom <= 1f &&
+            box.left < box.right && box.top < box.bottom) { "Invalid text bounds" }
+        val (width, height) = size(image)
+        val rect = PixelRect(
+            floor(box.left.toDouble() * width).toInt(),
+            floor(box.top.toDouble() * height).toInt(),
+            ceil(box.right.toDouble() * width).toInt(),
+            ceil(box.bottom.toDouble() * height).toInt()
+        )
+        return decodeRegion(image, rect, width, height, maxSide, useRegionDecoder)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun decodeRegion(
+        image: ByteArray,
+        rect: PixelRect,
+        width: Int,
+        height: Int,
+        maxSide: Int,
+        useRegionDecoder: Boolean
+    ): Bitmap {
+        require(rect.left >= 0 && rect.left < rect.right && rect.right <= width)
+        require(rect.top >= 0 && rect.top < rect.bottom && rect.bottom <= height)
+        val sample = PageImage.sampleSize(rect.right - rect.left, rect.bottom - rect.top, maxSide)
         if (useRegionDecoder) {
             val decoder = try {
                 BitmapRegionDecoder.newInstance(image, 0, image.size, false)
@@ -39,7 +67,7 @@ object PageDecode {
             if (decoder != null) {
                 try {
                     val bitmap = try {
-                        decoder.decodeRegion(Rect(0, tile.top, width, tile.bottom), options(sample))
+                        decoder.decodeRegion(Rect(rect.left, rect.top, rect.right, rect.bottom), options(sample))
                     } catch (_: IllegalArgumentException) { null }
                     if (bitmap != null) return bitmap
                 } finally { decoder.recycle() }
@@ -53,13 +81,15 @@ object PageDecode {
         val whole = BitmapFactory.decodeByteArray(image, 0, image.size, options(fallbackSample)) ?: throw unreadable()
         try {
             val step = maxOf(sample, fallbackSample)
-            val targetWidth = ((width.toLong() + step - 1) / step).toInt().coerceAtLeast(1)
-            val targetHeight = ((tile.bottom.toLong() - tile.top + step - 1) / step).toInt().coerceAtLeast(1)
-            val top = (tile.top.toLong() * whole.height / height).toInt()
-            val bottom = ((tile.bottom.toLong() * whole.height + height - 1) / height).toInt()
+            val targetWidth = ((rect.right.toLong() - rect.left + step - 1) / step).toInt().coerceAtLeast(1)
+            val targetHeight = ((rect.bottom.toLong() - rect.top + step - 1) / step).toInt().coerceAtLeast(1)
+            val left = (rect.left.toLong() * whole.width / width).toInt()
+            val top = (rect.top.toLong() * whole.height / height).toInt()
+            val right = ((rect.right.toLong() * whole.width + width - 1) / width).toInt()
+            val bottom = ((rect.bottom.toLong() * whole.height + height - 1) / height).toInt()
             val crop = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
             try {
-                Canvas(crop).drawBitmap(whole, Rect(0, top, whole.width, bottom), Rect(0, 0, targetWidth, targetHeight), Paint(Paint.FILTER_BITMAP_FLAG))
+                Canvas(crop).drawBitmap(whole, Rect(left, top, right, bottom), Rect(0, 0, targetWidth, targetHeight), Paint(Paint.FILTER_BITMAP_FLAG))
                 return crop
             } catch (failure: Throwable) {
                 crop.recycle()

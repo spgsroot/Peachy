@@ -7,6 +7,7 @@ internal fun interface TextProbe {
 }
 
 internal fun largestFittingSp(probe: TextProbe, widthPx: Float, heightPx: Float, minSp: Float = 6f, maxSp: Float = 22f): Float {
+    if (widthPx <= 0f || heightPx <= 0f || maxSp < minSp) return 0f
     if (!probe.fits(minSp, widthPx, heightPx)) return 0f
     if (probe.fits(maxSp, widthPx, heightPx)) return maxSp
     var low = minSp
@@ -24,6 +25,19 @@ internal fun capToMedian(sizes: List<Float>, factor: Float = 1.25f): List<Float>
     val middle = positive.size / 2
     val median = if (positive.size % 2 == 0) (positive[middle - 1] + positive[middle]) / 2f else positive[middle]
     return sizes.map { minOf(it, median * factor) }
+}
+
+internal fun boundedPlateRect(original: Rect, page: Rect): Rect? {
+    val rect = Rect(
+        maxOf(original.left, page.left),
+        maxOf(original.top, page.top),
+        minOf(original.right, page.right),
+        minOf(original.bottom, page.bottom),
+    )
+    return rect.takeIf {
+        it.left.isFinite() && it.top.isFinite() && it.right.isFinite() && it.bottom.isFinite() &&
+            it.width > 0f && it.height > 0f
+    }
 }
 
 internal fun resolveOverlaps(rects: List<Rect>): List<Rect> {

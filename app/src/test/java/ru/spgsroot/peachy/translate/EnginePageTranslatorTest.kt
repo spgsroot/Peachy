@@ -67,7 +67,7 @@ class EnginePageTranslatorTest {
         server.shutdown()
     }
 
-    private fun translator(ocr: PageOcr, detector: BubbleDetector = FakeDetector(), cache: OcrCache = FileOcrCache(folder.root)): PageTranslator =
+    private fun translator(ocr: PageOcr, detector: BubbleDetector = FakeDetector(), cache: OcrCache = FileOcrCache(folder.root)): EnginePageTranslator =
         EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "Peachy/test"), ocr, detector, cache, { 800 to 1200 })
 
     private fun reply(content: String) {
@@ -452,5 +452,158 @@ class EnginePageTranslatorTest {
         assertEquals(PageScan(emptyList(), emptyList(), 800f / 1200), cache.scan)
         assertEquals(1, cache.writes)
         assertEquals(0, server.requestCount)
+    }
+
+    @Test fun bubbleBlocksSharesCachedScanAndMergeWithWholePageTranslation() = runBlocking {
+        val a = OcrBlock("HELLO", Box(0.1f, 0.2f, 0.25f, 0.3f))
+        val b = OcrBlock("WORLD", Box(0.3f, 0.2f, 0.45f, 0.3f))
+        val ocr = FakeOcr(listOf(a, b))
+        val detector = FakeDetector(listOf(Region(Box(0.05f, 0.15f, 0.5f, 0.35f), 0.9f)))
+        val engine = translator(ocr, detector)
+        var loads = 0
+        provider = provider.copy(consented = false)
+        val selected = engine.bubbleBlocks(7, 0, "en") { loads++; jpeg }
+        assertEquals(listOf(OcrBlock("HELLO WORLD", Box(0.1f, 0.2f, 0.45f, 0.3f))), selected)
+        assertEquals(selected, engine.bubbleBlocks(7, 0, "en") { error("Fetch on cache hit") })
+        assertEquals(0, server.requestCount)
+        provider = provider.copy(consented = true)
+        replyUnits(1)
+        val page = engine.translate(7, 0, TranslateRequest(TranslateEngine.MlKit, "en", "ru")) { error("Fetch on cache hit") }
+        assertEquals(selected.map { it.text }, page.lines.map { it.text })
+        assertEquals(selected.map { it.box }, page.lines.map { it.box })
+        assertEquals(1, loads)
+        assertEquals(1, ocr.calls)
+        assertEquals(1, detector.calls)
+    }
+
+    @Test fun bubbleBlocksCacheIsScopedToSourceLanguage() = runBlocking {
+        val ocr = FakeOcr(blocks)
+        val engine = translator(ocr)
+        var loads = 0
+        engine.bubbleBlocks(7, 0, "ja") { loads++; jpeg }
+        engine.bubbleBlocks(7, 0, "ko") { loads++; jpeg }
+        engine.bubbleBlocks(7, 0, "ja") { error("Fetch on cache hit") }
+        assertEquals(2, loads)
+        assertEquals(2, ocr.calls)
+        assertEquals("ko", ocr.source)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun mlKitBubbleSendsOnlySelectedTextAndUsesEachRequestedLanguageWithoutLoadingImage() = runBlocking {
+        val ocr = FakeOcr(blocks)
+        val detector = FakeDetector()
+        val cache = MemoryCache()
+        val engine = translator(ocr, detector, cache)
+        val block = blocks[1]
+        for ((target, translated) in listOf("ru" to "второй", "en" to "second")) {
+            reply("""{"lines":[{"i":1,"translation":"unrequested"},{"i":0,"kind":"thought","translation":"$translated"},{"i":0,"translation":"duplicate"}]}""")
+            val result = engine.translateBubble(7, 0, TranslateRequest(TranslateEngine.MlKit, "ja", target), block) {
+                error("Text-only bubble translation must not fetch an image")
+            }
+            assertEquals(TranslatedLine(LineKind.Thought, block.text, translated, block.box), result)
+            val body = JSONObject(server.takeRequest().body.readUtf8())
+            val messages = body.getJSONArray("messages")
+            assertEquals(PagePrompt.blocks(target, "ja"), messages.getJSONObject(0).getString("content"))
+            assertEquals(PagePrompt.blocksUser(listOf(block)), messages.getJSONObject(1).getString("content"))
+            assertFalse(body.toString().contains("image_url"))
+            assertFalse(body.toString().contains(blocks[0].text))
+        }
+        assertEquals(0, ocr.calls)
+        assertEquals(0, detector.calls)
+        assertEquals(0, cache.writes)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun modelBubbleUploadsOnlyCropAndCombinesLinesInsideOriginalBlockBounds() = runBlocking {
+        val cropped = byteArrayOf(9, 8, 7)
+        val block = blocks[1]
+        val ocr = FakeOcr(blocks)
+        val cache = MemoryCache()
+        var crops = 0
+        var loads = 0
+        val engine = EnginePageTranslator(
+            TranslationClient(OkHttpClient(), { provider }, "test"), ocr, FakeDetector(), cache,
+            { error("Scanning a selected bubble is not needed") },
+            { bytes, box ->
+                assertArrayEquals(jpeg, bytes)
+                assertEquals(block.box, box)
+                crops++
+                cropped
+            }
+        )
+        reply("""{"lines":[{"kind":"sign","text":"model text","translation":"first","box":[0,0,1000,1000]},{"translation":"second","box":[100,200,300,400]}]}""")
+        val result = engine.translateBubble(7, 0, TranslateRequest(TranslateEngine.Model, "ja", "ru"), block) { loads++; jpeg }
+        assertEquals(TranslatedLine(LineKind.Sign, block.text, "first\nsecond", block.box), result)
+        val messages = JSONObject(server.takeRequest().body.readUtf8()).getJSONArray("messages")
+        assertEquals(PagePrompt.system("ru", "ja"), messages.getJSONObject(0).getString("content"))
+        val parts = messages.getJSONObject(1).getJSONArray("content")
+        val image = (0 until parts.length()).map { parts.getJSONObject(it) }.single { it.getString("type") == "image_url" }
+        assertEquals("data:image/jpeg;base64,CQgH", image.getJSONObject("image_url").getString("url"))
+        assertEquals(1, loads)
+        assertEquals(1, crops)
+        assertEquals(0, ocr.calls)
+        assertEquals(0, cache.writes)
+    }
+
+    @Test fun bubbleWithoutUsableSelectedTranslationFailsInsteadOfReturningAnEmptyPlate() = runBlocking {
+        val cache = MemoryCache()
+        val engine = EnginePageTranslator(
+            TranslationClient(OkHttpClient(), { provider }, "test"), FakeOcr(blocks), FakeDetector(), cache,
+            { 800 to 1200 }, { bytes, _ -> bytes }
+        )
+        for (mode in TranslateEngine.entries) {
+            reply(if (mode == TranslateEngine.MlKit) """{"lines":[{"i":1,"translation":"wrong block"}]}""" else """{"lines":[]}""")
+            try {
+                engine.translateBubble(7, 0, TranslateRequest(mode, "ja", "ru"), blocks[0]) { jpeg }
+                org.junit.Assert.fail("Missing bubble translation accepted")
+            } catch (failure: TranslationException) {
+                assertEquals(TranslationError.BadResponse, failure.error)
+            }
+        }
+        assertEquals(0, cache.writes)
+    }
+
+    @Test fun bubbleTranslationPreservesProviderConsentAndRateLimitErrors() = runBlocking {
+        val engine = EnginePageTranslator(
+            TranslationClient(OkHttpClient(), { provider }, "test"), FakeOcr(blocks), FakeDetector(), MemoryCache(),
+            { 800 to 1200 }, { bytes, _ -> bytes }
+        )
+        for (mode in TranslateEngine.entries) {
+            provider = provider.copy(consented = false)
+            try {
+                engine.translateBubble(7, 0, TranslateRequest(mode, "auto", "en"), blocks[0]) { jpeg }
+                org.junit.Assert.fail("Unconsented bubble upload accepted")
+            } catch (failure: TranslationException) {
+                assertEquals(TranslationError.NotConfigured, failure.error)
+            }
+            provider = provider.copy(consented = true)
+            server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "9"))
+            try {
+                engine.translateBubble(7, 0, TranslateRequest(mode, "auto", "en"), blocks[0]) { jpeg }
+                org.junit.Assert.fail("Rate limit swallowed")
+            } catch (failure: TranslationException) {
+                assertEquals(TranslationError.RateLimit(9), failure.error)
+            }
+        }
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun cancellingBubbleImageLoadPropagatesWithoutUploadOrCacheWrite() = runTest {
+        val started = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        val cache = MemoryCache()
+        val engine = translator(FakeOcr(blocks), cache = cache)
+        val work = async {
+            engine.translateBubble(7, 0, TranslateRequest(TranslateEngine.Model, "ja", "en"), blocks[0]) {
+                started.complete(Unit)
+                try { awaitCancellation() } finally { stopped.complete(Unit) }
+            }
+        }
+        started.await()
+        work.cancelAndJoin()
+        assertTrue(work.isCancelled)
+        assertTrue(stopped.isCompleted)
+        assertEquals(0, server.requestCount)
+        assertEquals(0, cache.writes)
     }
 }

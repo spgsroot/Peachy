@@ -8,6 +8,7 @@ import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.TextUtils
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -15,13 +16,17 @@ import androidx.compose.ui.unit.sp
 import ru.spgsroot.peachy.translate.LineKind
 import ru.spgsroot.peachy.translate.TranslatedLine
 
-internal class PlacedPlate(val rect: Rect, val layout: StaticLayout, val textTop: Float)
+internal class PlacedPlate(
+    val rect: Rect,
+    val layout: StaticLayout,
+    val textTop: Float,
+    val line: TranslatedLine
+)
 
 private const val MIN_READABLE_SP = 13f
 private const val MIN_SP = 6f
-private val GROWTH = arrayOf(1f to 1f, 1.4f to 1.15f, 1.9f to 1.3f, 2.6f to 1.5f, 3.2f to 1.8f)
 
-internal fun plateLayout(text: String, kind: LineKind, sizePx: Float, widthPx: Int): StaticLayout {
+internal fun plateLayout(text: String, kind: LineKind, sizePx: Float, widthPx: Int, maxLines: Int = Int.MAX_VALUE): StaticLayout {
     val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
         textSize = sizePx
@@ -37,55 +42,70 @@ internal fun plateLayout(text: String, kind: LineKind, sizePx: Float, widthPx: I
         .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
         .setLineSpacing(0f, 1.1f)
         .setIncludePad(false)
+        .setMaxLines(maxLines)
+        .setEllipsize(if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END)
         .build()
 }
 
 internal fun layoutPlates(lines: List<TranslatedLine>, page: Rect, density: Density): List<PlacedPlate> {
     if (page.width <= 0f || page.height <= 0f) return emptyList()
-    val visible = lines.filter { it.box != null && it.kind != LineKind.Sfx }
+    val visible = ArrayList<TranslatedLine>(lines.size)
+    val rects = ArrayList<Rect>(lines.size)
+    for (line in lines) {
+        val box = line.box ?: continue
+        if (line.kind == LineKind.Sfx || line.translation.isBlank()) continue
+        val original = Rect(
+            page.left + box.left * page.width, page.top + box.top * page.height,
+            page.left + box.right * page.width, page.top + box.bottom * page.height,
+        )
+        val rect = boundedPlateRect(original, page) ?: continue
+        visible.add(line)
+        rects.add(rect)
+    }
     val horizontalPadding = with(density) { 4.dp.toPx() }
     val verticalPadding = with(density) { 2.dp.toPx() }
-    val rects = ArrayList<Rect>(visible.size)
-    val sizes = ArrayList<Float>(visible.size)
-    val probes = visible.map { line ->
+    val trimmed = resolveOverlaps(rects)
+    val sizes = visible.mapIndexed { index, line ->
+        val rect = trimmed[index]
         val longestWord = longestUnbreakableWord(line.translation)
-        TextProbe { sp, width, height ->
-            val layout = plateLayout(line.translation, line.kind, with(density) { sp.sp.toPx() }, width.toInt())
-            layout.height <= height && layout.paint.measureText(longestWord) <= width
-        }
-    }
-    visible.forEachIndexed { index, line ->
-        val box = line.box!!
-        val original = Rect(page.left + box.left * page.width, page.top + box.top * page.height,
-            page.left + box.right * page.width, page.top + box.bottom * page.height)
-        var bestRect = original
-        var bestSize = 0f
-        for ((widthFactor, heightFactor) in GROWTH) {
-            val width = minOf(original.width * widthFactor, page.width)
-            val height = minOf(original.height * heightFactor, page.height)
-            val left = (original.center.x - width / 2f).coerceIn(page.left, page.right - width)
-            val top = (original.center.y - height / 2f).coerceIn(page.top, page.bottom - height)
-            val candidate = Rect(left, top, left + width, top + height)
-            val size = largestFittingSp(probes[index], (width - horizontalPadding).coerceAtLeast(1f), (height - verticalPadding).coerceAtLeast(1f))
-            if (size > bestSize || bestSize == 0f) { bestRect = candidate; bestSize = size }
-            if (size >= MIN_READABLE_SP) break
-        }
-        rects.add(bestRect)
-        sizes.add(bestSize.coerceAtLeast(MIN_SP))
+        largestFittingSp(
+            TextProbe { sp, width, height ->
+                val layout = plateLayout(line.translation, line.kind, with(density) { sp.sp.toPx() }, width.toInt())
+                layout.height <= height && (
+                    layout.paint.measureText(longestWord) <= width ||
+                        (sp == MIN_SP && (0 until layout.lineCount).all { layout.getLineWidth(it) <= width })
+                    )
+            },
+            (rect.width - horizontalPadding).toInt().toFloat(),
+            rect.height - verticalPadding,
+            minSp = MIN_SP,
+        )
     }
     val capped = capToMedian(sizes)
-    val trimmed = resolveOverlaps(rects)
-    return visible.mapIndexed { index, line ->
+    return visible.mapIndexedNotNull { index, line ->
         val rect = trimmed[index]
-        val width = (rect.width - horizontalPadding).toInt().coerceAtLeast(1)
-        val height = (rect.height - verticalPadding).coerceAtLeast(1f)
-        val sp = largestFittingSp(probes[index], width.toFloat(), height, maxSp = capped[index]).coerceAtLeast(MIN_SP)
-        val layout = plateLayout(line.translation, line.kind, with(density) { sp.sp.toPx() }, width)
-        PlacedPlate(rect, layout, rect.top + (rect.height - layout.height) / 2f)
+        val width = (rect.width - horizontalPadding).toInt()
+        val height = rect.height - verticalPadding
+        if (width <= 0 || height <= 0f) return@mapIndexedNotNull null
+        val layout = if (capped[index] > 0f) {
+            plateLayout(line.translation, line.kind, with(density) { capped[index].sp.toPx() }, width)
+        } else {
+            // Keep a readable beginning and signal omitted text, never a clipped middle.
+            val full = plateLayout(line.translation, line.kind, with(density) { MIN_READABLE_SP.sp.toPx() }, width)
+            var maxLines = 0
+            while (maxLines < full.lineCount && full.getLineBottom(maxLines) <= height) maxLines++
+            if (maxLines == 0 || full.paint.measureText("\u2026") > width) return@mapIndexedNotNull null
+            val shortened = plateLayout(line.translation, line.kind, full.paint.textSize, width, maxLines)
+            if (shortened.height > height ||
+                (shortened.lineCount == 1 && shortened.getEllipsisCount(0) > 0 && shortened.getEllipsisStart(0) == 0)
+            ) return@mapIndexedNotNull null
+            shortened
+        }
+        PlacedPlate(rect, layout, rect.top + (rect.height - layout.height) / 2f, line)
     }
 }
 
-/** Shared with the overflow pixel test: even an impossible 6 sp fit cannot draw over the art. */
+/** Clip both the background and glyph overhangs to the original text bounds. */
 internal fun drawPlate(canvas: Canvas, plate: PlacedPlate, density: Density) {
     val rect = plate.rect
     val save = canvas.save()

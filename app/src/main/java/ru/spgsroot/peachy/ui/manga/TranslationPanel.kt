@@ -51,13 +51,14 @@ import ru.spgsroot.peachy.translate.TranslationError
 fun TranslationPanel(
     state: PageState,
     batch: BatchState?,
-    onAgain: () -> Unit,
+    onAgain: (() -> Unit)?,
     onProvider: () -> Unit,
     onCancelBatch: () -> Unit,
     onHide: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bubble: Boolean = false
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable(bubble) { mutableStateOf(bubble) }
     val maxExpanded = (LocalConfiguration.current.screenHeightDp * 0.5f).dp
     val sheet = MaterialTheme.shapes.extraLarge
     Surface(
@@ -83,13 +84,14 @@ fun TranslationPanel(
                     Icon(Icons.Default.Translate, null, Modifier.size(18.dp))
                 }
                 Text(
-                    summary(state, expanded),
+                    if (bubble && expanded && state is PageState.Done) stringResource(R.string.translate_bubble)
+                    else summary(state, expanded),
                     Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 12.dp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = if (state is PageState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 )
-                if (state != PageState.Loading) {
+                if (onAgain != null && state != PageState.Loading) {
                     IconButton(onClick = onAgain) {
                         Icon(Icons.Default.Refresh, stringResource(R.string.translate_again))
                     }
@@ -180,6 +182,7 @@ private fun errorText(error: TranslationError): String = when (error) {
         if (error.retryAfterSeconds != null) stringResource(R.string.translate_error_rate_limit_after, error.retryAfterSeconds)
         else stringResource(R.string.translate_error_rate_limit)
     TranslationError.Network -> stringResource(R.string.translate_error_network)
+    TranslationError.Recognition -> stringResource(R.string.translate_error_recognition)
     TranslationError.BadResponse -> stringResource(R.string.translate_error_bad_response)
     TranslationError.Refused -> stringResource(R.string.translate_error_refused)
     is TranslationError.Server -> stringResource(R.string.translate_error_server, error.code)

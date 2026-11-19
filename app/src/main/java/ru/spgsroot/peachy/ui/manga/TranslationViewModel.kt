@@ -11,7 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -22,7 +22,8 @@ import ru.spgsroot.peachy.manga.TranslateMode
 import ru.spgsroot.peachy.translate.BatchState
 import ru.spgsroot.peachy.translate.PageBytes
 import ru.spgsroot.peachy.translate.PageState
-import ru.spgsroot.peachy.translate.PageTranslator
+import ru.spgsroot.peachy.translate.EnginePageTranslator
+import ru.spgsroot.peachy.translate.OcrBlock
 import ru.spgsroot.peachy.translate.ProviderSettings
 import ru.spgsroot.peachy.translate.ProviderSettingsStore
 import ru.spgsroot.peachy.translate.TargetLanguage
@@ -39,6 +40,37 @@ import ru.spgsroot.peachy.translate.ModelSpeedCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+internal data class TranslationChoice(val galleryId: Int, val request: TranslateRequest) {
+    val key: String = TranslationKey.of(request.engine, request.source, request.target)
+}
+
+/** The tag stays attached even while stateIn still holds the previous runner's last emission. */
+internal data class ReaderTranslationState(
+    val choice: TranslationChoice,
+    val pages: Map<Int, PageState>,
+    val batch: BatchState?,
+    val needsConsent: Boolean
+) {
+    fun forChoice(expected: TranslationChoice): ReaderTranslationState? = takeIf { choice == expected }
+}
+
+internal class ReaderTranslationSession(val choice: TranslationChoice, val runner: TranslationRunner) {
+    var active: Boolean = true
+        private set
+
+    fun close() {
+        active = false
+        runner.cancelBatch()
+    }
+
+    suspend fun afterCacheMiss(page: Int, force: Boolean, action: () -> Unit) {
+        if (!active) return
+        if (!force && runner.showCached(choice.galleryId, page, choice.key)) return
+        // The cache may have suspended across a gallery or translation-choice change.
+        if (active) action()
+    }
+}
+
 /**
  * Translation for the gallery the reader has open. Nothing is sent before the user has agreed to
  * which host receives the pages; a request that arrives earlier waits for the answer.
@@ -51,45 +83,48 @@ class TranslationViewModel @Inject constructor(
     private val pageBytes: PageBytes,
     private val store: TranslationStore,
     private val client: TranslationClient,
-    private val translator: PageTranslator
+    private val translator: EnginePageTranslator
 ) : ViewModel() {
-    private val runner = MutableStateFlow<TranslationRunner?>(null)
+    private val runner = MutableStateFlow<ReaderTranslationSession?>(null)
     private var galleryId = -1
     private var pageCount = 0
-    private var activeKey: String? = null
     private var pendingAfterConsent: (() -> Unit)? = null
 
     // The user said no this session: a page turn must not ask again, only a deliberate press does.
     private var declined = false
 
-    val pages: StateFlow<Map<Int, PageState>> = runner
-        .flatMapLatest { it?.pages ?: flowOf(emptyMap()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
-
-    val batch: StateFlow<BatchState?> = runner
-        .flatMapLatest { it?.batch ?: flowOf(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     private val _needsConsent = MutableStateFlow(false)
 
-    /** True when a request is wanted but the user has not yet agreed to send pages to the provider. */
-    val needsConsent: StateFlow<Boolean> = _needsConsent.asStateFlow()
+    internal val state: StateFlow<ReaderTranslationState?> = runner
+        .flatMapLatest { session ->
+            if (session == null) flowOf(null)
+            else combine(session.runner.pages, session.runner.batch, _needsConsent) { pages, batch, consent ->
+                ReaderTranslationState(session.choice, pages, batch, consent)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val provider: StateFlow<ProviderSettings> = providerStore.settings
 
-    /** Binds the view model to a gallery; opening the one that is already open changes nothing. */
-    fun open(galleryId: Int, pagePaths: List<String>) {
-        if (galleryId == this.galleryId && runner.value != null) return
-        runner.value?.cancelBatch()
-        pendingAfterConsent = null
-        declined = false
-        _needsConsent.value = false
-        this.galleryId = galleryId
+    internal fun choice(galleryId: Int, settings: ReaderSettings) = TranslationChoice(galleryId, request(settings))
+
+    /** Binds cache checks and their results to the exact choices the reader is composing. */
+    internal fun open(choice: TranslationChoice, pagePaths: List<String>) {
+        if (runner.value?.choice == choice) return
+        if (galleryId != choice.galleryId) {
+            declined = false
+            pageBytes.bind(pagePaths)
+        }
+        galleryId = choice.galleryId
         pageCount = pagePaths.size
-        activeKey = null
-        pageBytes.bind(pagePaths)
-        runner.value = newRunner()
+        select(choice)
     }
+
+    internal suspend fun bubbleBlocks(choice: TranslationChoice, page: Int) =
+        translator.bubbleBlocks(choice.galleryId, page, choice.request.source) { pageBytes.raw(choice.galleryId, page) }
+
+    internal suspend fun translateBubble(choice: TranslationChoice, page: Int, block: OcrBlock) =
+        translator.translateBubble(choice.galleryId, page, choice.request, block) { pageBytes.raw(choice.galleryId, page) }
 
     /**
      * Translates [page]. A page the cache already holds is shown without the consent question: nothing
@@ -97,13 +132,16 @@ class TranslationViewModel @Inject constructor(
      */
     fun translateNow(page: Int, settings: ReaderSettings, force: Boolean = false, explicit: Boolean = true) {
         val request = request(settings)
-        val key = TranslationKey.of(request.engine, request.source, request.target)
-        val current = runnerFor(key) ?: return
+        val current = runnerFor(request) ?: return
         val id = galleryId
+        val key = current.choice.key
         viewModelScope.launch {
-            if (!force && current.showCached(id, page, key)) return@launch
-            gated(explicit) {
-                viewModelScope.launch { current.translate(id, page, key, request, force) }
+            current.afterCacheMiss(page, force) {
+                gated(explicit) {
+                    viewModelScope.launch {
+                        if (current.active) current.runner.translate(id, page, key, request, force)
+                    }
+                }
             }
         }
     }
@@ -114,34 +152,40 @@ class TranslationViewModel @Inject constructor(
      */
     fun onPageSettled(page: Int, settings: ReaderSettings) {
         val request = request(settings)
-        val key = TranslationKey.of(request.engine, request.source, request.target)
-        val current = runnerFor(key) ?: return
-        val state = current.pages.value[page]
+        val current = runnerFor(request) ?: return
+        val key = current.choice.key
+        val state = current.runner.pages.value[page]
         if (state == PageState.Loading || state is PageState.Done) return
         if (settings.translateMode == TranslateMode.OnTurn) {
             translateNow(page, settings, explicit = false)
         } else {
             val id = galleryId
-            viewModelScope.launch { current.showCached(id, page, key) }
+            viewModelScope.launch { current.runner.showCached(id, page, key) }
         }
     }
 
     fun startWhole(settings: ReaderSettings) {
         val request = request(settings)
-        val key = TranslationKey.of(request.engine, request.source, request.target)
-        val current = runnerFor(key) ?: return
+        val current = runnerFor(request) ?: return
+        val key = current.choice.key
         val id = galleryId
         val count = pageCount
-        gated(explicit = true) { current.startBatch(id, count, key, request) }
+        gated(explicit = true) {
+            if (current.active) current.runner.startBatch(id, count, key, request)
+        }
     }
 
     fun cancelWhole() {
-        runner.value?.cancelBatch()
+        runner.value?.runner?.cancelBatch()
+    }
+
+    fun grantProviderConsent() {
+        providerStore.update { it.copy(consented = true) }
+        declined = false
     }
 
     fun acceptConsent() {
-        providerStore.update { it.copy(consented = true) }
-        declined = false
+        grantProviderConsent()
         _needsConsent.value = false
         val action = pendingAfterConsent
         pendingAfterConsent = null
@@ -208,14 +252,16 @@ class TranslationViewModel @Inject constructor(
     private fun newRunner() =
         TranslationRunner(pageBytes, translator, store, { provider.value.model }, viewModelScope)
 
-    /** A page-only state map must not show results or a batch from different translation choices. */
-    private fun runnerFor(key: String): TranslationRunner? {
+    private fun runnerFor(request: TranslateRequest): ReaderTranslationSession? {
         val current = runner.value ?: return null
-        if (activeKey == key) return current
-        current.cancelBatch()
+        val choice = TranslationChoice(galleryId, request)
+        return if (current.choice == choice) current else select(choice)
+    }
+
+    private fun select(choice: TranslationChoice): ReaderTranslationSession {
+        runner.value?.close()
         pendingAfterConsent = null
         _needsConsent.value = false
-        activeKey = key
-        return newRunner().also { runner.value = it }
+        return ReaderTranslationSession(choice, newRunner()).also { runner.value = it }
     }
 }

@@ -13,6 +13,8 @@
     <string name="translate_provider_link">Set up provider</string>
     <string name="translate_mode">Translation</string>
     <string name="translate_mode_manual">On request</string>
+    <string name="translate_mode_bubble">Tap bubble text</string>
+    <string name="translate_bubble">Bubble translation</string>
     <string name="translate_mode_on_turn">On page turn</string>
     <string name="translate_mode_whole">Whole gallery</string>
     <string name="translate_error_not_configured">Provider is not set up: a key and an address are needed</string>
@@ -20,11 +22,12 @@
     <string name="translate_error_rate_limit">Too many requests, wait a little</string>
     <string name="translate_error_rate_limit_after">Too many requests, wait %1$d s</string>
     <string name="translate_error_network">Cannot reach the provider or the page</string>
+    <string name="translate_error_recognition">Could not recognize text on this page</string>
     <string name="translate_error_bad_response">The provider did not answer as expected</string>
     <string name="translate_error_refused">The model refused to read this page</string>
     <string name="translate_error_server">Provider error: %1$d</string>
     <string name="provider_title">Page translation</string>
-    <string name="provider_hint">Manga pages go to a service whose model reads images. The key is your own and is stored encrypted on the phone.</string>
+    <string name="provider_hint">ML Kit recognizes text on your device. Depending on the mode, the provider receives recognized text or an image for translation. Your key is stored encrypted on your phone.</string>
     <string name="provider_base_url">API address</string>
     <string name="provider_url_rejected">https is required; plain http is allowed only for localhost and the local network</string>
     <string name="provider_model">Model</string>
@@ -35,8 +38,8 @@
     <string name="provider_test">Test</string>
     <string name="provider_testing">Testing…</string>
     <string name="provider_test_ok">The provider answered</string>
-    <string name="consent_title">Send pages?</string>
-    <string name="consent_text">To translate, the page image is sent to %1$s and nowhere else. The key stays on the phone and is sent only as a request header. That service may handle the content under its own rules.</string>
+    <string name="consent_title">Allow provider translation?</string>
+    <string name="consent_text">Allow sending data to %1$s for this and future translations? ML Kit sends recognized text. Vision mode sends an image: a crop when you tap a bubble, or the full image when you translate a page. The provider handles this data under its own rules.</string>
     <string name="consent_accept">Allow</string>
     <string name="consent_decline">Do not allow</string>
     <string name="settings_translation_row">Page translation</string>

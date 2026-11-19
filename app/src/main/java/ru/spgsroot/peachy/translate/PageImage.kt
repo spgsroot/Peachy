@@ -53,6 +53,14 @@ object PageImage {
         val options = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight) }
         val decoded = BitmapFactory.decodeByteArray(source, 0, source.size, options)
             ?: throw IllegalArgumentException("Not an image")
+        return jpeg(decoded)
+    }
+
+    /** Crops original pixels to the selected text bounds before sizing an upload-ready JPEG. */
+    fun crop(source: ByteArray, box: Box): ByteArray =
+        jpeg(PageDecode.decodeRegion(source, box, MAX_SIDE))
+
+    private fun jpeg(decoded: Bitmap): ByteArray {
         val (width, height) = scaledSize(decoded.width, decoded.height)
         val scaled = if (width == decoded.width && height == decoded.height) {
             decoded

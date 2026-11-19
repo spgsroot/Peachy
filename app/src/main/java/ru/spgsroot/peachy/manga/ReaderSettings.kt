@@ -7,9 +7,8 @@ enum class ReaderOrientation { Vertical, Horizontal }
 
 enum class ReaderFit { Contain, Width }
 
-/** When the reader asks for a translation: only on request, on every settled page, or for the whole gallery. */
 enum class TranslateMode(val wire: String) {
-    Manual("manual"), OnTurn("on_turn"), Whole("whole");
+    Manual("manual"), Bubble("bubble"), OnTurn("on_turn"), Whole("whole");
 
     companion object {
         fun fromWire(value: String?): TranslateMode = entries.firstOrNull { it.wire == value } ?: Manual

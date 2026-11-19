@@ -3,6 +3,10 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 0.9.1
+
+- **Manga translation.** Tap bubble text to translate a single block into the selected language. On-page translations stay within the original text bounds; when no readable line fits, the reader opens the full text in the panel.
+
 ## 0.9.0
 
 - **Manga recommendations.** In **For you**, **Already read** adds a gallery to reading history
