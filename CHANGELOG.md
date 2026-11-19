@@ -3,6 +3,13 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 3.7.1
+
+- **Browser navigation.** Android Back walks the current page history first. At its root, Back
+  returns to the previously selected tab without closing either tab. The browser exits only
+  when there is no page or tab left to go back to.
+- Recreating the browser activity no longer opens a second copy of the original launch link.
+
 ## 3.7.0
 
 ### Added

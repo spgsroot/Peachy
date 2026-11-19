@@ -94,8 +94,17 @@ class BrowserTab(val id: Int) {
     /** Our own load is in flight: its commit settles [historyIndex] instead of appending an entry. */
     internal var expectCommit = false
 
-    /** Live back/forward we started (-1/+1); the index already moved and the commit only settles it. */
-    internal var pendingStep = 0
+    /** Logical position of the first live history entry; negative once its prefix is trimmed. */
+    internal var liveHistoryStart = 0
+
+    /** A restored forward tail survives until the live WebView starts a new branch. */
+    internal var keepStoredForward = false
+
+    /** Exact native Back/Forward destination approved by the user's toolbar or phone action. */
+    internal var pendingHistoryUrl: String? = null
+
+    /** Explicit load waiting for its first start/history callback; older loads may still finish. */
+    internal var pendingLoadUrl: String? = null
 
     /** Clear the WebView's own history once this page finishes, so it cannot disagree with [history]. */
     internal var clearLiveHistory = false
@@ -171,6 +180,17 @@ class BrowserController(
     private val shields = HashMap<WebView, PageShield>()
     private val cosmeticRuntime by lazy { activity.assets.open("adblock/cosmetic.js").bufferedReader().use { it.readText() } }
     private var nextId = 1
+    // Most recently left tab last; system Back consumes this trail without recording the return.
+    private val previousTabs = ArrayDeque<BrowserTab>()
+
+    fun previousTabIds() = IntArray(previousTabs.size) { previousTabs[it].id }
+
+    fun restorePreviousTabs(ids: IntArray) {
+        previousTabs.clear()
+        for (id in ids) {
+            tabs.firstOrNull { it.id == id && id != activeId }?.let { previousTabs.addLast(it) }
+        }
+    }
 
     val active: BrowserTab get() = tabs.first { it.id == activeId }
 
@@ -223,7 +243,8 @@ class BrowserController(
     private fun openRestored(tab: BrowserTab) {
         val target = tab.history.getOrNull(tab.historyIndex) ?: tab.url.takeIf { it.isNotEmpty() } ?: return
         tab.expectCommit = true
-        tab.pendingStep = 0
+        tab.keepStoredForward = true
+        tab.pendingHistoryUrl = null
         tab.clearLiveHistory = true
         tab.pendingScrollY = tab.scrollY
         tab.loading = true
@@ -231,27 +252,34 @@ class BrowserController(
         refreshHistoryFlags(tab)
     }
 
-    /** Adds a tab; [activate] false keeps the current page on screen. */
-    private fun addTab(activate: Boolean): BrowserTab? {
+    fun newTab(input: String? = null): BrowserTab {
         if (tabs.size >= MAX_TABS) {
             toast(R.string.browser_too_many_tabs)
-            return null
+            return active
         }
         val tab = BrowserTab(nextId++)
         tabs += tab
-        if (activate) activeId = tab.id
-        persist()
-        return tab
-    }
-
-    fun newTab(input: String? = null): BrowserTab {
-        val tab = addTab(activate = true) ?: return active
+        select(tab)
         if (input != null) navigate(tab, input)
         return tab
     }
 
     fun select(tab: BrowserTab) {
-        if (tab.id != activeId) tabs.firstOrNull { it.id == activeId }?.webView?.onPause()
+        if (tab.id != activeId) {
+            tabs.firstOrNull { it.id == activeId }?.let { previousTabs.addLast(it) }
+            previousTabs.remove(tab)
+            activate(tab)
+        }
+    }
+
+    fun returnToPreviousTab(): Boolean {
+        val previous = previousTabs.removeLastOrNull() ?: return false
+        activate(previous)
+        return true
+    }
+
+    private fun activate(tab: BrowserTab) {
+        tabs.firstOrNull { it.id == activeId }?.webView?.onPause()
         activeId = tab.id
         tab.chromeHidden = false
         tab.scrollTravel = 0
@@ -272,11 +300,12 @@ class BrowserController(
         tab.webView?.let(::destroy)
         tab.webView = null
         dropTabState(tab)
+        previousTabs.remove(tab)
         tabs.remove(tab)
         if (tabs.isEmpty()) {
             newTab()
         } else if (tab.id == activeId) {
-            select(tabs[(index - 1).coerceAtLeast(0)])
+            if (!returnToPreviousTab()) activate(tabs[(index - 1).coerceAtLeast(0)])
         }
         persist()
     }
@@ -289,12 +318,14 @@ class BrowserController(
             return
         }
         // A new navigation starts a new branch: whatever the tab could have gone forward to is gone.
+        if (tab.webView == null) tab.liveHistoryStart = tab.historyIndex + 1
+        tab.keepStoredForward = false
         recordEntry(tab, target)
         tab.url = target
         tab.host = Hosts.hostOf(target)
         tab.expectCommit = true
-        tab.pendingStep = 0
-        tab.clearLiveHistory = false
+        tab.pendingHistoryUrl = null
+        // Preserve a pending restore/fallback reset: its live list still belongs to the old page.
         tab.pendingScrollY = -1
         tab.pendingLazyLoad = false
         tab.scrollY = 0
@@ -321,7 +352,9 @@ class BrowserController(
         tab.posted.clear()
         tab.historyIndex = -1
         tab.expectCommit = false
-        tab.pendingStep = 0
+        tab.liveHistoryStart = 0
+        tab.keepStoredForward = false
+        tab.pendingHistoryUrl = null
         tab.clearLiveHistory = false
         tab.scrollY = 0
         tab.pendingScrollY = -1
@@ -526,10 +559,11 @@ class BrowserController(
     private fun recordEntry(tab: BrowserTab, url: String) {
         if (!BrowserUrls.isWebUrl(url)) return
         while (tab.history.size > tab.historyIndex + 1) tab.history.removeAt(tab.history.lastIndex)
-        if (tab.history.getOrNull(tab.historyIndex) == url) return
         tab.history.add(url)
-        while (tab.history.size > BrowserSessionStore.MAX_HISTORY) tab.history.removeAt(0)
-        if (tab.posted.size > tab.history.size) tab.posted.retainAll(tab.history.toSet())
+        while (tab.history.size > BrowserSessionStore.MAX_HISTORY) {
+            tab.history.removeAt(0)
+            tab.liveHistoryStart--
+        }
         tab.historyIndex = tab.history.lastIndex
         refreshHistoryFlags(tab)
     }
@@ -544,11 +578,53 @@ class BrowserController(
         if (index in tab.history.indices) tab.history[index] = url
     }
 
+    /**
+     * Native entries, not callback count or URL equality, define live history: redirects and
+     * replaceState rewrite entries, while pushState can add the same URL more than once.
+     */
+    private fun syncLiveHistory(tab: BrowserTab, view: WebView): String? {
+        val live = view.copyBackForwardList()
+        val current = live.currentIndex
+        val url = live.currentItem?.url ?: return null
+        if (current < 0 || !BrowserUrls.isWebUrl(url)) return null
+        tab.pendingHistoryUrl = null
+        if (tab.clearLiveHistory) {
+            // Fallback temporarily appends to the old live list. Never adopt that stale list.
+            settleEntry(tab, url)
+            tab.expectCommit = false
+            return url
+        }
+        tab.expectCommit = false
+        val start = tab.liveHistoryStart
+        tab.keepStoredForward = tab.keepStoredForward && live.size == 1
+        val end = if (tab.keepStoredForward) maxOf(tab.history.size, start + live.size) else start + live.size
+        // The native list can outlive our bounded cache. Keep its current page inside the window
+        // even when Back reaches a native entry already trimmed out of the stored addresses.
+        val windowStart = minOf(start + current, (end - BrowserSessionStore.MAX_HISTORY).coerceAtLeast(0))
+        val windowEnd = minOf(end, windowStart + BrowserSessionStore.MAX_HISTORY)
+        repeat(windowStart.coerceIn(0, tab.history.size)) { tab.history.removeAt(0) }
+        val mappedStart = start - windowStart
+        for (index in (-mappedStart).coerceAtLeast(0) until minOf(live.size, windowEnd - start)) {
+            val at = mappedStart + index
+            val entry = checkNotNull(live.getItemAtIndex(index)).url
+            if (at < tab.history.size) {
+                if (tab.history[at] != entry) tab.history[at] = entry
+            } else {
+                tab.history.add(entry)
+            }
+        }
+        while (tab.history.size > windowEnd - windowStart) tab.history.removeAt(tab.history.lastIndex)
+        tab.liveHistoryStart = mappedStart
+        tab.historyIndex = mappedStart + current
+        return url
+    }
+
     /** Back/Forward availability covers the live WebView and the stored backlog behind it. */
     private fun refreshHistoryFlags(tab: BrowserTab) {
         val view = tab.webView
-        tab.canGoBack = (view?.canGoBack() ?: false) || tab.historyIndex > 0
-        tab.canGoForward = (view?.canGoForward() ?: false) || tab.historyIndex < tab.history.lastIndex
+        val useLive = !tab.clearLiveHistory && !tab.expectCommit
+        tab.canGoBack = (useLive && view?.canGoBack() == true) || tab.historyIndex > 0
+        tab.canGoForward = (useLive && view?.canGoForward() == true) || tab.historyIndex < tab.history.lastIndex
     }
 
     private fun schedulePersist() {
@@ -637,10 +713,9 @@ class BrowserController(
      */
     fun goBack(tab: BrowserTab) {
         val view = tab.webView
-        if (view != null && view.canGoBack()) {
-            tab.pendingStep = -1
-            tab.historyIndex = (tab.historyIndex - 1).coerceAtLeast(0)
-            view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex - 1)?.url }?.let { prepare(tab, view, it) }
+        if (view != null && !tab.clearLiveHistory && !tab.expectCommit && view.canGoBack()) {
+            tab.pendingHistoryUrl = view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex - 1)?.url }
+            tab.pendingHistoryUrl?.let { prepare(tab, view, it) }
             view.goBack()
             refreshHistoryFlags(tab)
             persist()
@@ -651,10 +726,9 @@ class BrowserController(
 
     fun goForward(tab: BrowserTab) {
         val view = tab.webView
-        if (view != null && view.canGoForward()) {
-            tab.pendingStep = 1
-            tab.historyIndex = (tab.historyIndex + 1).coerceAtMost(tab.history.lastIndex)
-            view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex + 1)?.url }?.let { prepare(tab, view, it) }
+        if (view != null && !tab.clearLiveHistory && !tab.expectCommit && view.canGoForward()) {
+            tab.pendingHistoryUrl = view.copyBackForwardList().let { it.getItemAtIndex(it.currentIndex + 1)?.url }
+            tab.pendingHistoryUrl?.let { prepare(tab, view, it) }
             view.goForward()
             refreshHistoryFlags(tab)
             persist()
@@ -676,7 +750,8 @@ class BrowserController(
         tab.url = url
         tab.host = Hosts.hostOf(url)
         tab.expectCommit = true
-        tab.pendingStep = 0
+        tab.keepStoredForward = true
+        tab.pendingHistoryUrl = null
         tab.clearLiveHistory = true
         tab.pendingScrollY = -1
         tab.loading = true
@@ -733,6 +808,7 @@ class BrowserController(
         main.removeCallbacks(persistRunnable)
         hideFullscreen()
         tabs.forEach { tab -> tab.webView?.let(::destroy); tab.webView = null }
+        previousTabs.clear()
         thumbStates.clear()
         pendingNavigation = null
         pendingWindow = null
@@ -796,6 +872,7 @@ class BrowserController(
     private fun loadFiltered(tab: BrowserTab, url: String) {
         val view = webViewOf(tab)
         prepare(tab, view, url)
+        tab.pendingLoadUrl = url
         view.loadUrl(url)
     }
 
@@ -833,7 +910,9 @@ class BrowserController(
                 prepare(tab, view, secure)
                 return false
             }
-            if (BrowserPolicy.requiresConfirmation(tab.host, secure)) {
+            val historyRequest = secure == tab.pendingHistoryUrl
+            tab.pendingHistoryUrl = null
+            if (!historyRequest && BrowserPolicy.requiresConfirmation(tab.host, secure)) {
                 pendingNavigation = PendingNavigation(tab.id, secure)
                 // A server redirect can already be in flight; returning true alone does not
                 // always abort it, so stop the load before asking.
@@ -893,6 +972,7 @@ class BrowserController(
             // The URL is adopted only when the page commits: a blocked redirect must not become
             // the host that the next cross-site check compares against.
             val tab = tabOf(view) ?: return
+            tab.pendingLoadUrl = null
             tab.pageGeneration++
             tab.filterSource = url
             tab.loading = true
@@ -902,54 +982,43 @@ class BrowserController(
 
         override fun onPageCommitVisible(view: WebView, url: String) {
             val tab = tabOf(view) ?: return
+            if (tab.pendingLoadUrl != null || url != view.url) return
             tab.url = url
             tab.host = Hosts.hostOf(url)
             shields[view]?.committed(url)
+            refreshHistoryFlags(tab)
             persist()
         }
 
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
             val tab = tabOf(view) ?: return
-            tab.url = url
-            tab.host = Hosts.hostOf(url)
-            when {
-                // Our own load: the entry is already in the list, the commit only settles it.
-                tab.expectCommit -> {
-                    tab.expectCommit = false
-                    settleEntry(tab, url)
-                }
-                // A live back/forward we started: the index already moved, the commit settles it.
-                tab.pendingStep != 0 -> {
-                    tab.pendingStep = 0
-                    settleEntry(tab, url)
-                }
-                // A navigation the page started (link, script, redirect) is a new history entry.
-                !isReload && url != tab.history.getOrNull(tab.historyIndex) -> recordEntry(tab, url)
-            }
+            if (url != view.url || (tab.pendingLoadUrl != null && url != tab.pendingLoadUrl)) return
+            tab.pendingLoadUrl = null
+            val committed = syncLiveHistory(tab, view) ?: return
+            tab.url = committed
+            tab.host = Hosts.hostOf(committed)
             refreshHistoryFlags(tab)
             persist()
         }
 
         override fun onPageFinished(view: WebView, url: String) {
             val tab = tabOf(view) ?: return
-            tab.loading = false
-            tab.url = url
-            tab.host = Hosts.hostOf(url)
-            // A history navigation always finishes a page even when it reports no new visited URL;
-            // settling here keeps a stale step marker from swallowing the next real navigation.
-            if (tab.pendingStep != 0) {
-                tab.pendingStep = 0
-                settleEntry(tab, url)
-            }
-            // Same for our own load that never produced a visited-history callback (error page):
-            // its entry exists already and must not be appended a second time later.
-            if (tab.expectCommit) {
+            // Superseded loads can finish after the next navigation has already started.
+            if (tab.pendingLoadUrl != null || url != view.url) return
+            if (tab.expectCommit || tab.clearLiveHistory) {
+                syncLiveHistory(tab, view)
                 tab.expectCommit = false
                 settleEntry(tab, url)
             }
+            tab.pendingHistoryUrl = null
+            tab.loading = false
+            tab.url = url
+            tab.host = Hosts.hostOf(url)
             if (tab.clearLiveHistory) {
                 tab.clearLiveHistory = false
                 view.clearHistory()
+                tab.liveHistoryStart = tab.historyIndex
+                tab.keepStoredForward = true
             }
             refreshHistoryFlags(tab)
             applyPendingScroll(view, tab)
@@ -972,7 +1041,9 @@ class BrowserController(
             tab.scrollRestoring = false
             tab.pendingLazyLoad = false
             tab.expectCommit = false
-            tab.pendingStep = 0
+            tab.liveHistoryStart = tab.historyIndex
+            tab.keepStoredForward = true
+            tab.pendingHistoryUrl = null
             tab.clearLiveHistory = false
             tab.canGoBack = tab.historyIndex > 0
             tab.canGoForward = tab.historyIndex < tab.history.lastIndex

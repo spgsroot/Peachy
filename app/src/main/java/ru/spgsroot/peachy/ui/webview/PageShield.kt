@@ -12,7 +12,8 @@ import ru.spgsroot.peachy.browser.adblock.BrowserFilter
 /** One exact HTTPS origin at a time. Never expose an Android object, page URL lookup, or network API to JS. */
 internal class PageShield(private val view: WebView, private val engine: BrowserFilter, private val runtime: String, private val genericEnabled: () -> Boolean = { true }, private val disabled: (String?) -> Boolean) {
     private var start: ScriptHandler? = null
-    private var listener = false
+    private var listenerOrigin: String? = null
+    private var genericExceptions: String? = null
     private var registeredUrl: String? = null
     private var fallback: String? = null
     private var generation = -1L
@@ -30,15 +31,21 @@ internal class PageShield(private val view: WebView, private val engine: Browser
     fun close() {
         style = null
         start?.remove(); start = null
-        if (listener) WebViewCompat.removeWebMessageListener(view, BRIDGE)
-        listener = false; fallback = null; currentDocument = null; registeredUrl = null
+        removeListener()
+        fallback = null; currentDocument = null; registeredUrl = null
+    }
+    private fun removeListener() {
+        genericExceptions = null
+        if (listenerOrigin != null) WebViewCompat.removeWebMessageListener(view, BRIDGE)
+        listenerOrigin = null
     }
     fun prepare(url: String) {
         val parsed = url.toHttpUrlOrNull()
         if (parsed == null || !parsed.isHttps || disabled(parsed.host)) { close(); return }
         if (registeredUrl == url && generation == engine.generation && genericAtStart == genericEnabled()) return
         genericAtStart = genericEnabled()
-        close()
+        start?.remove(); start = null
+        fallback = null
         val origin = parsed.newBuilder().username("").password("").encodedPath("/").query(null).fragment(null).build().toString().removeSuffix("/")
         val payload = JSONObject(engine.page(url))
         val scripts = payload.remove("injected_script") as String
@@ -50,18 +57,24 @@ internal class PageShield(private val view: WebView, private val engine: Browser
         payload.remove("hide_selectors")
         payload.put("stylesheet", origin + stylePath)
         if (!genericAtStart) payload.put("generichide", true)
-        if (!payload.getBoolean("generichide") && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+        val needsListener = !payload.getBoolean("generichide") && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+        if (listenerOrigin != origin || !needsListener) removeListener()
+        genericExceptions = if (needsListener) exceptions else null
+        // Keep the live bridge for same-origin navigations: its old page can still have messages
+        // queued while WebView is deciding whether to load the new document.
+        if (needsListener && listenerOrigin == null) {
             WebViewCompat.addWebMessageListener(view, BRIDGE, setOf(origin)) { _, message, source, main, reply ->
-                if (!main || source.toString().trimEnd('/') != origin || disabled(parsed.host)) return@addWebMessageListener
+                val currentExceptions = genericExceptions ?: return@addWebMessageListener
+                if (!main || listenerOrigin != origin || source.toString().trimEnd('/') != origin || disabled(parsed.host)) return@addWebMessageListener
                 val data = message.data ?: return@addWebMessageListener
                 if (data.length > 24_000) return@addWebMessageListener
                 val valid = runCatching {
                     val groups = JSONArray(data); require(groups.length() == 2)
                     (0..1).forEach { i -> val a = groups.getJSONArray(i); require(a.length() <= 96); for (j in 0 until a.length()) require(a.get(j) is String && a.getString(j).length <= 128) }
                 }.isSuccess
-                if (valid) reply.postMessage(engine.generic(data, exceptions))
+                if (valid) reply.postMessage(engine.generic(data, currentExceptions))
             }
-            listener = true
+            listenerOrigin = origin
         }
         val js = "(()=>{if(window!==top || location.origin!==${JSONObject.quote(origin)})return;const scriptletGlobals={};\n$scripts\n;($runtime)($payload);})()"
         currentDocument = js

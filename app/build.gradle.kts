@@ -35,8 +35,8 @@ android {
         manifestPlaceholders["peachyAppLabel"] = "@string/app_name"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "3.7.0"
+        versionCode = 14
+        versionName = "3.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

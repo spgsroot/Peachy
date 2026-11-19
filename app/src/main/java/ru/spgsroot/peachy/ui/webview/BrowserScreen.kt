@@ -250,9 +250,8 @@ fun BrowserScreen(
             // Then the page's own history: the live WebView first, then the addresses restored with
             // the tab, so Back keeps leading to the previous page after a process restart too.
             tab.canGoBack -> controller.goBack(tab)
-            // End of this tab's history: leave the browser, keeping every tab for next time. Closing
-            // a tab is the tab strip's own control, so Back here never deletes a window.
-            else -> onClose()
+            // At the root, return to the tab we came from without closing either tab.
+            else -> if (!controller.returnToPreviousTab()) onClose()
         }
     }
 

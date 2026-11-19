@@ -70,6 +70,7 @@ class WebViewActivity : ComponentActivity() {
     private lateinit var controller: BrowserController
     private lateinit var session: BrowserSessionStore
     private var browserReady = false
+    private var handledLaunchUrl = false
     private var closedByUser = false
     private var returningToAuth = false
     private var captureStarted = false
@@ -116,6 +117,7 @@ class WebViewActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         session = BrowserSessionStore.forApp(this)
+        handledLaunchUrl = savedInstanceState?.getBoolean(STATE_HANDLED_LAUNCH_URL) == true
 
         lifecycleScope.launch {
             // Nothing protected is composed until the session is known to be unlocked.
@@ -128,7 +130,7 @@ class WebViewActivity : ComponentActivity() {
                 return@launch
             }
             if (!sessionUnlocked() || isFinishing || isDestroyed) return@launch
-            startBrowser()
+            startBrowser(savedInstanceState?.getIntArray(STATE_PREVIOUS_TABS))
             // Only an explicit launch asks for capture; a recreated activity must not re-prompt for
             // the microphone and screen recording on its own.
             if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_CAPTURE, false)) {
@@ -148,7 +150,7 @@ class WebViewActivity : ComponentActivity() {
     }
 
     /** Rebuilds the browser from the durable session and shows it; called once, after the gate. */
-    private fun startBrowser() {
+    private fun startBrowser(previousTabIds: IntArray?) {
         val restored = session.load()
         controller = BrowserController(
             activity = this,
@@ -160,9 +162,10 @@ class WebViewActivity : ComponentActivity() {
             session = session,
             restored = restored
         )
+        if (previousTabIds != null) controller.restorePreviousTabs(previousTabIds)
         // A link the app was asked to open is a deliberate destination: it gets its own tab instead
         // of replacing the restored one. A first launch still reuses the single blank tab.
-        val url = intent.getStringExtra(EXTRA_URL).orEmpty().trim()
+        val url = if (handledLaunchUrl) "" else intent.getStringExtra(EXTRA_URL).orEmpty().trim()
         if (url.isNotEmpty()) {
             val active = controller.active
             if (restored == null && active.url.isEmpty() && active.webView == null) {
@@ -174,6 +177,7 @@ class WebViewActivity : ComponentActivity() {
                 if (controller.tabs.size == before) controller.navigate(opened, url)
             }
         }
+        handledLaunchUrl = true
         browserReady = true
         // The browser is the screen the session should come back to after the next unlock or kill.
         appSession.browserVisible = true
@@ -197,6 +201,12 @@ class WebViewActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_HANDLED_LAUNCH_URL, handledLaunchUrl)
+        if (browserReady) outState.putIntArray(STATE_PREVIOUS_TABS, controller.previousTabIds())
     }
 
     override fun onResume() {
@@ -297,6 +307,8 @@ class WebViewActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val STATE_HANDLED_LAUNCH_URL = "handledLaunchUrl"
+        private const val STATE_PREVIOUS_TABS = "previousTabs"
         const val EXTRA_URL = "extra_url"
         const val EXTRA_CAPTURE = "extra_capture"
     }
