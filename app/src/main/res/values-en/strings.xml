@@ -10,6 +10,8 @@
     <string name="btn_set_password">Set password</string>
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_nsfw_toggle">Enable NSFW features</string>
+    <string name="settings_nsfw_hint">Manga, page translation and devices. Saved items stay on this phone.</string>
     <string name="settings_device">Device</string>
     <string name="settings_power_boost">Power boost</string>
     <string name="timer_label">Auto-switch timer</string>

@@ -50,6 +50,8 @@ class TranslationClient(
         .followRedirects(false)
         .followSslRedirects(false)
         .build()
+    // Non-streaming OCR replies can spend more than two minutes reasoning before the first header.
+    private val ocrHttp = this.http.newBuilder().readTimeout(240, TimeUnit.SECONDS).build()
     // A paid speed probe must never be replayed by OkHttp's pooled-connection recovery.
     private val probeHttp = this.http.newBuilder().retryOnConnectionFailure(false).build()
 
@@ -66,13 +68,14 @@ class TranslationClient(
     ): List<IndexedTranslation> = complete(
         galleryId,
         { chatBody(it, PagePrompt.blocks(target, source), PagePrompt.blocksUser(blocks)) },
-        ::parseBlocks
+        ::parseBlocks, ocrHttp
     )
 
     private suspend fun <T : Any> complete(
         galleryId: Int,
         bodyFor: (ProviderSettings) -> JSONObject,
-        parse: (String) -> T?
+        parse: (String) -> T?,
+        client: OkHttpClient = http
     ): T =
         withContext(Dispatchers.IO) {
             // Read at send time, so a host changed or consent withdrawn mid-batch stops the next page.
@@ -81,8 +84,7 @@ class TranslationClient(
             val body = bodyFor(provider)
             // A reply that is not valid JSON is usually a one-off: ask again once.
             repeat(2) {
-                val content = send(provider, body, sessionHeader(provider.baseUrl, galleryId))
-                parse(content)?.let { return@withContext it }
+                send(client, provider, body, sessionHeader(provider.baseUrl, galleryId), parse)?.let { return@withContext it }
             }
             throw TranslationException(TranslationError.BadResponse)
         }
@@ -99,10 +101,10 @@ class TranslationClient(
                 .put("max_tokens", 8)
                 .put("messages", JSONArray().put(message("user", PagePrompt.CHECK)))
             try {
-                send(provider, body, sessionHeader(provider.baseUrl, CHECK_SESSION_ID))
+                send(http, provider, body, sessionHeader(provider.baseUrl, CHECK_SESSION_ID)) { Unit }
             } catch (e: TranslationException) {
                 // A model that spent its whole small budget thinking still proves address, key and model work.
-                if (e.error != TranslationError.Refused) throw e
+                if (e.error != TranslationError.Refused && e.error != TranslationError.OutputLimit) throw e
             }
         }
     }
@@ -167,26 +169,27 @@ class TranslationClient(
             .put(JSONObject().put("type", "text").put("text", PagePrompt.USER))
             .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", uri)))
         return chatBody(provider, PagePrompt.system(request.target, request.source), user)
+            .put("max_tokens", 4096)
     }
 
     private fun chatBody(provider: ProviderSettings, system: String, user: Any): JSONObject =
         JSONObject()
             .put("model", provider.model)
             .put("temperature", 0.2)
-            .put("max_tokens", 4096)
             .put("response_format", JSONObject().put("type", "json_object"))
             .put(
                 "messages",
                 JSONArray().put(message("system", system)).put(message("user", user))
             )
 
-    /** Posts [body] and returns `choices[0].message.content`. */
-    private suspend fun send(provider: ProviderSettings, body: JSONObject, session: String?): String {
+    private suspend fun <T : Any> send(
+        client: OkHttpClient, provider: ProviderSettings, body: JSONObject, session: String?, parse: (String) -> T?
+    ): T? {
         val text = try {
             val request = providerRequest(provider, "/chat/completions", session)
                 .post(adaptLimits(body, provider.baseUrl).toString().toRequestBody(JSON))
                 .build()
-            execute(http.newCall(request))
+            execute(client.newCall(request))
         } catch (e: CancellationException) {
             throw e
         } catch (e: TranslationException) {
@@ -196,7 +199,7 @@ class TranslationClient(
         } catch (e: IllegalArgumentException) {
             throw TranslationException(TranslationError.NotConfigured, e)
         }
-        return contentOf(text)
+        return parseCompletion(text, parse)
     }
 
     private suspend fun execute(call: Call): String = executeResponse(call) { it.body?.string().orEmpty() }
@@ -231,11 +234,8 @@ class TranslationClient(
     private fun retryAfterSeconds(response: Response): Int? =
         response.header("Retry-After")?.trim()?.toIntOrNull()?.takeIf { it > 0 }
 
-    /**
-     * The reply text. [TranslationError.BadResponse] when the provider sent an error object instead
-     * of a completion; [TranslationError.Refused] when the model gave none or the provider filtered it.
-     */
-    private fun contentOf(envelope: String): String {
+    /** An explicit output limit is terminal: resending the same paid request cannot raise it. */
+    private fun <T : Any> parseCompletion(envelope: String, parse: (String) -> T?): T? {
         val root = try {
             JSONObject(envelope)
         } catch (e: JSONException) {
@@ -248,8 +248,10 @@ class TranslationClient(
             throw TranslationException(TranslationError.Refused)
         }
         val content = choice.optJSONObject("message")?.takeIf { !it.isNull("content") }?.optString("content").orEmpty()
+        if (content.isNotBlank()) parse(content)?.let { return it }
+        if (choice.optString("finish_reason") == "length") throw TranslationException(TranslationError.OutputLimit)
         if (content.isBlank()) throw TranslationException(TranslationError.Refused)
-        return content
+        return null
     }
 
     companion object {

@@ -24,6 +24,7 @@
     <string name="translate_error_network">Нет связи с провайдером или страницей</string>
     <string name="translate_error_recognition">Не удалось распознать текст на странице</string>
     <string name="translate_error_bad_response">Провайдер ответил не тем, чего мы ждали</string>
+    <string name="translate_error_output_limit">Провайдер исчерпал лимит ответа до завершения перевода</string>
     <string name="translate_error_refused">Модель отказалась читать эту страницу</string>
     <string name="translate_error_server">Ошибка провайдера: %1$d</string>
     <string name="provider_title">Перевод страниц</string>

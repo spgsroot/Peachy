@@ -6,7 +6,6 @@ import android.security.keystore.KeyProperties
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.security.KeyStore
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -21,9 +20,11 @@ internal interface BrowserSessionCipher {
 /** AES-GCM with an Android Keystore key in the app and an injectable key in local tests. */
 internal class AesGcmBrowserSessionCipher(private val key: SecretKey) : BrowserSessionCipher {
     override fun seal(plain: ByteArray): ByteArray {
-        val iv = ByteArray(IV_BYTES).also(SecureRandom()::nextBytes)
-        val encrypted = cipher(Cipher.ENCRYPT_MODE, iv).doFinal(plain)
-        return ByteBuffer.allocate(HEADER_BYTES + IV_BYTES + encrypted.size)
+        // Keystore rejects a caller IV (CALLER_NONCE_PROHIBITED) and generates its own.
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+        val encrypted = cipher.doFinal(plain)
+        val iv = cipher.iv
+        return ByteBuffer.allocate(HEADER_BYTES + iv.size + encrypted.size)
             .putInt(SEALED_MAGIC)
             .putInt(SEALED_VERSION)
             .put(iv)

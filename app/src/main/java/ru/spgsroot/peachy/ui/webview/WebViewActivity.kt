@@ -9,13 +9,18 @@ import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import android.webkit.WebView
 import android.widget.Toast
+import android.view.KeyEvent
+import android.view.WindowInsets
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -38,9 +44,11 @@ import ru.spgsroot.peachy.data.browser.BrowserStore
 import ru.spgsroot.peachy.data.session.AppSessionStore
 import ru.spgsroot.peachy.domain.dsp.HapticInputRouter
 import ru.spgsroot.peachy.domain.dsp.HapticSource
+import ru.spgsroot.peachy.nsfw.NsfwGate
 import ru.spgsroot.peachy.playback.service.WebViewAudioCaptureService
 import ru.spgsroot.peachy.security.AuthManager
 import ru.spgsroot.peachy.security.AuthSession
+import ru.spgsroot.peachy.security.applyScreenshotPolicy
 import ru.spgsroot.peachy.ui.theme.PeachyTheme
 
 /**
@@ -66,6 +74,9 @@ class WebViewActivity : ComponentActivity() {
     @Inject
     lateinit var appSession: AppSessionStore
 
+    @Inject
+    lateinit var nsfwGate: NsfwGate
+
     private val viewModel: BrowserViewModel by viewModels()
     private lateinit var controller: BrowserController
     private lateinit var session: BrowserSessionStore
@@ -75,6 +86,11 @@ class WebViewActivity : ComponentActivity() {
     private var returningToAuth = false
     private var captureStarted = false
     private var captureOn by mutableStateOf(false)
+    /**
+     * Predictive back finishes this activity unless an app callback sits above the system one.
+     * WebView may register its own later; [claimHistoryBack] puts this back on top.
+     */
+    private var historyBack: Any? = null
 
     private val recordAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -107,15 +123,18 @@ class WebViewActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Page content stays out of adb: no remote inspection of this WebView.
         WebView.setWebContentsDebuggingEnabled(false)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+        window.applyScreenshotPolicy(this)
+        lifecycleScope.launch {
+            nsfwGate.enabled.collect { enabled ->
+                if (enabled == false) stopCapture()
+            }
+        }
         // The app is dark in every system theme: light status and navigation bar icons.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
+        claimHistoryBack()
         session = BrowserSessionStore.forApp(this)
         handledLaunchUrl = savedInstanceState?.getBoolean(STATE_HANDLED_LAUNCH_URL) == true
 
@@ -134,7 +153,10 @@ class WebViewActivity : ComponentActivity() {
             // Only an explicit launch asks for capture; a recreated activity must not re-prompt for
             // the microphone and screen recording on its own.
             if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_CAPTURE, false)) {
-                beginAudioCaptureFlow()
+                lifecycleScope.launch {
+                    val enabled = nsfwGate.enabled.first { it != null } == true
+                    if (enabled && !isFinishing && !isDestroyed) beginAudioCaptureFlow()
+                }
             }
         }
     }
@@ -183,12 +205,14 @@ class WebViewActivity : ComponentActivity() {
         appSession.browserVisible = true
         appSession.setBrowserOpen(true)
         setContent {
+            val nsfw by nsfwGate.enabled.collectAsStateWithLifecycle()
             PeachyTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     BrowserScreen(
                         controller = controller,
                         viewModel = viewModel,
                         captureOn = captureOn,
+                        captureAvailable = nsfw == true,
                         onCaptureChange = { wanted -> if (wanted) beginAudioCaptureFlow() else stopCapture() },
                         onClose = {
                             // Closing the browser keeps the tab strip for the next open; only the
@@ -237,6 +261,9 @@ class WebViewActivity : ComponentActivity() {
         if (closedByUser) appSession.setBrowserOpen(false)
         if (browserReady) controller.destroyAll()
         if (!isChangingConfigurations) appSession.browserVisible = false
+        if (Build.VERSION.SDK_INT >= 33) {
+            (historyBack as? OnBackInvokedCallback)?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
+        }
         super.onDestroy()
     }
 
@@ -255,6 +282,43 @@ class WebViewActivity : ComponentActivity() {
         finish()
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (browserReady && event.keyCode == KeyEvent.KEYCODE_FORWARD) {
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                val tab = controller.active
+                if (tab.canGoForward) controller.goForward(tab)
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** Re-registers after a WebView attaches, so its own callback cannot outrank history. */
+    internal fun claimHistoryBack() {
+        if (Build.VERSION.SDK_INT < 33 || isDestroyed) return
+        val callback = historyBack as? OnBackInvokedCallback ?: HistoryBack().also { historyBack = it }
+        onBackInvokedDispatcher.unregisterOnBackInvokedCallback(callback)
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+            callback
+        )
+    }
+
+    private inner class HistoryBack : OnBackInvokedCallback {
+        override fun onBackInvoked() {
+            val insets = window.decorView.rootWindowInsets
+            if (Build.VERSION.SDK_INT >= 30 && insets?.isVisible(WindowInsets.Type.ime()) == true) {
+                WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.ime())
+                return
+            }
+            if (!browserReady) {
+                finish()
+                return
+            }
+            onBackPressedDispatcher.onBackPressed()
+        }
+    }
+
     private fun stopCapture() {
         if (captureStarted) {
             runCatching {
@@ -267,6 +331,7 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun beginAudioCaptureFlow() {
+        if (!nsfwGate.allows()) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             Toast.makeText(this, "WebView audio capture requires Android 10+", Toast.LENGTH_SHORT).show()
             return
@@ -281,6 +346,7 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun ensureRecordAudioPermission() {
+        if (!nsfwGate.allows()) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             requestMediaProjectionConsent()
         } else {
@@ -289,11 +355,13 @@ class WebViewActivity : ComponentActivity() {
     }
 
     private fun requestMediaProjectionConsent() {
+        if (!nsfwGate.allows()) return
         val mediaProjectionManager = applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
     }
 
     private fun startAudioCaptureService(resultCode: Int, data: Intent) {
+        if (!nsfwGate.allows()) return
         captureStarted = true
         captureOn = true
         ContextCompat.startForegroundService(

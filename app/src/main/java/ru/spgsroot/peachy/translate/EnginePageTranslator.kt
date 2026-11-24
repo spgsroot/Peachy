@@ -18,14 +18,19 @@ class EnginePageTranslator internal constructor(
     private val detector: BubbleDetector,
     private val ocrCache: OcrCache,
     private val pageSize: (ByteArray) -> Pair<Int, Int>,
-    private val crop: (ByteArray, Box) -> ByteArray = PageImage::crop
+    private val crop: (ByteArray, Box) -> ByteArray = PageImage::crop,
+    private val fitModel: (ByteArray, PageTranslation) -> PageTranslation = ::fitModelBubbles
 ) : PageTranslator {
     @Inject constructor(client: TranslationClient, ocr: PageOcr, detector: BubbleDetector, ocrCache: OcrCache) :
         this(client, ocr, detector, ocrCache, PageDecode::size)
 
     override suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation =
         when (request.engine) {
-            TranslateEngine.Model -> traced("translate.net") { client.translate(galleryId, page, request, image) }
+            TranslateEngine.Model -> {
+                val bytes = image()
+                val translated = traced("translate.net") { client.translate(galleryId, page, request) { bytes } }
+                withContext(Dispatchers.Default) { fitModel(bytes, translated) }
+            }
             TranslateEngine.MlKit -> {
                 val blocks = bubbleBlocks(galleryId, page, request.source, image)
                 val source = if (request.source == "auto") "" else request.source
@@ -40,7 +45,7 @@ class EnginePageTranslator internal constructor(
                         for (translation in translations) {
                             val block = blocks.getOrNull(translation.index) ?: continue
                             if (!accepted.add(translation.index)) continue
-                            add(TranslatedLine(translation.kind, block.text, translation.translation, block.box))
+                            add(block.translated(translation.kind, translation.translation))
                         }
                     }
                     PageTranslation(source, lines)
@@ -57,7 +62,7 @@ class EnginePageTranslator internal constructor(
     ): List<OcrBlock> {
         val scan = ocrCache.get(galleryId, page, source)
             ?: scanPage(galleryId, page, image(), source)
-        return mergeBlocks(scan)
+        return withoutOcrComposites(mergeBlocks(scan), allowVariant = false, { it.box }, { it.text })
     }
 
     /** Translates only [block]; its original text and page box remain authoritative. Never stores a page translation. */
@@ -72,7 +77,7 @@ class EnginePageTranslator internal constructor(
             val translation = traced("translate.net") {
                 client.translateBlocks(galleryId, listOf(block), request.source, request.target)
             }.firstOrNull { it.index == 0 } ?: throw TranslationException(TranslationError.BadResponse)
-            TranslatedLine(translation.kind, block.text, translation.translation, block.box)
+            block.translated(translation.kind, translation.translation)
         }
         TranslateEngine.Model -> {
             val result = traced("translate.net") {
@@ -82,7 +87,7 @@ class EnginePageTranslator internal constructor(
                 }
             }
             val first = result.lines.firstOrNull() ?: throw TranslationException(TranslationError.BadResponse)
-            TranslatedLine(first.kind, block.text, result.lines.joinToString("\n") { it.translation }, block.box)
+            block.translated(first.kind, result.lines.joinToString("\n") { it.translation })
         }
     }
 

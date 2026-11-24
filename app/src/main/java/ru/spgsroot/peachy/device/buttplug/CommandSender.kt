@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.domain.dsp.HapticMapper
 import ru.spgsroot.peachy.domain.dsp.HapticRuntimeConfig
+import ru.spgsroot.peachy.nsfw.NsfwGate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -31,7 +32,8 @@ data class ActuatorTarget(
 class CommandSender @Inject constructor(
     private val hapticMapper: HapticMapper,
     private val runtimeConfig: HapticRuntimeConfig,
-    private val connectionManager: ButtplugConnectionManager
+    private val connectionManager: ButtplugConnectionManager,
+    private val nsfwGate: NsfwGate
 ) {
     private var job: Job? = null
     private var watchdogJob: Job? = null
@@ -62,6 +64,7 @@ class CommandSender @Inject constructor(
      * Each intensity value from the DSP pipeline is sent to ALL targets.
      */
     fun start(scope: CoroutineScope, targets: List<ActuatorTarget>) {
+        if (!nsfwGate.allows()) return
         stop(sendStopCommand = job != null)
         this.targets = targets
         lastIntensity = 0f
@@ -81,6 +84,7 @@ class CommandSender @Inject constructor(
     }
 
     fun pulse(intensity: Float, durationMs: Long) {
+        if (!nsfwGate.allows()) return
         if (targets.isEmpty() || scope == null) return
         scope?.launch {
             sendScalarToAll(intensity.coerceIn(0f, 1f))

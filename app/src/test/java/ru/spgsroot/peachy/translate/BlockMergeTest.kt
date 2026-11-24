@@ -21,6 +21,27 @@ class BlockMergeTest {
         assertEquals(listOf(OcrBlock("A B", Box(0.1f, 0.1f, 0.3f, 0.25f))), merge(listOf(a, b), listOf(region)))
     }
 
+    @Test fun aCoarseDetectorBoxCannotJoinTwoBalloonsOrBridgeAThirdText() {
+        val first = a.copy(interior = Box(.08f, .08f, .32f, .16f))
+        val second = b.copy(interior = Box(.08f, .19f, .32f, .27f))
+        assertEquals(listOf(first, second), merge(listOf(first, second), listOf(region)))
+        val middle = OcrBlock("caption", Box(.14f, .16f, .26f, .19f), Box(.12f, .155f, .28f, .195f))
+        assertEquals(listOf(a, middle, b), merge(listOf(a, middle, b), listOf(region)))
+    }
+
+    @Test fun onlyCompleteDuplicateGroupsAreRemovedBeforeTranslation() {
+        val left = OcrBlock("Left window", Box(.1f, .1f, .42f, .22f))
+        val right = OcrBlock("Right window", Box(.58f, .1f, .9f, .22f))
+        val group = OcrBlock("LEFT WINDOW! RIGHT WINDOW.", Box(.1f, .1f, .9f, .22f))
+        fun keep(vararg blocks: OcrBlock) = withoutOcrComposites(blocks.toList(), false, { it.box }, { it.text })
+        assertEquals(listOf(right, left), keep(right, group, left))
+        val different = group.copy(text = "Left windox! Right window.")
+        assertEquals(listOf(left, different, right), keep(left, different, right))
+        val unrelated = group.copy(box = Box(0f, 0f, 1f, .5f))
+        assertEquals(listOf(left, unrelated, right), keep(left, unrelated, right))
+        assertEquals(listOf(group, left), keep(group, left))
+    }
+
     @Test fun kanaBlocksJoinWithoutSpaceInColumnOrder() {
         val left = OcrBlock("あ", Box(0.1f, 0.1f, 0.15f, 0.4f))
         val right = OcrBlock("い", Box(0.2f, 0.1f, 0.25f, 0.4f))

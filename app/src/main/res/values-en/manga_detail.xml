@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="manga_detail_read">Read</string>
+    <string name="manga_detail_copy_title">Copy title</string>
     <string name="manga_detail_continue">Continue from page %1$d</string>
     <string name="manga_detail_download">Download</string>
     <string name="manga_detail_downloading">Downloading %1$s</string>

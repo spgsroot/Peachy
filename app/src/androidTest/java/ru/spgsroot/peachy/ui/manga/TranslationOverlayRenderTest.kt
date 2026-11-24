@@ -1,5 +1,6 @@
 package ru.spgsroot.peachy.ui.manga
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
@@ -17,9 +18,11 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -151,6 +154,34 @@ class TranslationOverlayRenderTest {
         }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(0, omitted) }
+    }
+
+    @Test fun doubleTapReflowsAnOtherwiseTooShallowCaption() {
+        val image = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.CYAN) }
+        val caption = line("Été déjà, прочитано", Box(.2f, .49f, .8f, .51f))
+        val zoom = ReaderZoom()
+        compose.setContent {
+            ReaderPage(image, 0, true, zoom, false, false, false, Modifier.size(200.dp).testTag("zoom"),
+                200.dp, 0f, 0, {}, { _, _ -> }, {}, listOf(caption), null, onTap = { _, _ -> })
+        }
+        val page = compose.onNodeWithTag("zoom")
+        compose.waitUntil(10_000) {
+            val p = page.captureToImage().toPixelMap()
+            p[p.width / 2, p.height / 2] == Color.Cyan
+        }
+        page.performTouchInput { doubleClick(center) }
+        compose.waitUntil(10_000) {
+            val p = page.captureToImage().toPixelMap()
+            p[p.width / 2, p.height / 3] == Color.Cyan &&
+                (p.height * 48 / 100..p.height * 52 / 100).any { y ->
+                    (p.width / 4..p.width * 3 / 4).any { x -> p[x, y].green < .25f }
+                }
+        }
+        page.performTouchInput { doubleClick(center) }
+        compose.waitUntil(5_000) {
+            val p = page.captureToImage().toPixelMap()
+            !zoom.zoomed && (p.width / 4..p.width * 3 / 4).all { x -> p[x, p.height / 2] == Color.Cyan }
+        }
     }
 
     private fun line(text: String, box: Box) = TranslatedLine(LineKind.Speech, "Source", text, box)

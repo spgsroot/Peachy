@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.http.SslError
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
 import android.os.Message
 import android.view.PixelCopy
@@ -588,8 +589,8 @@ class BrowserController(
         val url = live.currentItem?.url ?: return null
         if (current < 0 || !BrowserUrls.isWebUrl(url)) return null
         tab.pendingHistoryUrl = null
-        if (tab.clearLiveHistory) {
-            // Fallback temporarily appends to the old live list. Never adopt that stale list.
+        if (tab.clearLiveHistory || (tab.keepStoredForward && live.size == 1)) {
+            // clearHistory leaves a one-entry list. Adopting it would drop stored Back and disable the button.
             settleEntry(tab, url)
             tab.expectCommit = false
             return url
@@ -862,6 +863,14 @@ class BrowserController(
         shields[this] = shield
         webViewClient = Client(tab, shield)
         webChromeClient = Chrome()
+        if (Build.VERSION.SDK_INT >= 33) {
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    v.post { (activity as? WebViewActivity)?.claimHistoryBack() }
+                }
+                override fun onViewDetachedFromWindow(v: View) = Unit
+            })
+        }
     }
 
     private fun prepare(tab: BrowserTab, view: WebView, url: String) {

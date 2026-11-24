@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.data.repository.SettingsRepository
 import ru.spgsroot.peachy.locale.LocaleManager
+import ru.spgsroot.peachy.nsfw.NsfwEnforcer
 import ru.spgsroot.peachy.security.AppLockGuard
 import ru.spgsroot.peachy.translate.OrtBubbleDetector
 import javax.inject.Inject
@@ -26,6 +27,9 @@ class PeachyApplication : Application() {
     @Inject
     lateinit var appLockGuard: AppLockGuard
 
+    @Inject
+    lateinit var nsfwEnforcer: NsfwEnforcer
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun attachBaseContext(base: Context) {
@@ -38,6 +42,7 @@ class PeachyApplication : Application() {
         super.onCreate()
         appLockGuard.install(this, MainActivity::class.java)
         initializeSettings()
+        nsfwEnforcer.start(applicationScope)
     }
 
     override fun onTrimMemory(level: Int) {

@@ -12,8 +12,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -33,6 +35,7 @@ fun TranslationOverlay(
     lines: List<TranslatedLine>,
     pageAspect: Float,
     modifier: Modifier = Modifier,
+    layoutZoom: Float = 1f,
     selectedLine: TranslatedLine? = null,
     onSelectionOmitted: (TranslatedLine) -> Unit = {}
 ) {
@@ -41,7 +44,7 @@ fun TranslationOverlay(
     val latestOnSelectionOmitted by rememberUpdatedState(onSelectionOmitted)
     val density = LocalDensity.current
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val page = fittedPage(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat(), pageAspect)
+        val page = fittedPage(constraints.maxWidth * layoutZoom, constraints.maxHeight * layoutZoom, pageAspect)
         val plates by rememberPlateLayout(lines, page, density) {
             withContext(Dispatchers.Default) {
                 Log.d("PageTrace", "layoutPlates ${lines.size} lines")
@@ -55,8 +58,8 @@ fun TranslationOverlay(
             }
         }
         Canvas(Modifier.fillMaxSize()) {
-            drawIntoCanvas { canvas ->
-                plates?.forEach { drawPlate(canvas.nativeCanvas, it, density) }
+            scale(1f / layoutZoom, pivot = Offset.Zero) {
+                drawIntoCanvas { canvas -> plates?.forEach { drawPlate(canvas.nativeCanvas, it) } }
             }
         }
     }

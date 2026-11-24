@@ -1,0 +1,10 @@
+# Manga title and translation QA (#36–37)
+
+Historical results from the `peachy-manga-copy-translation` worktree, based on `d07c06d` (0.9.1, code 16). These are not network tests of the 0.9.2 candidate. The source run used an isolated Android 37 emulator, synthetic reader pages, and one 49-page English edition (605808) translated to Russian with ML Kit and OpenCode Go. No account data, page content, screenshots or raw request logs are included here.
+
+- **Title:** the test copied all 209 characters of an ellipsized title into an isolated clipboard and checked Android’s sensitive flag. It did not read the device clipboard.
+- **Synthetic page:** OCR located all four labeled regions; overlapping detector boxes did not merge adjacent balloons. The test measured glyphs and plate backgrounds against independently drawn boundaries and found no pixels outside. A long preview remained truncated; tapping it opened the full text in the reader panel.
+- **Provider:** the first account returned HTTP 402 on page 25. Across subsequent runs with a second account, 42/49 pages had a saved translation (485 lines). Pages 9, 34 and 43 timed out after 240 seconds; page 45 had an earlier network error with no known cause. Page 25 was refused; pages 3 and 27 had no recognized text. On page 40 the provider returned translations for only 12 of 13 input blocks. The seven missing pages are not rendering passes.
+- **Rendering at 1×:** 102 saved lines fit in full, 219 had an ellipsis, 139 had no plate and 25 sound effects were panel-only. All 321 plates had visible glyphs without clipping; all 485 saved lines could be read in the scrolling panel. Not all originals were cached: only 28 of the 42 translated pages had an original raster for a before/after comparison. The other 14 had layer/geometry checks, not a comparison against the artwork. Six pixels on page 32 remained ambiguous; no human annotation established whether they were letters or art.
+
+Translation quality was not graded. These numbers apply to this edition, provider and viewport; a successful synthetic render is not evidence that a live provider translated every page.

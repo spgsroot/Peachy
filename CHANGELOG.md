@@ -5,9 +5,13 @@ interface rebrand; earlier entries are not reconstructed.
 
 ## 0.9.2
 
-- **Player.** Library, Documents and Browser are now one tap away in the top bar. Queue sorting and filtering remain below the bar.
+- **Player.** Documents and Browser are one tap away in the top bar; Library joins them when NSFW features are enabled. Queue sorting and filtering remain below the bar.
 - **Gallery.** Search moves to its own row when the hint would be clipped; the empty-library message is centered.
 - **Documents.** Sort by date, name or size, or filter by file size.
+- **Settings and lock.** Manga, translation, device control and browser audio capture are opt-in, including after upgrading. Turning them off keeps saved items. Release builds retain screenshot protection.
+- **Session restore (#34).** After unlocking, return to the saved screen or browser tab. Browser Back follows page history before switching tabs or leaving the browser.
+- **Manga details and reader (#36–37).** Copy the full title, even when it is truncated onscreen. Translation plates use detected light balloons or source text bounds, avoid duplicate OCR groups and rewrap on zoom. The panel keeps the complete saved translation even when a plate cannot fit.
+- **OCR translation.** Text requests no longer impose a 4096-token ceiling. Unusable truncated responses report the provider’s output limit; the reader can wait up to four minutes for response data without resending a timed-out page.
 
 ## 0.9.1
 

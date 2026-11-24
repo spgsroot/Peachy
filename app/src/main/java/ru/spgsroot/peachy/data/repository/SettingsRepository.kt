@@ -54,6 +54,10 @@ class SettingsRepository @Inject constructor(
         settingsDao.updateLanguage(languageCode)
     }
 
+    suspend fun updateNsfwEnabled(enabled: Boolean) {
+        settingsDao.updateNsfwEnabled(enabled)
+    }
+
     suspend fun initializeDefaults() {
         settingsDao.insertIfAbsent(
             SettingsEntity(
@@ -65,7 +69,8 @@ class SettingsRepository @Inject constructor(
                 dspPowerBoost = 1.0f,
                 dspThreshold = 0.03f,
                 autoLockTimeoutMs = 30000L,
-                languageCode = "system"
+                languageCode = "system",
+                nsfwEnabled = false
             )
         )
     }
@@ -81,6 +86,7 @@ class SettingsRepository @Inject constructor(
             threshold = dspThreshold
         ),
         autoLockTimeoutMs = autoLockTimeoutMs,
-        languageCode = languageCode
+        languageCode = languageCode,
+        nsfwEnabled = nsfwEnabled
     )
 }

@@ -48,7 +48,7 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
             blocks += read.onPage(PixelRect(0, tile.top, width, tile.bottom))
         }
         traced("group") {
-            val unique = PageTiles.dedupeSeams(blocks, { it.rect.box(width, height) }) { a, b ->
+            val unique = PageTiles.dedupeSeams(blocks, { it.rect.normalized(width, height) }) { a, b ->
                 if (a.rect.area() >= b.rect.area()) a else b
             }
             groupOcrBlocks(unique, width, height, source)
@@ -119,8 +119,10 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
             recognitionLock.unlock()
             throw IOException("OCR region is smaller than $MIN_OCR_SIDE pixels")
         }
+        val paper: BubblePaper
         val task = try {
             coroutineContext.ensureActive()
+            paper = BubblePaper(bitmap)
             val recognizer = when (source) {
                 "ja", "auto" -> japanese
                 "zh" -> chinese
@@ -142,18 +144,40 @@ class MlKitPageOcr @Inject constructor() : PageOcr {
                 recognitionLock.unlock()
             }
         }
-        val blocks = text.textBlocks.mapNotNull { block ->
-            val box = block.boundingBox ?: return@mapNotNull null
-            RawOcrBlock(block.lines.mapNotNull { line ->
-                val lineBox = line.boundingBox ?: return@mapNotNull null
-                RawOcrLine(line.text, PixelRect(lineBox.left, lineBox.top, lineBox.right, lineBox.bottom), line.confidence)
-            }, PixelRect(box.left, box.top, box.right, box.bottom))
+        val groups = mutableMapOf<Int, MutableList<RawOcrLine>>()
+        text.textBlocks.forEachIndexed { index, block ->
+            for (line in block.lines) {
+                val bounds = line.boundingBox?.pixels() ?: continue
+                if (line.confidence < 0.3f || !line.text.codePoints().anyMatch { Character.isLetterOrDigit(it) }) continue
+                fun add(owner: Int, value: String, rect: PixelRect) {
+                    groups.getOrPut(if (owner > 0) owner else -index - 1) { mutableListOf() }
+                        .add(RawOcrLine(value, rect, line.confidence))
+                }
+                val owner = paper.owner(bounds)
+                if (owner > 0 || line.elements.size < 2 || line.elements.any { it.boundingBox == null }) {
+                    add(owner, line.text, bounds)
+                } else {
+                    // ML Kit can report words in two adjacent balloons as one line.
+                    val parts = line.elements.groupBy { paper.owner(it.boundingBox!!.pixels()) }
+                    if (parts.size == 1) add(parts.keys.first(), line.text, bounds)
+                    else for ((id, words) in parts) {
+                        val values = words.map { it.text }
+                        add(id, values.joinToString(joinSeparator(values)), words.boundsOf { it.boundingBox!!.pixels() })
+                    }
+                }
+            }
+        }
+        val blocks = groups.map { (id, lines) ->
+            val rect = lines.boundsOf { it.rect }
+            RawOcrBlock(lines, rect, if (id > 0) paper.interior(rect, id) ?: rect else null)
         }
         return BitmapRead(blocks, width, height)
     }
 }
 
 private const val MIN_OCR_SIDE = 32
+
+private fun android.graphics.Rect.pixels() = PixelRect(left, top, right, bottom)
 
 private data class BitmapRead(val blocks: List<RawOcrBlock>, val width: Int, val height: Int) {
     fun onPage(rect: PixelRect): List<RawOcrBlock> {
@@ -164,15 +188,12 @@ private data class BitmapRead(val blocks: List<RawOcrBlock>, val width: Int, val
             rect.top + (box.bottom.toDouble() * (rect.bottom - rect.top) / height).roundToInt()
         )
         return blocks.map { block ->
-            RawOcrBlock(block.lines.map { it.copy(rect = map(it.rect)) }, map(block.rect))
+            RawOcrBlock(block.lines.map { it.copy(rect = map(it.rect)) }, map(block.rect), block.interior?.let(::map))
         }
     }
 }
 
 private fun PixelRect.area(): Long = (right - left).toLong() * (bottom - top)
-
-private fun PixelRect.box(width: Int, height: Int) =
-    Box(left.toFloat() / width, top.toFloat() / height, right.toFloat() / width, bottom.toFloat() / height)
 
 private val directOcrExecutor = Executor { it.run() }
 

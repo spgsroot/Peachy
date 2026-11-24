@@ -68,7 +68,8 @@ class EnginePageTranslatorTest {
     }
 
     private fun translator(ocr: PageOcr, detector: BubbleDetector = FakeDetector(), cache: OcrCache = FileOcrCache(folder.root)): EnginePageTranslator =
-        EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "Peachy/test"), ocr, detector, cache, { 800 to 1200 })
+        EnginePageTranslator(TranslationClient(OkHttpClient(), { provider }, "Peachy/test"), ocr, detector, cache,
+            { 800 to 1200 }, fitModel = { _, response -> response })
 
     private fun reply(content: String) {
         server.enqueue(MockResponse().setBody(JSONObject().put(

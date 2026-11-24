@@ -14,13 +14,13 @@ class OcrCacheTest {
     private val scan = PageScan(blocks, listOf(Region(Box(.05f, .1f, .8f, .9f), .9f)), .7f)
     private val validJson = """{"aspect":0.7,"blocks":[{"text":"文字","box":[0.1,0.2,0.7,0.8]}],"regions":[{"box":[0.05,0.1,0.8,0.9],"score":0.9}]}"""
 
-    private fun fixture(name: String = "1/0-ja-v2-dc6b6341.json", json: String = validJson): File =
+    private fun fixture(name: String = "1/0-ja-v$OCR_PIPELINE_VERSION-dc6b6341.json", json: String = validJson): File =
         File(folder.root, name).apply { parentFile!!.mkdirs(); writeText(json) }
 
     @Test fun roundTripKeepsBlocksRegionsAndAspect() = runBlocking {
         FileOcrCache(folder.root).put(1, 0, "ja", scan)
         assertEquals(scan, FileOcrCache(folder.root).get(1, 0, "ja"))
-        val json = JSONObject(File(folder.root, "1/0-ja-v2-dc6b6341.json").readText())
+        val json = JSONObject(File(folder.root, "1/0-ja-v$OCR_PIPELINE_VERSION-dc6b6341.json").readText())
         assertEquals(setOf("aspect", "blocks", "regions"), json.keySet())
         assertEquals(.7, json.getDouble("aspect"), 1e-6)
         val block = json.getJSONArray("blocks").getJSONObject(0)
@@ -36,6 +36,16 @@ class OcrCacheTest {
     @Test fun readsTheDocumentedJsonShape() = runBlocking {
         fixture()
         assertEquals(scan, FileOcrCache(folder.root).get(1, 0, "ja"))
+    }
+
+    @Test fun cacheKeepsTheTightSourceForCropsAndTheSeparateInteriorForSpeech() = runBlocking {
+        val source = blocks.single().copy(interior = Box(.07f, .16f, .74f, .85f))
+        val cache = FileOcrCache(folder.root)
+        cache.put(1, 0, "en", scan.copy(blocks = listOf(source)))
+        val restored = cache.get(1, 0, "en")!!.blocks.single()
+        assertEquals(source.box, restored.box)
+        assertEquals(source.interior, restored.translated(LineKind.Speech, "Hello").box)
+        assertEquals(source.box, restored.translated(LineKind.Narration, "Caption").box)
     }
 
     @Test fun emptyRegionsAreValid() = runBlocking {
@@ -68,7 +78,7 @@ class OcrCacheTest {
     }
 
     @Test fun staleVersionFileIsIgnored() = runBlocking {
-        fixture("1/0-ja-v3-dc6b6341.json")
+        fixture("1/0-ja-v2-dc6b6341.json")
         assertNull(FileOcrCache(folder.root).get(1, 0, "ja"))
     }
 
@@ -112,7 +122,7 @@ class OcrCacheTest {
     @Test fun otherTagIsAMiss() = runBlocking {
         val other = FileOcrCache(folder.root, "deadbeef")
         other.put(1, 0, "ja", scan)
-        assertTrue(File(folder.root, "1/0-ja-v2-deadbeef.json").isFile)
+        assertTrue(File(folder.root, "1/0-ja-v$OCR_PIPELINE_VERSION-deadbeef.json").isFile)
         assertNull(FileOcrCache(folder.root).get(1, 0, "ja"))
         assertEquals(scan, other.get(1, 0, "ja"))
     }
@@ -148,7 +158,7 @@ class OcrCacheTest {
 
     @Test fun failedAtomicReplacementKeepsStaleGenerationsAndCleansTemp() = runBlocking {
         val old = fixture("1/3-auto-v1.json", "{\"blocks\":[]}")
-        File(folder.root, "1/3-auto-v2-dc6b6341.json").mkdir()
+        File(folder.root, "1/3-auto-v$OCR_PIPELINE_VERSION-dc6b6341.json").mkdir()
         FileOcrCache(folder.root).put(1, 3, "auto", scan)
         assertTrue(old.isFile)
         assertEquals(emptyList<String>(), File(folder.root, "1").listFiles()!!.filter { it.extension == "tmp" }.map { it.name })

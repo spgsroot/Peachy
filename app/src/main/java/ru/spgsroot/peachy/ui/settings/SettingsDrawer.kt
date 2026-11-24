@@ -6,6 +6,7 @@ import androidx.activity.compose.LocalActivity
 import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BluetoothConnected
@@ -58,6 +59,7 @@ fun SettingsDrawer(
 ) {
     val updates: UpdateViewModel = hiltViewModel(checkNotNull(LocalActivity.current as? ComponentActivity))
     val settings = viewModel.settings.collectAsStateWithLifecycle().value
+    val nsfwOn = settings?.nsfwEnabled == true
     val isPasswordSet by viewModel.isPasswordSet.collectAsStateWithLifecycle()
     val deviceState by viewModel.deviceState.collectAsStateWithLifecycle()
     val devices by viewModel.devices.collectAsStateWithLifecycle()
@@ -92,6 +94,14 @@ fun SettingsDrawer(
         }
     }
 
+    LaunchedEffect(nsfwOn) {
+        if (!nsfwOn) {
+            showProviderDialog = false
+            showDeviceDialog = false
+            toysExpanded = false
+        }
+    }
+
     val context = LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val solWallet = "FB4B37LCd52dgVED5fR7Vj7CDttsa74CQyBc647agQP7"
@@ -113,9 +123,8 @@ fun SettingsDrawer(
                 PeachyBrand(Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
             }
 
-            // ═══════════════════════════════════════════
-            // TOYS SETTINGS — collapsed by default; the header keeps the connection state visible
-            // ═══════════════════════════════════════════
+            // Toys stay out of the drawer until the NSFW switch is known to be on.
+            if (nsfwOn) {
             item(key = "toys_header") {
                 ToysSectionHeader(
                     expanded = toysExpanded,
@@ -189,11 +198,11 @@ fun SettingsDrawer(
                 }
             }
 
-            // Divider
             item(key = "toys_divider") {
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
+            }
             }
 
             // ═══════════════════════════════════════════
@@ -207,6 +216,31 @@ fun SettingsDrawer(
             }
 
             settings?.let { s ->
+                item(key = "nsfw") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .toggleable(
+                                value = s.nsfwEnabled,
+                                role = Role.Switch,
+                                onValueChange = viewModel::setNsfwEnabled
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(stringResource(R.string.settings_nsfw_toggle))
+                            Text(
+                                stringResource(R.string.settings_nsfw_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = s.nsfwEnabled, onCheckedChange = null)
+                    }
+                }
+
                 item(key = "timer") {
                     Spacer(modifier = Modifier.height(16.dp))
                     TimerSlider(
@@ -266,16 +300,17 @@ fun SettingsDrawer(
                 }
             }
 
-            // Page translation section
-            item(key = "providers") {
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedButton(
-                    onClick = { showProviderDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.settings_translation_row))
+            if (nsfwOn) {
+                item(key = "providers") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { showProviderDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.settings_translation_row))
+                    }
                 }
             }
 

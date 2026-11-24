@@ -2,6 +2,8 @@
 
 The `manga/{id}` route uses Compose and Coil. Downloaded pages take precedence over remote URLs resolved by `NhentaiCdn.page`. Saved library metadata remains usable if the gallery request fails.
 
+The gallery details toolbar includes **Copy title** when the primary title is present. It copies the full model string even if the toolbar shows an ellipsis. Android receives plain text marked sensitive; the action does not read the existing clipboard.
+
 ## Catalog filters
 
 Language chips include English, Japanese, Chinese, and Translated. Each cycles through include, exclude, and off using the corresponding `language:` tag.
@@ -42,13 +44,15 @@ Leaving the reader reads the current pager position or live strip layout, even d
 
 `PageTranslator` receives a `TranslateRequest(engine, source, target)` with the resolved target. The Model engine sends the page image to the configured provider. The MlKit engine consumes `PageOcr` blocks locally and sends only numbered OCR text to that same provider for translation; a page with no OCR blocks returns an empty translation without an HTTP request. Both network paths require the existing provider consent, reject redirects, and use the same HTTP error mapping.
 
-Translated lines can carry an optional `Box` around their original text. Stored JSON uses `[left, top, right, bottom]` fractions in `0..1`. Model replies may instead use the requested `0..1000` coordinates: parsing scales the whole box when any coordinate exceeds one, clamps and orders its edges, and discards malformed or degenerate boxes without dropping the translated line. OCR translations retain each referenced block's original text and box; invalid indices and repeated references are skipped.
+ML Kit text requests use the provider's default output budget and wait up to 240 seconds without response data. The image path keeps its 4096-token limit and 120-second read timeout. A timeout does not trigger another translation request. If a provider returns `finish_reason=length` and no usable translation, the reader reports the output limit without retrying. A complete, parseable translation is still accepted. Provider-side limits and charges still apply.
+
+Translated lines can carry a placement `Box`. Stored JSON uses `[left, top, right, bottom]` fractions in `0..1`. Model replies provide tight source-text boxes in `0..1000`: parsing scales the whole box when any coordinate exceeds one, clamps and orders its edges, and discards malformed or degenerate boxes without dropping the line. After parsing, the device checks the already-loaded image for a safe speech/thought interior. OCR translations use the corresponding local region's text and placement; invalid indices and repeated references are skipped. Old saved translations retain their existing boxes and do not require another provider request.
 
 The database and vault continue to treat the `lang` field as an opaque cache key. `TranslationKey.of(engine, source, target)` returns exactly `target` for Model + `auto`, preserving existing caches and backups. Other choices use `target|engine.wire|source`, for example `de|mlkit|ja`. Changing translation choices switches the reader's displayed state and batch to that key; cached entries under other keys remain available.
 
 **Tap bubble text** is an opt-in translation mode in reader settings. The reader starts local text recognition when a page becomes visible. A single tap on recognized text translates that block into the selected target language. A tap made before recognition finishes waits for that scan. A miss keeps the usual page or toolbar action. If recognition fails, the reader still handles the tap and reports the recognition error without sending a translation request. Double-tap and pinch still zoom.
 
-ML Kit sends only the selected text; the vision engine sends a crop of that text, not the whole page. Both require consent for the configured provider. With **Show on the page** off, translations open in the panel. With it on, the translation fits inside the original text bounds; tap it again for the full wording. If even a shortened line cannot fit, the full translation opens in the panel on the first tap. Sound effects also use the panel. Finished bubble translations are reused across page turns and layout changes without marking a partially translated page as complete.
+ML Kit sends only the selected text; the vision engine sends a crop of the source text, not the balloon or the whole page. Both require consent for the configured provider. With **Show on the page** off, translations open in the panel. With it on, tap a translated region again for the full wording. If even a shortened line cannot fit, the full translation opens in the panel on the first tap. Sound effects also use the panel. Finished bubble translations are reused across page turns and layout changes without marking a partially translated page as complete.
 
 ### Choosing a model
 
@@ -60,7 +64,13 @@ In the provider dialog, **Models** loads the unsaved address/key's `/models` lis
 
 With `overlay` on, a page with a finished translation draws each boxed, non-Sfx line as a white plate over its original text. `fittedPage` excludes letterboxing; the overlay shares the image's transform, so zoom and pan carry the plates with the page. Lines without boxes and Sfx stay in the panel. Settings (`TranslationSettingRows`) holds engine, source, target and overlay controls.
 
-`layoutPlates` fits each plate inside its original text box, clipped to the fitted page. These are text rectangles, not detected bubble outlines. Long translations wrap and shrink inside the box rather than expanding across the art. If the full text still does not fit, the plate shows a beginning with an ellipsis when space permits; otherwise the original art remains visible. The panel retains the full translation. Layout runs on `Dispatchers.Default`; zoom and pan move the image and plates together without recomputing the text.
+Local analysis looks for connected, enclosed near-white paper around the source letters. Page-edge components and components larger than one third of the working image are rejected. A speech or thought plate can use an inscribed rectangle made of blank paper around its text, not the balloon's outer bounding box. Open, dark or textured balloons without a verified interior keep their tight source bounds. Signs and narration use the source rectangle even if blank space surrounds them.
+
+When a broad OCR group repeats the full source of two or more disjoint crops, the reader uses the smaller boxes. Each crop must lie at least 95% inside the group and their combined bounds must agree with all four group edges within 5% of its width or height. Before sending OCR, the combined text must match, ignoring case, spacing and punctuation. On already-translated pages the overlay also accepts one substituted character in a source of at least 20 characters, in a fragment of at least four. The alternate translation stays in the panel; Sfx boxes are never removed this way.
+
+`layoutPlates` excludes other remaining source boxes, including undrawn sound effects. Where boxes overlap, it measures each remaining free rectangle and chooses the one that shows the most text; at equal coverage it prefers larger type. Android `StaticLayout` wraps and draws the text. A shallow caption can use the actual glyph height rather than reserving empty font ascent and descent. If a tall glyph prevents the first line from fitting, the reader tries a shorter prefix with an ellipsis at the same readable size. Multiline text and ellipsized previews use at least 12 sp; a complete single line can go down to 8 sp. The maximum is 22 sp.
+
+At each half-step of page zoom the reader rewraps the translation inside the same source bounds instead of magnifying an already truncated preview. Panning alone does not remeasure text. If no readable prefix fits, the original art remains visible; the scrollable panel always retains the full wording.
 
 ## On-device page text recognition
 
@@ -82,7 +92,7 @@ is active at once. Other pages can interleave between tiles. Cancellation stops 
 immediately, but ML Kit's completion listener retains and recycles the current bitmap and
 releases the mutex only when native recognition has finished; the next tile is not started.
 
-Before detector merge, each ML Kit text block remains one output block. Lines below 0.3 confidence, blank lines and
+Lines are assigned to enclosed paper components; words in one ML Kit line may belong to different balloons. Text without an identified balloon keeps its ML Kit block. Lines below 0.3 confidence, blank lines and
 symbol-only noise are removed. Most lines with height at least 1.5 times width make a block vertical:
 its columns read right-to-left, top-to-bottom; other blocks use rows top-to-bottom, left-to-right.
 Mostly kana/Han text joins without spaces; other scripts join with spaces. Page rows use columns
@@ -109,11 +119,7 @@ tensor and reusable buffers through synchronous inference. Cancellation cannot i
 `run()`; cleanup and lock release wait for it to return. `onTrimMemory` releases idle resources.
 
 The model has one text class: `Region` contains only `box` and `score`, not a speech/Sfx kind.
-ML Kit remains the only source of text. `mergeBlocks` assigns each block to its greatest
-covered-share region (at least `ASSIGN_SHARE = 0.6`; ties prefer the smaller region).
-Regions containing 2–6 blocks and occupying at most 35% of the page join those blocks in
-geometric reading order, with the union of their text boxes. Other blocks remain unchanged.
-This groups text, not bubble outlines; provider `kind` still separates speech and sound effects.
+ML Kit remains the only source of text. `mergeBlocks` leaves independently enclosed text alone. For remaining blocks it assigns the greatest covered-share region (at least `ASSIGN_SHARE = 0.6`; ties prefer the smaller region). Regions containing 2–6 assigned blocks and occupying at most 35% of the page join them in geometric reading order only if their union does not cover a different source block. The detector's outer box is never used as a plate.
 
 Up to eight regions scoring at least 0.5 and claiming no first-pass block get a second OCR
 pass with 10% padding clipped to the page. Each padded rectangle grows symmetrically to at
@@ -137,9 +143,9 @@ earlier OCR-cache benefit on that path. First-pass OCR failure remains a page fa
 ### OCR cache
 
 `FileOcrCache` stores `PageScan(blocks, regions, aspect)` under
-`cacheDir/ocr/{galleryId}/{page}-{source}-v2-dc6b6341.json`
-(`OCR_PIPELINE_VERSION = 2`, detector-model hash prefix `dc6b6341`).
-The blocks include successful second-pass text, before merge; merge runs again on every read,
+`cacheDir/ocr/{galleryId}/{page}-{source}-v3-dc6b6341.json`
+(`OCR_PIPELINE_VERSION = 3`, detector-model hash prefix `dc6b6341`).
+Blocks include successful second-pass text, tight source bounds and an optional inscribed interior, before detector merge; merge runs again on every read,
 so changing grouping thresholds does not invalidate OCR. Target language is not part of the key.
 Empty blocks/regions are valid hits; missing, malformed, invalid-geometry or old-version files
 are misses. A successful same-directory atomic replacement removes obsolete generations

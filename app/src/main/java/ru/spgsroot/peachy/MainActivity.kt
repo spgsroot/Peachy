@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import android.graphics.Color
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -42,7 +41,10 @@ import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.data.session.AppSessionStore
 import ru.spgsroot.peachy.data.storage.DuplicateVideoException
 import ru.spgsroot.peachy.locale.LocaleManager
+import ru.spgsroot.peachy.nsfw.NsfwGate
+import ru.spgsroot.peachy.nsfw.NsfwRoutes
 import ru.spgsroot.peachy.security.AppLockGuard
+import ru.spgsroot.peachy.security.applyScreenshotPolicy
 import ru.spgsroot.peachy.security.AuthManager
 import ru.spgsroot.peachy.security.AuthSession
 import ru.spgsroot.peachy.documents.ui.DocumentRouteScreen
@@ -81,8 +83,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var appSession: AppSessionStore
 
+    @Inject
+    lateinit var nsfwGate: NsfwGate
+
     private val shareImportViewModel: ShareImportViewModel by viewModels()
     private var recreated = false
+    @Volatile private var splashHeld = true
 
     override fun attachBaseContext(newBase: Context) {
         val languageCode = LocaleManager.getCurrentLocale()
@@ -101,10 +107,13 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen().popBrandOnExit()
+        installSplashScreen().apply {
+            setKeepOnScreenCondition { splashHeld }
+            popBrandOnExit()
+        }
         super.onCreate(savedInstanceState)
         recreated = savedInstanceState != null
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        window.applyScreenshotPolicy(this)
         if (savedInstanceState == null) shareImportViewModel.enqueue(intent)
         // The app is dark in every system theme: light status and navigation bar icons.
         enableEdgeToEdge(
@@ -114,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PeachyTheme {
-                AppNavigation(authManager, authSession, shareImportViewModel, appSession)
+                AppNavigation(authManager, authSession, shareImportViewModel, appSession, nsfwGate) { splashHeld = false }
             }
         }
     }
@@ -172,7 +181,9 @@ fun AppNavigation(
     authManager: AuthManager,
     authSession: AuthSession,
     shareImports: ShareImportViewModel,
-    appSession: AppSessionStore
+    appSession: AppSessionStore,
+    nsfwGate: NsfwGate,
+    onReveal: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -206,20 +217,26 @@ fun AppNavigation(
     when {
         // The stored session is still being read; the splash screen covers this moment.
         onboardingCompleted == null || passwordSet == null -> Unit
-        !onboardingCompleted -> OnboardingScreen(
-            onComplete = {
-                scope.launch { authManager.skipOnboarding() }
-            },
-            onPasswordSet = { password ->
-                scope.launch {
-                    authManager.setPassword(password)
-                    authSession.setPasswordConfigured(true)
-                    authSession.unlock()
+        !onboardingCompleted -> {
+            SideEffect(onReveal)
+            OnboardingScreen(
+                onComplete = {
+                    scope.launch { authManager.skipOnboarding() }
+                },
+                onPasswordSet = { password ->
+                    scope.launch {
+                        authManager.setPassword(password)
+                        authSession.setPasswordConfigured(true)
+                        authSession.unlock()
+                    }
                 }
-            }
-        )
-        locked -> AuthGate(authManager, authSession)
-        else -> UnlockedApp(shareImports, appSession)
+            )
+        }
+        locked -> {
+            SideEffect(onReveal)
+            AuthGate(authManager, authSession)
+        }
+        else -> UnlockedApp(shareImports, appSession, nsfwGate, onReveal)
     }
 }
 
@@ -270,7 +287,12 @@ private fun AuthGate(authManager: AuthManager, authSession: AuthSession) {
 }
 
 @Composable
-private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessionStore) {
+private fun UnlockedApp(
+    shareImports: ShareImportViewModel,
+    appSession: AppSessionStore,
+    nsfwGate: NsfwGate,
+    onReveal: () -> Unit
+) {
     // Composed only while the session is unlocked, so restoration can never stand in for the
     // password screen. Locking disposes the controller and every destination; what the user was
     // looking at is kept in AppSessionStore and navigated back to on the next unlock.
@@ -288,37 +310,76 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
             appSession.read()
         }
     }
-    var restoredApplied by remember { mutableStateOf(restored.route == null) }
+    val nsfwEnabled by nsfwGate.enabled.collectAsStateWithLifecycle()
+    // An adult route stays covered until the switch is known. Unknown is not "on".
+    var restoredApplied by remember { mutableStateOf(false) }
+    // The screen under a restored browser is often Player. Compose it only after this activity
+    // has stopped, so its SurfaceView cannot flash through the cover while the browser starts.
+    var hideForBrowser by remember { mutableStateOf(restored.browserOpen && !appSession.browserVisible) }
+    var browserHandoff by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        restored.route?.let { target ->
-            // A recreated activity may already have its back stack; only navigate when the top
-            // destination is a different one, so a rotation never stacks a duplicate.
+    LaunchedEffect(nsfwEnabled, hideForBrowser) {
+        if (hideForBrowser) {
+            if (!appSession.browserVisible) {
+                context.startActivity(Intent(context, WebViewActivity::class.java))
+                browserHandoff = true
+                onReveal()
+            } else {
+                hideForBrowser = false
+            }
+            return@LaunchedEffect
+        }
+        val waitingOnGate = restored.route != null && NsfwRoutes.isNsfw(restored.route) && nsfwEnabled == null
+        if (waitingOnGate) return@LaunchedEffect
+        if (!restoredApplied) {
+            val chain = restoreLaunchChain(restored.route, nsfwEnabled) ?: return@LaunchedEffect
+            val target = chain.last()
             if (navController.currentDestination?.route != routePatternOf(target)) {
-                // The parent screens go in first, so Back from a restored sub-screen follows the
-                // usual hierarchy instead of dropping the user out of the app.
-                restoredChain(target).forEach { step ->
-                    navController.navigate(step) { launchSingleTop = true }
+                // Player stays under the restored screen, but it is not composed first: its SurfaceView
+                // would show through any cover. boot is popped in the same frame as the real destination.
+                chain.forEachIndexed { index, step ->
+                    navController.navigate(step) {
+                        if (index == 0) popUpTo("boot") { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
             }
+            restoredApplied = true
         }
-        restoredApplied = true
-        // The browser is a separate activity, not a graph destination: reopening it here keeps it
-        // after the unlock instead of dropping the user on the screen underneath it.
-        if (restored.browserOpen && !appSession.browserVisible) {
-            context.startActivity(Intent(context, WebViewActivity::class.java))
+    }
+
+    LaunchedEffect(nsfwEnabled, route) {
+        if (nsfwEnabled == false && NsfwRoutes.isNsfw(route)) {
+            val popped = navController.popBackStack("player", inclusive = false)
+            if (!popped) {
+                navController.navigate("player") {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         }
     }
 
     // Every destination change is remembered, not only the final one at exit: a killed process
-    // never gets onDestroy, and the next unlock must land on the same screen.
-    LaunchedEffect(entry) {
+    // never gets onDestroy, and the next unlock must land on the same screen. An adult route is
+    // not written while the switch is off, so the next cold start cannot open it.
+    LaunchedEffect(entry, restoredApplied, nsfwEnabled) {
+        if (!restoredApplied) return@LaunchedEffect
         val current = entry ?: return@LaunchedEffect
-        concreteRouteOf(current)?.let(appSession::saveRoute)
+        val concrete = concreteRouteOf(current) ?: return@LaunchedEffect
+        if (NsfwRoutes.isNsfw(concrete) && nsfwEnabled != true) return@LaunchedEffect
+        appSession.saveRoute(concrete)
     }
     val updates: UpdateViewModel = hiltViewModel()
     val updateOptions by updates.options.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && browserHandoff) hideForBrowser = false
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val hasPendingShare by shareImports.hasPending.collectAsState()
     var updateAccess by remember { mutableStateOf(false) }
 
@@ -370,7 +431,7 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
     Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = "player",
+            startDestination = "boot",
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
@@ -379,6 +440,9 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { ExitTransition.None }
         ) {
+            composable("boot") {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+            }
             composable("player") {
                 val playerViewModel: PlayerViewModel = hiltViewModel()
                 PlayerScreen(navController = navController, viewModel = playerViewModel)
@@ -388,13 +452,18 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
                 GalleryScreen(navController = navController, viewModel = galleryViewModel)
             }
             composable("manga") { entry ->
-                MangaHubScreen(navController = navController, entry = entry)
+                if (nsfwEnabled == true) MangaHubScreen(
+                    navController = navController,
+                    entry = entry,
+                    initialHub = appSession.read().mangaHub,
+                    onHub = appSession::saveMangaHub
+                )
             }
             composable(
                 "manga/{id}",
                 arguments = listOf(navArgument("id") { type = NavType.IntType })
             ) { entry ->
-                GalleryDetailScreen(
+                if (nsfwEnabled == true) GalleryDetailScreen(
                     galleryId = entry.arguments?.getInt("id") ?: return@composable,
                     navController = navController
                 )
@@ -409,7 +478,7 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
                     }
                 )
             ) { entry ->
-                MangaReaderScreen(
+                if (nsfwEnabled == true) MangaReaderScreen(
                     galleryId = entry.arguments?.getInt("id") ?: return@composable,
                     startAt = entry.arguments?.getInt("page")?.takeIf { it >= 0 },
                     navController = navController
@@ -431,18 +500,20 @@ private fun UnlockedApp(shareImports: ShareImportViewModel, appSession: AppSessi
                 "mangatags/{type}",
                 arguments = listOf(navArgument("type") { type = NavType.StringType })
             ) { entry ->
-                TagBrowserScreen(
+                if (nsfwEnabled == true) TagBrowserScreen(
                     onSearch = navController::searchCatalog,
                     onBack = { navController.popBackStack() },
                     initialType = entry.arguments?.getString("type") ?: "tag"
                 )
             }
         }
-        // A NavHost cannot start on a route that carries arguments, so the stored destination is
-        // navigated to right after the graph exists. This cover hides that first frame, so the
-        // player is never composed as a flash on the way to the restored screen.
-        if (!restoredApplied) {
+        // The cover protects startup and gated routes, not later navigation away from the saved screen.
+        val covered = hideForBrowser || !restoredApplied || route == null || route == "boot" ||
+            (NsfwRoutes.isNsfw(route) && nsfwEnabled != true)
+        if (covered) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        } else {
+            SideEffect { onReveal() }
         }
     }
 }
@@ -486,4 +557,15 @@ private fun restoredChain(target: String): List<String> = when {
     target.startsWith("mangatags/") -> listOf("manga", target)
     target.startsWith("documents/") -> listOf("documents", target)
     else -> listOf(target)
+}
+
+/**
+ * Screens for a cold start. Null while an adult route is still unknown, so nothing adult and no
+ * Player placeholder is opened. Player is only the real fallback.
+ */
+internal fun restoreLaunchChain(route: String?, nsfwEnabled: Boolean?): List<String>? {
+    if (route != null && NsfwRoutes.isNsfw(route) && nsfwEnabled == null) return null
+    val allowed = route?.takeUnless { NsfwRoutes.isNsfw(it) && nsfwEnabled != true } ?: "player"
+    val above = restoredChain(allowed).filter { it != "player" }
+    return if (above.isEmpty()) listOf("player") else listOf("player") + above
 }

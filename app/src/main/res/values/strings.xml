@@ -10,6 +10,8 @@
     <string name="btn_set_password">Задать пароль</string>
     <!-- Settings -->
     <string name="settings_title">Настройки</string>
+    <string name="settings_nsfw_toggle">Включение NSFW функционала</string>
+    <string name="settings_nsfw_hint">Манга, перевод страниц и устройства. Сохранённое не удаляется.</string>
     <string name="settings_device">Устройство</string>
     <string name="settings_power_boost">Усиление</string>
     <string name="timer_label">Таймер автопереключения</string>

@@ -196,6 +196,7 @@ internal fun errorName(error: TranslationError?): String = when (error) {
     TranslationError.Network -> stringResource(R.string.translate_error_network)
     TranslationError.Recognition -> stringResource(R.string.translate_error_recognition)
     TranslationError.BadResponse -> stringResource(R.string.translate_error_bad_response)
+    TranslationError.OutputLimit -> stringResource(R.string.translate_error_output_limit)
     TranslationError.Refused -> stringResource(R.string.translate_error_refused)
     is TranslationError.Server -> stringResource(R.string.translate_error_server, error.code)
 }

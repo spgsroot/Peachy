@@ -24,6 +24,7 @@
     <string name="translate_error_network">Cannot reach the provider or the page</string>
     <string name="translate_error_recognition">Could not recognize text on this page</string>
     <string name="translate_error_bad_response">The provider did not answer as expected</string>
+    <string name="translate_error_output_limit">The provider reached its output limit before finishing the translation</string>
     <string name="translate_error_refused">The model refused to read this page</string>
     <string name="translate_error_server">Provider error: %1$d</string>
     <string name="provider_title">Page translation</string>

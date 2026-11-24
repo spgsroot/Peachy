@@ -25,7 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class AppSessionStore @Inject constructor(@ApplicationContext context: Context) {
 
-    data class Snapshot(val route: String?, val browserOpen: Boolean)
+    data class Snapshot(val route: String?, val browserOpen: Boolean, val mangaHub: String? = null)
 
     /**
      * Process-local, never written: whether a browser screen is showing or starting. The restored
@@ -52,7 +52,7 @@ class AppSessionStore @Inject constructor(@ApplicationContext context: Context) 
         val safe = sanitize(route) ?: return
         val current = read()
         if (current.route == safe) return
-        write(Snapshot(safe, current.browserOpen))
+        write(Snapshot(safe, current.browserOpen, current.mangaHub))
     }
 
     /** Marks that the embedded browser is the screen the user should return to after unlocking. */
@@ -60,7 +60,16 @@ class AppSessionStore @Inject constructor(@ApplicationContext context: Context) 
     fun setBrowserOpen(open: Boolean) {
         val current = read()
         if (current.browserOpen == open) return
-        write(Snapshot(current.route, open))
+        write(Snapshot(current.route, open, current.mangaHub))
+    }
+
+    /** Remembers the manga hub section; an unknown name is ignored and never navigated to. */
+    @Synchronized
+    fun saveMangaHub(hub: String) {
+        val safe = sanitizeHub(hub) ?: return
+        val current = read()
+        if (current.mangaHub == safe) return
+        write(Snapshot(current.route, current.browserOpen, safe))
     }
 
     private fun write(snapshot: Snapshot) {
@@ -69,6 +78,7 @@ class AppSessionStore @Inject constructor(@ApplicationContext context: Context) 
             append("v1\n")
             snapshot.route?.let { append("route=").append(it).append('\n') }
             append("browser=").append(if (snapshot.browserOpen) "1" else "0").append('\n')
+            snapshot.mangaHub?.let { append("hub=").append(it).append('\n') }
         }
         val temp = File(file.parentFile, "$FILE_NAME.tmp")
         // A tiny file rewritten on navigation: the rename keeps a torn write from being read back.
@@ -105,15 +115,17 @@ class AppSessionStore @Inject constructor(@ApplicationContext context: Context) 
             var versionSeen = false
             var route: String? = null
             var browserOpen = false
+            var hub: String? = null
             for (line in text.lineSequence()) {
                 if (line.length > MAX_LINE_LENGTH) continue
                 when {
                     !versionSeen -> versionSeen = line == "v1"
                     line.startsWith("route=") -> route = sanitize(line.removePrefix("route="))
                     line == "browser=1" -> browserOpen = true
+                    line.startsWith("hub=") -> hub = sanitizeHub(line.removePrefix("hub="))
                 }
             }
-            return Snapshot(route, browserOpen)
+            return Snapshot(route, browserOpen, hub)
         }
 
         /**
@@ -134,6 +146,13 @@ class AppSessionStore @Inject constructor(@ApplicationContext context: Context) 
             }
             return null
         }
+
+        internal fun sanitizeHub(hub: String?): String? {
+            val text = hub?.trim() ?: return null
+            return text.takeIf { it in HUBS }
+        }
+
+        private val HUBS = setOf("Catalog", "ForYou", "Downloads", "Favorites", "SavedPages", "History")
 
         private const val MAX_ROUTE_LENGTH = 120
         private const val MAX_LINE_LENGTH = 256

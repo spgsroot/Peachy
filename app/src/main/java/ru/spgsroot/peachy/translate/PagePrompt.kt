@@ -16,7 +16,7 @@ object PagePrompt {
             "sourceLanguage" is the ISO 639-1 code of the language on the page.
             "kind" is one of: speech, thought, narration, sfx, sign.
             "text" is the original text, "translation" is the text in $language.
-            One line is one speech bubble or caption box; keep its text together rather than splitting it into sentences.
+            Keep each bubble, caption or isolated inscription on the artwork separate, even when adjacent. Keep sentences in the same bubble together.
             "box" is [left,top,right,bottom], tightly enclosing the original text of that speech bubble or caption.
             Use integers in 0..1000 for every coordinate: horizontal coordinates are fractions of the image width and vertical coordinates are fractions of the image height, each multiplied by 1000.
             If the page has no text, answer {"sourceLanguage":"","lines":[]}.

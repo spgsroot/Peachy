@@ -106,6 +106,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -144,6 +149,7 @@ fun BrowserScreen(
     controller: BrowserController,
     viewModel: BrowserViewModel,
     captureOn: Boolean,
+    captureAvailable: Boolean,
     onCaptureChange: (Boolean) -> Unit,
     onClose: () -> Unit
 ) {
@@ -305,8 +311,13 @@ fun BrowserScreen(
                 }
             }
             HorizontalDivider()
+            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             Row(
-                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 4.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .barHistorySwipe(tab.id, rtl, { if (tab.canGoBack) controller.goBack(tab) }, { if (tab.canGoForward) controller.goForward(tab) })
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -427,11 +438,13 @@ fun BrowserScreen(
                             text = { Text(stringResource(R.string.browser_shield_lists)) },
                             onClick = { menuOpen = false; sheet = Sheet.FILTERS }
                         )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.browser_capture)) },
-                            trailingIcon = { Switch(checked = captureOn, onCheckedChange = null) },
-                            onClick = { onCaptureChange(!captureOn) }
-                        )
+                        if (captureAvailable) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.browser_capture)) },
+                                trailingIcon = { Switch(checked = captureOn, onCheckedChange = null) },
+                                onClick = { onCaptureChange(!captureOn) }
+                            )
+                        }
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.browser_clear_site_data)) },
@@ -713,6 +726,27 @@ private fun WebHost(webView: android.webkit.WebView, onScroll: (scrollY: Int, de
         onDispose { webView.setOnScrollChangeListener(null) }
     }
 }
+
+/** Horizontal drag on the toolbar only: page scroll never sees it, and a tap still reaches the buttons. */
+private fun Modifier.barHistorySwipe(key: Any, rtl: Boolean, onBack: () -> Unit, onForward: () -> Unit): Modifier =
+    pointerInput(key, rtl) {
+        val threshold = 48.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var totalX = 0f
+            var dragging = false
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                if (!change.pressed) break
+                totalX += change.position.x - change.previousPosition.x
+                if (!dragging && kotlin.math.abs(totalX) >= viewConfiguration.touchSlop) dragging = true
+                if (dragging) change.consume()
+            }
+            if (!dragging || kotlin.math.abs(totalX) < threshold) return@awaitEachGesture
+            if ((if (rtl) totalX < 0 else totalX > 0)) onForward() else onBack()
+        }
+    }
 
 @Composable
 private fun StartPage(bookmarks: List<Pair<String, String>>, recent: List<Pair<String, String>>, onOpen: (String) -> Unit) {

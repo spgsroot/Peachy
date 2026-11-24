@@ -69,4 +69,13 @@ class AppSessionStoreTest {
         assertNull(snapshot.route)
         assertEquals(false, snapshot.browserOpen)
     }
+
+    @Test
+    fun aHubSectionSurvivesARouteRewrite() {
+        val snapshot = AppSessionStore.parse("v1\nroute=manga\nbrowser=0\nhub=Favorites\n")
+
+        assertEquals("Favorites", snapshot.mangaHub)
+        assertNull(AppSessionStore.sanitizeHub("search"))
+        assertEquals("Downloads", AppSessionStore.sanitizeHub("Downloads"))
+    }
 }

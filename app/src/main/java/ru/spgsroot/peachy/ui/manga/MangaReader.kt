@@ -972,8 +972,13 @@ internal fun ReaderPage(
                     },
                     onError = { aspectKnown = true }
                 )
-                key(model, page) {
-                    TranslationOverlay(lines, aspect, selectedLine = selectedLine, onSelectionOmitted = onSelectionOmitted)
+                if (lines.isNotEmpty()) key(model, page) {
+                    // Reflow in half-steps, not on every pinch frame or pan.
+                    val layoutZoom by remember(zoom, active) {
+                        derivedStateOf { if (active) (zoom.zoom * 2).toInt() * 0.5f else 1f }
+                    }
+                    TranslationOverlay(lines, aspect, layoutZoom = layoutZoom, selectedLine = selectedLine,
+                        onSelectionOmitted = onSelectionOmitted)
                 }
             }
         }

@@ -15,5 +15,6 @@ data class SettingsEntity(
     val dspPowerBoost: Float = 1.0f,
     val dspThreshold: Float = 0.03f,
     val autoLockTimeoutMs: Long,
-    val languageCode: String = "system"
+    val languageCode: String = "system",
+    val nsfwEnabled: Boolean = false
 )

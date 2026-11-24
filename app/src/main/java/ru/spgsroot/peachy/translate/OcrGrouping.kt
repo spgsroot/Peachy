@@ -1,11 +1,21 @@
 package ru.spgsroot.peachy.translate
 
 internal data class PixelRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
+internal inline fun <T> List<T>.boundsOf(rect: (T) -> PixelRect): PixelRect {
+    val first = rect(first())
+    if (size == 1) return first
+    var l = first.left; var t = first.top; var r = first.right; var b = first.bottom
+    for (i in 1 until size) {
+        val next = rect(this[i])
+        l = minOf(l, next.left); t = minOf(t, next.top); r = maxOf(r, next.right); b = maxOf(b, next.bottom)
+    }
+    return PixelRect(l, t, r, b)
+}
 internal data class RawOcrLine(val text: String, val rect: PixelRect, val confidence: Float = 1f)
-internal data class RawOcrBlock(val lines: List<RawOcrLine>, val rect: PixelRect)
+internal data class RawOcrBlock(val lines: List<RawOcrLine>, val rect: PixelRect, val interior: PixelRect? = null)
 
 /**
- * Keeps ML Kit's block boundaries (one bubble is not split into words). Lines below 0.3 confidence,
+ * Orders the regions from local recognition. Lines below 0.3 confidence,
  * blank lines and symbol-only lines are discarded; a single letter, ideograph or digit is retained.
  * Boxes are clipped to the image and zero-area boxes are discarded.
  *
@@ -27,31 +37,27 @@ internal fun groupOcrBlocks(
     require(imageWidth > 0 && imageHeight > 0)
     var verticalBlocks = 0
     val cleaned = blocks.mapNotNull { block ->
-        val rect = PixelRect(
-            block.rect.left.coerceIn(0, imageWidth), block.rect.top.coerceIn(0, imageHeight),
-            block.rect.right.coerceIn(0, imageWidth), block.rect.bottom.coerceIn(0, imageHeight)
-        )
-        if (rect.left >= rect.right || rect.top >= rect.bottom) return@mapNotNull null
         val lines = block.lines.mapNotNull { line ->
             val text = line.text.trim()
             if (line.confidence < 0.3f || !text.codePoints().anyMatch { Character.isLetterOrDigit(it) }) null
             else line.copy(text = text)
         }
         if (lines.isEmpty()) return@mapNotNull null
+        val bounds = if (lines.size == block.lines.size) block.rect else lines.boundsOf { it.rect }
+        val rect = PixelRect(bounds.left.coerceIn(0, imageWidth), bounds.top.coerceIn(0, imageHeight),
+            bounds.right.coerceIn(0, imageWidth), bounds.bottom.coerceIn(0, imageHeight))
+        if (rect.left >= rect.right || rect.top >= rect.bottom) return@mapNotNull null
         val vertical = lines.count { it.rect.bottom - it.rect.top >= 1.5f * (it.rect.right - it.rect.left) } * 2 > lines.size
         if (vertical) verticalBlocks++
         val ordered = if (vertical) columns(lines) { it.rect } else rows(lines) { it.rect }.flatten()
-        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(joinSeparator(lines.map { it.text })) { it.text }, rect)), rect)
+        RawOcrBlock(listOf(RawOcrLine(ordered.joinToString(joinSeparator(lines.map { it.text })) { it.text }, rect)), rect, block.interior)
     }
     val vertical = source == "ja" || source == "zh" || (source == "auto" && verticalBlocks * 2 > cleaned.size)
     return rows(cleaned) { it.rect }.flatMap { row ->
         if (vertical) columns(row) { it.rect } else row.sortedWith(compareBy({ it.rect.left }, { it.rect.top }))
     }.map { block ->
-        val rect = block.rect
-        OcrBlock(block.lines.single().text, Box(
-            rect.left.toFloat() / imageWidth, rect.top.toFloat() / imageHeight,
-            rect.right.toFloat() / imageWidth, rect.bottom.toFloat() / imageHeight
-        ))
+        OcrBlock(block.lines.single().text, block.rect.normalized(imageWidth, imageHeight),
+            block.interior?.normalized(imageWidth, imageHeight))
     }
 }
 

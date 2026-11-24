@@ -249,7 +249,7 @@ draw behind the system bars and screens apply insets rather than assuming a safe
   width below 360 dp, with 14 dp or 10 dp gaps respectively. Digits are 48 dp+ targets on every
   verified configuration.
 - **Top app bar** is the standard 64 dp Material bar. The player keeps Menu, Gallery, Add,
-  Library, Documents and Browser in one row with 48 dp targets at widths of 320 dp and up.
+  Documents and Browser in one row with 48 dp targets at widths of 320 dp and up; Library joins that row when NSFW features are enabled.
   The title shows the full brand lockup if it fits, then the mark alone, then neither.
   Sort and filter lives below the bar with the queue. Gallery moves the search field to its own
   row when its hint will not fit beside the actions. Selection mode uses `primary-container`.

@@ -2,6 +2,7 @@
 <resources>
     <string name="manga_detail_pages">Страницы</string>
     <string name="manga_detail_read">Читать</string>
+    <string name="manga_detail_copy_title">Копировать название</string>
     <string name="manga_detail_continue">Продолжить со страницы %1$d</string>
     <string name="manga_detail_download">Скачать</string>
     <string name="manga_detail_downloading">Скачивание %1$s</string>

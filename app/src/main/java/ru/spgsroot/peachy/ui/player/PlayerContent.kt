@@ -42,7 +42,8 @@ fun PlayerContent(
     queue: List<Video>,
     currentId: Long?,
     onSelectVideo: (Video) -> Unit,
-    onSwitchVideo: (Int) -> Unit
+    onSwitchVideo: (Int) -> Unit,
+    showDeviceStatus: Boolean
 ) {
     Box(
         modifier = modifier
@@ -102,7 +103,8 @@ fun PlayerContent(
             queue = queue,
             currentId = currentId,
             onSelectVideo = onSelectVideo,
-            onSwitchVideo = onSwitchVideo
+            onSwitchVideo = onSwitchVideo,
+            showDeviceStatus = showDeviceStatus
         )
     }
 }

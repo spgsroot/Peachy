@@ -1,5 +1,8 @@
 package ru.spgsroot.peachy.ui.manga
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.os.PersistableBundle
 import ru.spgsroot.peachy.manga.TagNames
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.StickyNote2
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,11 +48,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +64,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.manga.GalleryComment
 import ru.spgsroot.peachy.manga.GalleryDetail
@@ -101,18 +109,7 @@ fun GalleryDetailScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(detail?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_description_back))
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    Scaffold(topBar = { GalleryDetailTopBar(detail) { navController.popBackStack() } }) { padding ->
         when {
             detail == null && state.loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
                 CircularProgressIndicator()
@@ -200,6 +197,31 @@ fun GalleryDetailScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun GalleryDetailTopBar(detail: GalleryDetail?, onBack: () -> Unit) {
+    TopAppBar(
+        title = { Text(detail?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.content_description_back))
+            }
+        },
+        actions = {
+            if (detail != null && detail.title.isNotBlank()) {
+                val label = stringResource(R.string.manga_detail_copy_title)
+                val clipboard = LocalClipboard.current
+                val scope = rememberCoroutineScope()
+                IconButton(onClick = {
+                    val clip = ClipData.newPlainText(label, detail.title)
+                    clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+                    scope.launch { clipboard.setClipEntry(ClipEntry(clip)) }
+                }) { Icon(Icons.Outlined.ContentCopy, label) }
+            }
+        }
+    )
 }
 
 private const val PREVIEW_COLUMNS = 3

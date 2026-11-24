@@ -20,6 +20,9 @@ sealed interface TranslationError {
     /** The provider answered, but not with a usable translation, even after one more try. */
     object BadResponse : TranslationError
 
+    /** The provider ran out of output tokens before returning a usable translation. */
+    object OutputLimit : TranslationError
+
     /** The model declined to read the page: no message in the reply, or a content filter. */
     object Refused : TranslationError
 

@@ -34,6 +34,7 @@ import ru.spgsroot.peachy.browser.BrowserUrls
 /** Opens the browser, optionally at an address, optionally with page audio driving the haptics. */
 @Composable
 fun WebViewUrlDialog(
+    allowCapture: Boolean,
     onDismiss: () -> Unit,
     onOpen: (url: String, capture: Boolean) -> Unit
 ) {
@@ -52,7 +53,7 @@ fun WebViewUrlDialog(
         }
         focus.clearFocus()
         keyboard?.hide()
-        onOpen(typed, capture)
+        onOpen(typed, allowCapture && capture)
         onDismiss()
     }
 
@@ -79,6 +80,7 @@ fun WebViewUrlDialog(
                     keyboardActions = KeyboardActions(onGo = { open() }),
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (allowCapture) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -87,7 +89,8 @@ fun WebViewUrlDialog(
                     Checkbox(checked = capture, onCheckedChange = { capture = it })
                     Text(stringResource(R.string.dialog_browser_capture), style = MaterialTheme.typography.bodyLarge)
                 }
-                if (capture) {
+                }
+                if (allowCapture && capture) {
                     Text(
                         text = stringResource(R.string.webview_audio_capture_hint),
                         style = MaterialTheme.typography.bodySmall,

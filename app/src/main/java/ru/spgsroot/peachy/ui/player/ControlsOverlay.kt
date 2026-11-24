@@ -53,7 +53,8 @@ fun ControlsOverlay(
     queue: List<Video>,
     currentId: Long?,
     onSelectVideo: (Video) -> Unit,
-    onSwitchVideo: (Int) -> Unit
+    onSwitchVideo: (Int) -> Unit,
+    showDeviceStatus: Boolean
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(0L) }
@@ -151,7 +152,7 @@ fun ControlsOverlay(
                             showControls()
                         }
                     )
-                    if (!compact) DeviceStatusBar(
+                    if (!compact && showDeviceStatus) DeviceStatusBar(
                         deviceState = deviceState,
                         devices = devices,
                         activeDeviceIndex = activeDeviceIndex

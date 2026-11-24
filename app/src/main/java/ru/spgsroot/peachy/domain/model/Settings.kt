@@ -5,7 +5,8 @@ data class Settings(
     val playbackSpeed: Float,
     val dspConfig: DspConfig,
     val autoLockTimeoutMs: Long,
-    val languageCode: String = "system"
+    val languageCode: String = "system",
+    val nsfwEnabled: Boolean = false
 )
 
 data class DspConfig(

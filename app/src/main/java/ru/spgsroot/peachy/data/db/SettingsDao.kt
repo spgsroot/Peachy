@@ -50,4 +50,7 @@ interface SettingsDao {
 
     @Query("UPDATE settings SET languageCode = :languageCode WHERE id = 1")
     suspend fun updateLanguage(languageCode: String)
+
+    @Query("UPDATE settings SET nsfwEnabled = :enabled WHERE id = 1")
+    suspend fun updateNsfwEnabled(enabled: Boolean)
 }

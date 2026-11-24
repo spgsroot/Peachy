@@ -79,14 +79,19 @@ private enum class HubDestination(val label: Int, val icon: ImageVector) {
     History(R.string.manga_history, Icons.Filled.History)
 }
 
+private fun hubOf(raw: String?): HubDestination =
+    HubDestination.entries.firstOrNull { it.name == raw } ?: HubDestination.Catalog
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MangaHubScreen(
     navController: NavController,
     entry: NavBackStackEntry,
+    initialHub: String? = null,
+    onHub: (String) -> Unit = {},
     viewModel: MangaViewModel = hiltViewModel()
 ) {
-    var destination by rememberSaveable { mutableStateOf(HubDestination.Catalog) }
+    var destination by rememberSaveable { mutableStateOf(hubOf(initialHub)) }
     var catalogKey by rememberSaveable { mutableIntStateOf(0) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -97,6 +102,7 @@ fun MangaHubScreen(
     val randomFailed by viewModel.randomFailed.collectAsStateWithLifecycle()
     val randomError = stringResource(R.string.manga_random_error)
     LaunchedEffect(randomFailed) { if (randomFailed) snackbar.showSnackbar(randomError) }
+    LaunchedEffect(destination) { onHub(destination.name) }
 
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
     var queryText by rememberSaveable(catalog.query.text) { mutableStateOf(catalog.query.text) }

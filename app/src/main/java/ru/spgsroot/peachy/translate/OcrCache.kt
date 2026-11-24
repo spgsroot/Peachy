@@ -11,7 +11,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-const val OCR_PIPELINE_VERSION = 2
+const val OCR_PIPELINE_VERSION = 3
 const val DETECTOR_MODEL_TAG = "dc6b6341"
 
 interface OcrCache {
@@ -21,9 +21,8 @@ interface OcrCache {
 
 /**
  * Derived local data only; a miss never prevents recognition.
- * Files: {gallery}/{page}-{source}-v2-{tag}.json, with aspect, blocks and detector regions.
- * JSON: {"aspect":0.7,"blocks":[{"text":"..","box":[l,t,r,b]}],
- *        "regions":[{"box":[l,t,r,b],"score":0.9}]}.
+ * Files: {gallery}/{page}-{source}-v3-{tag}.json. Blocks store source text bounds and,
+ * when known, a separate safe balloon interior; detector regions store bounds and score.
  * Invalid geometry, aspect or scores are misses. A successful atomic replacement precedes
  * removal of older versions/tags for the same page and source; unrelated entries stay intact.
  */
@@ -42,7 +41,11 @@ class FileOcrCache(private val dir: File, private val tag: String = DETECTOR_MOD
                 List(blocks.length()) { index ->
                     val block = blocks.getJSONObject(index)
                     val text = block.get("text") as? String ?: throw JSONException("Invalid text")
-                    OcrBlock(text, readBox(block.getJSONArray("box")))
+                    val box = readBox(block.getJSONArray("box"))
+                    val interior = if (block.has("interior")) readBox(block.getJSONArray("interior")) else null
+                    if (interior != null && (interior.left > box.left || interior.top > box.top ||
+                            interior.right < box.right || interior.bottom < box.bottom)) throw JSONException("Invalid interior")
+                    OcrBlock(text, box, interior)
                 },
                 List(regions.length()) { index ->
                     val region = regions.getJSONObject(index)
@@ -66,7 +69,11 @@ class FileOcrCache(private val dir: File, private val tag: String = DETECTOR_MOD
             // A crash leaves at most an ignored .tmp; malformed existing JSON is a cache miss.
             temp = File.createTempFile("ocr-", ".tmp", target.parentFile)
             val json = JSONObject().put("aspect", scan.aspect).put("blocks", JSONArray().apply {
-                scan.blocks.forEach { block -> put(JSONObject().put("text", block.text).put("box", boxJson(block.box))) }
+                scan.blocks.forEach { block ->
+                    val item = JSONObject().put("text", block.text).put("box", boxJson(block.box))
+                    block.interior?.let { item.put("interior", boxJson(it)) }
+                    put(item)
+                }
             }).put("regions", JSONArray().apply {
                 scan.regions.forEach { region -> put(JSONObject().put("box", boxJson(region.box)).put("score", region.score)) }
             })

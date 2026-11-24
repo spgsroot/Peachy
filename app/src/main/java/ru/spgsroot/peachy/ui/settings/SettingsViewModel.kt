@@ -15,6 +15,7 @@ import ru.spgsroot.peachy.device.buttplug.DeviceState
 import ru.spgsroot.peachy.device.buttplug.isAudioDrivable
 import ru.spgsroot.peachy.domain.dsp.HapticRuntimeConfig
 import ru.spgsroot.peachy.domain.model.Settings
+import ru.spgsroot.peachy.nsfw.NsfwGate
 import ru.spgsroot.peachy.security.AuthManager
 import javax.inject.Inject
 
@@ -24,7 +25,8 @@ class SettingsViewModel @Inject constructor(
     private val authManager: AuthManager,
     val connectionManager: ButtplugConnectionManager,
     private val hapticRuntimeConfig: HapticRuntimeConfig,
-    private val commandSender: CommandSender
+    private val commandSender: CommandSender,
+    private val nsfwGate: NsfwGate
 ) : ViewModel() {
 
     val settings: StateFlow<Settings?> = settingsRepository.getSettings()
@@ -103,6 +105,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setNsfwEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateNsfwEnabled(enabled)
+            if (!enabled) disconnectDevice()
+        }
+    }
+
     fun setPassword(password: String) {
         viewModelScope.launch {
             authManager.setPassword(password)
@@ -121,6 +130,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun connectDevice(deviceIndex: Int) {
+        if (!nsfwGate.allows()) return
         android.util.Log.d("SettingsViewModel", "Device selected: $deviceIndex")
         val libDevice = connectionManager.rawDevices.firstOrNull { it.index == deviceIndex }
         val targets = libDevice?.features?.flatMap { feature ->

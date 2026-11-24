@@ -279,7 +279,7 @@ class TranslationClientTest {
     }
 
     @Test
-    fun blocksRequestContainsNumberedTextWithoutAnImageAndUsesThePageBudget() {
+    fun blocksRequestContainsNumberedTextWithoutAnImageOrFixedOutputCap() {
         reply(blocksReply)
         assertEquals(listOf(IndexedTranslation(0, LineKind.Speech, "А?")), translateBlocks())
 
@@ -291,7 +291,7 @@ class TranslationClientTest {
         val body = JSONObject(request.body.readUtf8())
         assertEquals(DEFAULT_MODEL, body.getString("model"))
         assertEquals(0.2, body.getDouble("temperature"), 0.0001)
-        assertEquals(4096, body.getInt("max_tokens"))
+        assertFalse(body.has("max_tokens"))
         assertEquals("json_object", body.getJSONObject("response_format").getString("type"))
         val messages = body.getJSONArray("messages")
         val system = messages.getJSONObject(0).getString("content")
@@ -436,6 +436,30 @@ class TranslationClientTest {
     }
 
     @Test
+    fun outputLimitDoesNotRetryOrDiscardACompleteTranslation() {
+        var calls = 0
+        var content = ""
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            calls++
+            val buffer = okio.Buffer()
+            chain.request().body!!.writeTo(buffer)
+            val body = JSONObject(buffer.readUtf8())
+            assertFalse(body.has("max_tokens") || body.has("max_completion_tokens"))
+            okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(200).message("OK")
+                .body(envelope(content, "length").toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val client = TranslationClient(http, { settings }, agent)
+        fun request() = runBlocking { client.translateBlocks(7, blocks, "ja", "ru") }
+        assertEquals(TranslationError.OutputLimit, failureOf { request() })
+        content = """{"lines":["""
+        assertEquals(TranslationError.OutputLimit, failureOf { request() })
+        content = blocksReply
+        assertEquals("А?", request().single().translation)
+        assertEquals(3, calls)
+    }
+
+    @Test
     fun blocksOnOpencodeSendTheirGallerySession() {
         var seen: String? = null
         val http = OkHttpClient.Builder().addInterceptor { chain ->
@@ -451,7 +475,7 @@ class TranslationClientTest {
     }
 
     @Test
-    fun blocksOnOpenAiAdaptTheActualRequestBudget() {
+    fun blocksOnOpenAiLeaveTheOutputBudgetToTheProvider() {
         var seen: JSONObject? = null
         val http = OkHttpClient.Builder().addInterceptor { chain ->
             val buffer = okio.Buffer()
@@ -464,7 +488,7 @@ class TranslationClientTest {
         val provider = ProviderSettings(baseUrl = "https://api.openai.com/v1", apiKey = "k", consented = true)
         runBlocking { TranslationClient(http, { provider }, agent).translateBlocks(7, blocks, "ja", "ru") }
         val body = requireNotNull(seen)
-        assertEquals(4096, body.getInt("max_completion_tokens"))
+        assertFalse(body.has("max_completion_tokens"))
         assertFalse(body.has("max_tokens"))
         assertFalse(body.has("temperature"))
         assertEquals("json_object", body.getJSONObject("response_format").getString("type"))

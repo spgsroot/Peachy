@@ -49,6 +49,8 @@ fun PlayerScreen(
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val currentId = playerState.displayedVideoId()
+    val appSettings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val nsfwOn = appSettings?.nsfwEnabled == true
     val deviceState by settingsViewModel.deviceState.collectAsStateWithLifecycle()
     val devices by settingsViewModel.devices.collectAsStateWithLifecycle()
     val activeDeviceIndex by settingsViewModel.activeDeviceIndex.collectAsStateWithLifecycle()
@@ -108,6 +110,7 @@ fun PlayerScreen(
                         onMenu = { scope.launch { drawerState.open() } },
                         onGallery = { navController.navigate("gallery") },
                         onAdd = { showAddDialog = true },
+                        showLibrary = nsfwOn,
                         onLibrary = { navController.navigate("manga") },
                         onDocuments = { navController.navigate("documents") },
                         onBrowser = {
@@ -170,7 +173,8 @@ fun PlayerScreen(
                         queue = queue,
                         currentId = currentId,
                         onSelectVideo = viewModel::playVideo,
-                        onSwitchVideo = { direction -> if (direction > 0) viewModel.onNext() else viewModel.onPrevious() }
+                        onSwitchVideo = { direction -> if (direction > 0) viewModel.onNext() else viewModel.onPrevious() },
+                        showDeviceStatus = nsfwOn
                     )
                 }
             }
@@ -218,6 +222,7 @@ fun PlayerScreen(
 
     if (showWebViewDialog) {
         WebViewUrlDialog(
+            allowCapture = nsfwOn,
             onDismiss = { showWebViewDialog = false },
             onOpen = { url, capture ->
                 viewModel.pauseForWebView()
@@ -238,6 +243,7 @@ private fun LibraryTopBar(
     onMenu: () -> Unit,
     onGallery: () -> Unit,
     onAdd: () -> Unit,
+    showLibrary: Boolean,
     onLibrary: () -> Unit,
     onDocuments: () -> Unit,
     onBrowser: () -> Unit,
@@ -262,8 +268,10 @@ private fun LibraryTopBar(
             IconButton(onClick = onAdd) {
                 Icon(Icons.Default.Add, stringResource(R.string.content_description_add_video))
             }
-            IconButton(onClick = onLibrary) {
-                Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
+            if (showLibrary) {
+                IconButton(onClick = onLibrary) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
+                }
             }
             IconButton(onClick = onDocuments) {
                 Icon(Icons.Default.Description, stringResource(R.string.documents_title))

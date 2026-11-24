@@ -73,7 +73,10 @@ class BrowserNavigationTest {
         val blank = BrowserSessionStore.Snapshot(listOf(BrowserSessionStore.Tab(1, "", "", 0)), 1)
         session.save(blank)
         val appSession = AppSessionStore(context)
-        val previouslyOpen = appSession.read().browserOpen
+        // Pin the underlying screen too: after root Back, verify that the next screen is actually drawn.
+        val sessionFile = context.noBackupFilesDir.resolve("app_session")
+        val savedSession = sessionFile.takeIf { it.exists() }?.readBytes()
+        appSession.saveRoute("player")
         appSession.setBrowserOpen(true)
         try {
             val manualLaunch = InstrumentationRegistry.getArguments().getString("manualLaunch") == "true"
@@ -113,6 +116,17 @@ class BrowserNavigationTest {
             systemBack()
             awaitPage(activity, controller, existing, web, pageA, "A")
             waitFor("Forward enabled after system Back") { onMain { existing.canGoForward.takeIf { it } } }
+            if (InstrumentationRegistry.getArguments().getString("edgeGesture") == "true") {
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_FORWARD)
+                awaitPage(activity, controller, existing, web, pageB, "B")
+                systemBack()
+                awaitPage(activity, controller, existing, web, pageA, "A")
+                barForward()
+                awaitPage(activity, controller, existing, web, pageB, "B")
+                systemBack()
+                awaitPage(activity, controller, existing, web, pageA, "A")
+                report("PASS: edge Back, KEYCODE_FORWARD, toolbar swipe on the active tab")
+            }
             click(R.string.browser_forward)
             awaitPage(activity, controller, existing, web, pageB, "B")
             // Exercise toolbar Back as well: state flags alone must not masquerade as navigation.
@@ -160,11 +174,26 @@ class BrowserNavigationTest {
             waitFor("root Back returns to the main app, not the launcher") { resumedActivity() as? MainActivity }
             assertTrue("Root fallback finishes the browser activity", onMain { activity.isFinishing || activity.isDestroyed })
             report("PASS: single root Back returns to the main app")
+            click(R.string.documents_title)
+            val title = waitForNode("Documents title") { it.text?.toString() == context.getString(R.string.documents_title) }
+            val bounds = Rect().also(title::getBoundsInScreen)
+            waitFor("painted Documents title, not accessibility nodes behind the restore cover") {
+                val frame = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+                    .takeScreenshot() ?: return@waitFor null
+                try {
+                    val color = frame.getPixel(bounds.left, bounds.top)
+                    (bounds.top until bounds.bottom).any { y ->
+                        (bounds.left until bounds.right).any { x -> frame.getPixel(x, y) != color }
+                    }.takeIf { it }
+                } finally {
+                    frame.recycle()
+                }
+            }
         } finally {
             onMain { (resumedActivityOnMain() as? WebViewActivity)?.finish() }
             instrumentation.waitForIdleSync()
             session.save(prior ?: blank.copy(tabs = emptyList()))
-            AppSessionStore(context).setBrowserOpen(previouslyOpen)
+            if (savedSession == null) sessionFile.delete() else sessionFile.writeBytes(savedSession)
             check(shield.edit().apply {
                 if (hadAttempt) putLong("attempt", oldAttempt) else remove("attempt")
             }.commit())
@@ -268,6 +297,42 @@ class BrowserNavigationTest {
         inject(MotionEvent.ACTION_UP, bounds.second)
     }
 
+
+    /** Drag on the toolbar row, clear of the system edge and the back button. */
+    private fun barForward() {
+        val back = waitForNode("browser back for the toolbar swipe") {
+            it.matchesLabel(context.getString(R.string.browser_back))
+        }
+        val row = Rect().also { back.getBoundsInScreen(it) }
+        val density = onMain {
+            (resumedActivityOnMain() ?: throw AssertionError("No resumed activity for the toolbar swipe"))
+                .resources.displayMetrics.density
+        }
+        val start = 96f * density
+        drag(start, start + 160f * density, row.centerY().toFloat())
+    }
+
+    private fun drag(fromX: Float, toX: Float, y: Float) {
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val downTime = SystemClock.uptimeMillis()
+        fun inject(action: Int, x: Float) {
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            try {
+                assertTrue("Inject drag action=$action", automation.injectInputEvent(event, true))
+            } finally {
+                event.recycle()
+            }
+        }
+        inject(MotionEvent.ACTION_DOWN, fromX)
+        for (step in 1..16) {
+            SystemClock.sleep(20)
+            inject(MotionEvent.ACTION_MOVE, fromX + (toX - fromX) * step / 16f)
+        }
+        inject(MotionEvent.ACTION_UP, toX)
+        instrumentation.waitForIdleSync()
+    }
+
     private fun resumedActivity(): Activity? = onMain { resumedActivityOnMain() }
     private fun resumedActivityOnMain(): Activity? =
         ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).singleOrNull()
@@ -323,8 +388,10 @@ class BrowserNavigationTest {
             }
             return null
         }
-        return instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
-            .rootInActiveWindow?.let(::search)
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        // Back/Forward swap enabled state without changing node IDs. Inspect the current toolbar.
+        if (android.os.Build.VERSION.SDK_INT >= 34) automation.clearCache()
+        return automation.rootInActiveWindow?.let(::search)
     }
 
     private fun waitForNode(label: String, predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo =
