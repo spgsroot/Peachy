@@ -5,22 +5,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -36,9 +32,10 @@ import ru.spgsroot.peachy.ui.dialog.WebViewUrlDialog
 import ru.spgsroot.peachy.ui.settings.SettingsDrawer
 import ru.spgsroot.peachy.ui.settings.SettingsViewModel
 import ru.spgsroot.peachy.ui.webview.WebViewActivity
-import ru.spgsroot.peachy.ui.gallery.MediaFilterDialog
+import ru.spgsroot.peachy.ui.gallery.MediaFilterButton
 import ru.spgsroot.peachy.ui.theme.PeachyBrand
 import ru.spgsroot.peachy.ui.theme.peachyBrandWidth
+import ru.spgsroot.peachy.ui.theme.peachyMarkWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,8 +58,6 @@ fun PlayerScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var showBatchDialog by remember { mutableStateOf(false) }
     var showWebViewDialog by remember { mutableStateOf(false) }
-    var showFilterDialog by remember { mutableStateOf(false) }
-    var actionsMenuOpen by remember { mutableStateOf(false) }
 
     // Состояние полноэкранного режима
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
@@ -109,82 +104,37 @@ fun PlayerScreen(
             topBar = {
                 // Скрываем TopAppBar в полноэкранном режиме
                 if (!isFullscreen) {
-                    TopAppBar(
-                        title = {
-                            BoxWithConstraints {
-                                // Measure the actual Onest wordmark plus the exact mark at the
-                                // current font scale; the slot decides, not a guessed dp value.
-                                val brandWidth = peachyBrandWidth() + 1.dp
-                                PeachyBrand(showWordmark = maxWidth >= brandWidth)
-                            }
+                    LibraryTopBar(
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onGallery = { navController.navigate("gallery") },
+                        onAdd = { showAddDialog = true },
+                        onLibrary = { navController.navigate("manga") },
+                        onDocuments = { navController.navigate("documents") },
+                        onBrowser = {
+                            viewModel.pauseForWebView()
+                            context.startActivity(Intent(context, WebViewActivity::class.java))
                         },
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                scope.launch { drawerState.open() }
-                            }) {
-                                Icon(Icons.Default.Menu, stringResource(R.string.content_description_menu))
-                            }
-                        },
-                        actions = {
-                            // Three 48 dp actions leave the title slot wide enough for the full
-                            // lockup; secondary destinations stay one tap away in the overflow.
-                            IconButton(onClick = { navController.navigate("gallery") }) {
-                                Icon(Icons.Default.VideoLibrary, stringResource(R.string.content_description_gallery))
-                            }
-                            IconButton(onClick = { showAddDialog = true }) {
-                                Icon(Icons.Default.Add, stringResource(R.string.content_description_add_video))
-                            }
-                            Box {
-                                IconButton(onClick = { actionsMenuOpen = true }) {
-                                    Icon(Icons.Default.MoreVert, stringResource(R.string.content_description_more))
-                                }
-                                DropdownMenu(expanded = actionsMenuOpen, onDismissRequest = { actionsMenuOpen = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.media_filters)) },
-                                        leadingIcon = { Icon(Icons.Default.FilterList, null) },
-                                        onClick = { actionsMenuOpen = false; showFilterDialog = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.content_description_library)) },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
-                                        onClick = { actionsMenuOpen = false; navController.navigate("manga") }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.documents_title)) },
-                                        leadingIcon = { Icon(Icons.Default.Description, null) },
-                                        onClick = {
-                                            actionsMenuOpen = false
-                                            navController.navigate("documents")
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.browser_open)) },
-                                        leadingIcon = { Icon(Icons.Default.Public, null) },
-                                        onClick = {
-                                            actionsMenuOpen = false
-                                            viewModel.pauseForWebView()
-                                            context.startActivity(Intent(context, WebViewActivity::class.java))
-                                        }
-                                    )
-                                }
-                            }
-                        }
                     )
                 }
             }
         ) { padding ->
-            // Nothing to play means nothing on the stage - a library without videos, or a filter
-            // that matched none. The stage would stay a bare black surface, so the empty state takes
-            // its place. A displayed video keeps the stage even while a queue change settles.
-            if (uiState == PlayerUiState.Empty || (queue.isEmpty() && currentId == null)) {
-                EmptyState(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    onOpenLibrary = { navController.navigate("gallery") }
-                )
-            } else {
-                Column(Modifier.fillMaxSize().padding(if (isFullscreen) PaddingValues(0.dp) else padding)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(if (isFullscreen) PaddingValues(0.dp) else padding)
+            ) {
+                // Queue sort lives on this screen, not in the shared navigation bar.
+                if (!isFullscreen) {
+                    Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End) {
+                        MediaFilterButton(filter) { viewModel.filter.value = it }
+                    }
+                }
+                if (uiState == PlayerUiState.Empty || (queue.isEmpty() && currentId == null)) {
+                    EmptyState(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        onOpenLibrary = { navController.navigate("gallery") }
+                    )
+                } else {
                     PlayerContent(
                         modifier = Modifier.weight(1f),
                         playerState = playerState,
@@ -204,7 +154,6 @@ fun PlayerScreen(
                         onPanChange = { offset ->
                             panX += offset.x
                             panY += offset.y
-                            // Сбрасываем сдвиг, если вернулись к оригинальному размеру
                             if (zoomScale <= 1.01f) {
                                 panX = 0f
                                 panY = 0f
@@ -234,14 +183,6 @@ fun PlayerScreen(
         scope.launch { drawerState.close() }
     }
 
-    if (showFilterDialog) {
-        MediaFilterDialog(
-            current = filter,
-            onDismiss = { showFilterDialog = false },
-            // Live: every valid edit already reached the queue; closing changes nothing back.
-            onChange = { viewModel.filter.value = it }
-        )
-    }
 
     if (showAddDialog) {
         AddVideoDialog(
@@ -289,4 +230,47 @@ fun PlayerScreen(
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryTopBar(
+    onMenu: () -> Unit,
+    onGallery: () -> Unit,
+    onAdd: () -> Unit,
+    onLibrary: () -> Unit,
+    onDocuments: () -> Unit,
+    onBrowser: () -> Unit,
+) {
+    TopAppBar(
+        title = {
+            BoxWithConstraints {
+                if (maxWidth >= peachyMarkWidth() + 1.dp) {
+                    PeachyBrand(showWordmark = maxWidth >= peachyBrandWidth() + 1.dp)
+                }
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Default.Menu, stringResource(R.string.content_description_menu))
+            }
+        },
+        actions = {
+            IconButton(onClick = onGallery) {
+                Icon(Icons.Default.VideoLibrary, stringResource(R.string.content_description_gallery))
+            }
+            IconButton(onClick = onAdd) {
+                Icon(Icons.Default.Add, stringResource(R.string.content_description_add_video))
+            }
+            IconButton(onClick = onLibrary) {
+                Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
+            }
+            IconButton(onClick = onDocuments) {
+                Icon(Icons.Default.Description, stringResource(R.string.documents_title))
+            }
+            IconButton(onClick = onBrowser) {
+                Icon(Icons.Default.Public, stringResource(R.string.browser_open))
+            }
+        },
+    )
 }

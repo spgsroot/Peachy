@@ -28,7 +28,7 @@ fun MediaFilterButton(current: MediaFilter, onChange: (MediaFilter) -> Unit) {
     if (open) MediaFilterDialog(current, onDismiss = { open = false }, onChange = onChange)
 }
 
-/** Shared by the gallery app bar and the player's actions overflow, which hosts the button. */
+/** Shared by the gallery and documents bars, and by the player queue. */
 @Composable
 internal fun MediaFilterDialog(current: MediaFilter, onDismiss: () -> Unit, onChange: (MediaFilter) -> Unit) {
     var sort by remember { mutableStateOf(current.sort) }

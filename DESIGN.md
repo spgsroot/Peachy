@@ -248,11 +248,11 @@ draw behind the system bars and screens apply insets rather than assuming a safe
 - **Authentication keypad** is 72 dp per key at normal size, 56 dp when height is below 640 dp or
   width below 360 dp, with 14 dp or 10 dp gaps respectively. Digits are 48 dp+ targets on every
   verified configuration.
-- **Top app bar** is the standard 64 dp Material bar. The player title slot holds the brand lockup
-  only while it can fit: `peachyBrandWidth()` measures the actual Onest wordmark at the current font
-  scale plus the exact mark width and gap, and the wordmark falls to the mark alone below that.
-  Actions are Gallery, Add and one overflow menu, three 48 dp buttons. Gallery keeps its search title
-  and switches the whole bar to `primary-container` in selection mode.
+- **Top app bar** is the standard 64 dp Material bar. The player keeps Menu, Gallery, Add,
+  Library, Documents and Browser in one row with 48 dp targets at widths of 320 dp and up.
+  The title shows the full brand lockup if it fits, then the mark alone, then neither.
+  Sort and filter lives below the bar with the queue. Gallery moves the search field to its own
+  row when its hint will not fit beside the actions. Selection mode uses `primary-container`.
 - **Settings drawer** is a modal Material drawer with 16 dp content padding, the brand lockup above
   the device section, and bottom padding from `navigationBars ∪ mandatorySystemGestures`. The
   union covers whichever bottom system region is larger; `windowInsetsPadding` subtracts what

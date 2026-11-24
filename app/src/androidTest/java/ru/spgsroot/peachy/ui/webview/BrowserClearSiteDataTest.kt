@@ -88,10 +88,10 @@ class BrowserClearSiteDataTest {
     private fun openBrowser(launchTimeoutMs: Long) {
         val setup = context.getString(R.string.btn_set_password)
         val login = context.getString(R.string.btn_login)
-        val more = context.getString(R.string.content_description_more)
+        val browser = context.getString(R.string.browser_open)
         val pin = "6084"
         val entry = waitFor("onboarding, unlock, player, or restored browser", launchTimeoutMs) {
-            findNode { it.isEditable || it.matchesLabel(setup) || it.matchesLabel(login) || it.matchesLabel(more) }
+            findNode { it.isEditable || it.matchesLabel(setup) || it.matchesLabel(login) || it.matchesLabel(browser) }
         }
         if (entry.isEditable) return
         when {
@@ -107,13 +107,9 @@ class BrowserClearSiteDataTest {
                 click(login)
             }
         }
-        val screen = waitForNode("player or restored browser") { it.isEditable || it.matchesLabel(more) }
+        val screen = waitForNode("player or restored browser") { it.isEditable || it.matchesLabel(browser) }
         if (screen.isEditable) return
-        click(more)
-        val afterMenu = waitForNode("browser menu item or restored browser") {
-            it.isEditable || it.matchesLabel(context.getString(R.string.browser_open))
-        }
-        if (!afterMenu.isEditable) click(R.string.browser_open)
+        click(R.string.browser_open)
     }
 
     private fun openClearDialog() {

@@ -52,6 +52,10 @@ fun peachyBrandWidth(): Dp {
     return MarkHeight * markAspect() + MarkGap + with(LocalDensity.current) { textWidth.toDp() }
 }
 
+/** Width of the sculpted mark alone, the fallback the lockup uses when the wordmark does not fit. */
+@Composable
+fun peachyMarkWidth(): Dp = MarkHeight * markAspect()
+
 /**
  * Peachy lockup: the supplied sculpted P and, unless a screen already names the product, the
  * "peachy." wordmark with its accent period. The mark is decorative next to the wordmark.

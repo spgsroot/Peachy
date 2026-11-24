@@ -58,11 +58,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.spgsroot.peachy.R
+import ru.spgsroot.peachy.ui.gallery.MediaFilterButton
 import ru.spgsroot.peachy.documents.DocumentFormat
 import ru.spgsroot.peachy.documents.DocumentFormatError
 import ru.spgsroot.peachy.documents.DocumentKind
@@ -82,6 +84,8 @@ fun DocumentsScreen(
 ) {
     val context = LocalContext.current
     val documents by viewModel.documents.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val shown = remember(documents, filter) { filterDocuments(documents, filter) }
     val importing by viewModel.importing.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var deleteTarget by remember { mutableStateOf<DocumentSummary?>(null) }
@@ -116,10 +120,14 @@ fun DocumentsScreen(
                             )
                         }
                     },
+                    actions = {
+                        MediaFilterButton(filter, viewModel::setFilter)
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface,
                         navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 )
                 if (importing) {
@@ -139,14 +147,25 @@ fun DocumentsScreen(
             )
         }
     ) { padding ->
-        if (documents.isEmpty()) {
-            DocumentsEmptyState(Modifier.fillMaxSize().padding(padding))
-        } else {
-            LazyColumn(
+        when {
+            documents.isEmpty() -> DocumentsEmptyState(Modifier.fillMaxSize().padding(padding))
+            shown.isEmpty() -> Box(
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(R.string.gallery_search_empty),
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 96.dp)
             ) {
-                items(documents, key = { it.id }) { document ->
+                items(shown, key = { it.id }) { document ->
                     DocumentRow(
                         document = document,
                         onOpen = { onOpen(document.id) },

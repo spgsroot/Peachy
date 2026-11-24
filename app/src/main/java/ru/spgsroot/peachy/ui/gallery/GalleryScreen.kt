@@ -27,8 +27,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,6 +71,13 @@ fun GalleryScreen(
     BackHandler(enabled = isSelectionMode) { viewModel.clearSelection() }
     BackHandler(enabled = !isSelectionMode && pager.currentPage == 3 && activeAlbum != null) { activeAlbum = null }
     val exportProgress by viewModel.exportProgress.collectAsState()
+    val searchHint = stringResource(R.string.gallery_search_title)
+    val hintWidth = rememberTextMeasurer()
+        .measure(searchHint, style = MaterialTheme.typography.bodyLarge, maxLines = 1, softWrap = false)
+        .size.width
+    // Four 48 dp buttons, 16 dp app-bar padding, 32 dp field padding and 48 dp for Clear.
+    val searchOnOwnRow = LocalConfiguration.current.screenWidthDp.dp <
+        288.dp + with(LocalDensity.current) { hintWidth.toDp() }
     val exportResult by viewModel.exportResult.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val albumError by viewModel.albumError.collectAsState()
@@ -205,7 +215,8 @@ fun GalleryScreen(
                     } else if (isSelectionMode) {
                         Text(stringResource(R.string.gallery_selected, selectedItems.size))
                     } else {
-                        HeaderSearch(query, viewModel::setQuery, stringResource(R.string.gallery_search_title))
+                        if (searchOnOwnRow) Text(stringResource(R.string.gallery_title))
+                        else HeaderSearch(query, viewModel::setQuery, searchHint)
                     }
                 },
                 navigationIcon = {
@@ -271,6 +282,13 @@ fun GalleryScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (searchOnOwnRow && !isSelectionMode && exportProgress == null) {
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Box(Modifier.windowInsetsPadding(TopAppBarDefaults.windowInsets.only(WindowInsetsSides.Horizontal))) {
+                        HeaderSearch(query, viewModel::setQuery, searchHint)
+                    }
+                }
+            }
             TabRow(selectedTabIndex = pager.currentPage) {
                 listOf(R.string.media_all, R.string.media_videos, R.string.media_photos, R.string.album_title).forEachIndexed { index, title ->
                     // Four equal segments keep the row's shape. The label owns the whole segment
@@ -302,10 +320,15 @@ fun GalleryScreen(
             if (page == 3 && activeAlbum == null) {
                 AlbumBrowser(albums, allItems, { activeAlbum = it }, { viewModel.createAlbum(it) }, viewModel::renameAlbum, viewModel::deleteAlbum)
             } else if (pageItems.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         stringResource(if (query.isEmpty()) R.string.empty_gallery else R.string.gallery_search_empty),
-                        style = MaterialTheme.typography.titleMedium
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
