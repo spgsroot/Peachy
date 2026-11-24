@@ -3,6 +3,12 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 0.9.2
+
+- **Player.** Library, Documents and Browser are now one tap away in the top bar. Queue sorting and filtering remain below the bar.
+- **Gallery.** Search moves to its own row when the hint would be clipped; the empty-library message is centered.
+- **Documents.** Sort by date, name or size, or filter by file size.
+
 ## 0.9.1
 
 - **Manga translation.** Tap bubble text to translate a single block into the selected language. On-page translations stay within the original text bounds; when no readable line fits, the reader opens the full text in the panel.
