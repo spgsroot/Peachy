@@ -3,6 +3,12 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 0.9.5
+
+- **Player.** Sort and filter stays in the toolbar instead of occupying a row above the player. Documents and Browser move into More only when the buttons would not fit.
+- **Manga translation.** OCR translations retain source order and incomplete replies are no longer cached. Whole-gallery translation can use the previous page’s translated lines; tapping one bubble still sends only that bubble.
+- **Gallery details.** Read marks stay visible without expanding chapter and translation management. Changing a mark does not move your bookmark.
+
 ## 0.9.4
 
 - **Manga.** Expand likely translations in the catalog. Confirm two editions as the same chapter to share a read mark without changing either reading position. Other chapters stay unread; manual links, read marks and rejected suggestions survive library backup and restore.

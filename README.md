@@ -4,9 +4,9 @@
 
 Your photos, videos and reading, in one Android app. Peachy combines a local media library, a player, an HTTPS browser and an adult manga reader, with optional device sync through Intiface Central.
 
-**Android 8.0+ · v0.9.4 (versionCode 20) · English / Русский · AGPL-3.0**
+**Android 8.0+ · v0.9.5 (versionCode 21) · English / Русский · AGPL-3.0**
 
-Capabilities below describe the **0.9.4 source**, not a claim about every older APK.
+Capabilities below describe the **0.9.5 source**, not a claim about every older APK.
 
 [Download APK](https://github.com/spgsroot/Peachy/releases/latest) · [Website](https://peachyproject.org/) · [Русский](README_RU.md) · [Privacy](#privacy-and-network) · [Build](#build)
 
