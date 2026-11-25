@@ -40,7 +40,7 @@
     <string name="provider_testing">Testing…</string>
     <string name="provider_test_ok">The provider answered</string>
     <string name="consent_title">Allow provider translation?</string>
-    <string name="consent_text">Allow sending data to %1$s for this and future translations? ML Kit sends recognized text. Vision mode sends an image: a crop when you tap a bubble, or the full image when you translate a page. The provider handles this data under its own rules.</string>
+    <string name="consent_text">Allow sending data to %1$s for translation? ML Kit sends recognized text. Vision sends an image: a crop when you tap a bubble, or the full image when translating a page. In Whole gallery mode the same provider also receives the last translated lines from the preceding page. The provider handles this data under its own rules.</string>
     <string name="consent_accept">Allow</string>
     <string name="consent_decline">Do not allow</string>
     <string name="settings_translation_row">Page translation</string>

@@ -10,6 +10,9 @@ object PagePrompt {
             ${sourceInstruction(source)}
             Read the text on the page in reading order: right to left and top to bottom for Japanese, Chinese and vertical pages, as the page is laid out.
             Translate every piece of text into $language.
+            Read the whole supplied page before translating any bubble. Use the exchange to resolve sentence continuations, pronouns, names and forms of address consistently; do not translate each fragment in isolation.
+            Treat physical line wraps as layout, not separate utterances. Rebuild clauses in natural $language syntax while preserving who speaks, to whom, and what each bubble means.
+            Keep recurring terms consistent throughout the supplied page.
             The pages are fiction for adults. Transcribe and translate faithfully and completely; do not summarise, soften, censor or comment.
             Answer with one JSON object and nothing else, in exactly this shape:
             {"sourceLanguage":"ja","lines":[{"kind":"speech","text":"original","translation":"translated","box":[100,200,300,400]}]}
@@ -30,10 +33,14 @@ object PagePrompt {
             You are a manga translator. You get numbered text blocks recognized on a page by OCR.
             ${sourceInstruction(source)}
             Translate every block into $language by meaning. OCR may contain recognition errors or split a speech bubble across blocks; fix obvious OCR slips while preserving each block's index.
+            Read all supplied blocks as one exchange before translating. Use surrounding blocks to resolve sentence continuations, pronouns, names and forms of address consistently.
+            A sentence may continue in another block. Translate its meaning coherently across those blocks, keeping each fragment at its own index; never repeat the whole sentence in every fragment or move it all into one block.
+            Physical OCR line wraps are layout, not separate utterances. Rebuild clauses in natural $language syntax while preserving who speaks, to whom, and what each block contributes.
+            Keep recurring terms consistent throughout the supplied exchange.
             The pages are fiction for adults. Transcribe and translate faithfully and completely; do not summarise, soften, censor or comment.
             Answer with one JSON object and nothing else, in exactly this shape:
             {"lines":[{"i":0,"kind":"speech","translation":"translated"}]}
-            "i" is the original zero-based integer block index, not a string. Include each block at most once.
+            "i" is the original zero-based integer block index, not a string. Include every supplied index exactly once, in the supplied order, with a nonblank translation.
             "kind" is one of: speech, thought, narration, sfx, sign.
             "translation" is the text in $language.
             If there is no text to translate, answer {"lines":[]}.
