@@ -89,6 +89,14 @@ More: [manga reader](docs/manga-reader.md) · [detector runtime and limits](docs
 
 ## Screens and design
 
+**[Browse the Android feature gallery](repo/screens-v0.9.3/)** · [Player & import](repo/screens-v0.9.3/#плеер-и-импорт) · [Media library](repo/screens-v0.9.3/#медиатека) · [Documents](repo/screens-v0.9.3/#документы) · [Settings & backup](repo/screens-v0.9.3/#настройки) · [Devices](repo/screens-v0.9.3/#устройства) · [Browser](repo/screens-v0.9.3/#браузер)
+
+**[Manga walkthrough · 0.9.4](repo/screens-v0.9.4/)** — follow *Shinshoku Kiss* from the catalog to the reader, then see how Peachy links chapters and translations. The 0.9.3 gallery above records the rest of the app and labels capture gaps.
+
+| Catalog | Gallery details | Reader |
+|:---:|:---:|:---:|
+| <img src="repo/screens-v0.9.4/catalog.png" width="180" alt="Shinshoku Kiss in the catalog"/> | <img src="repo/screens-v0.9.4/manga-detail.png" width="180" alt="Reading and chapter actions"/> | <img src="repo/screens-v0.9.4/reader.png" width="180" alt="Page 5 and the thumbnail strip"/> |
+
 See the [website](https://peachyproject.org/) for the new design and [DESIGN.md](DESIGN.md) for the native design record. Its Library/Player previews and the banner use genuine newer Android captures with sample media; the NASA browser preview was captured in Chromium, **not** in Peachy's browser.
 
 <details>
