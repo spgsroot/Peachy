@@ -4,9 +4,9 @@
 
 Your photos, videos and reading, in one Android app. Peachy combines a local media library, a player, an HTTPS browser and an adult manga reader, with optional device sync through Intiface Central.
 
-**Android 8.0+ · v0.9.3 (versionCode 19) · English / Русский · AGPL-3.0**
+**Android 8.0+ · v0.9.4 (versionCode 20) · English / Русский · AGPL-3.0**
 
-Capabilities below describe the **0.9.3 source**, not a claim about every older APK.
+Capabilities below describe the **0.9.4 source**, not a claim about every older APK.
 
 [Download APK](https://github.com/spgsroot/Peachy/releases/latest) · [Website](https://peachyproject.org/) · [Русский](README_RU.md) · [Privacy](#privacy-and-network) · [Build](#build)
 
@@ -23,7 +23,7 @@ Set an app password, then import photos/videos or share them to Peachy. Local pl
 | Library | Photos and videos together: All / Videos / Photos / Albums, search, name/size sorting, size filters and adjustable tiles. Rename, delete and move mixed selections between albums. Photos open in an EXIF-aware zoom viewer. |
 | Player | Local video on Media3 ExoPlayer: queue, speed, timer, seek gestures, brightness/volume and zoom. Video-only tools include covers, notes, folder export and single/batch HEVC or H.264 compression. |
 | Browser | HTTPS tabs with previews, bookmarks, history, notes and native Brave ad/tracker filtering. Save video files found on a page; HLS/DASH stream downloading is unsupported. |
-| Manga (18+) | Browse nhentai by tags, save galleries/pages, resume reading, zoom and use continuous or paged layouts. “For you” ranks recommendations on the device; fetching candidates still uses the network. |
+| Manga (18+) | Browse nhentai by tags, group/link translations and chapters with per-translation reading positions, save galleries/pages, resume reading, zoom and use continuous or paged layouts. “For you” ranks recommendations on the device; fetching candidates still uses the network. |
 | Documents | View/edit supported images and PDFs on working copies. Recognising an Office format is **not** Office editing: see [format limits](#documents-and-format-limits). |
 | Optional extras | Audio-driven compatible devices through Buttplug / Intiface Central, manga translation with your chosen provider, and password-encrypted `.peachy` library exports. |
 
@@ -79,7 +79,7 @@ JPEG export composites transparency without a full-image `IntArray`, avoiding th
 
 ### Backup and updates
 
-A `.peachy` library export uses its **own password**, AES-256-GCM and a PBKDF2-SHA256 key. It includes media/thumbnails, albums, saved manga/pages, histories, tags, notes, browser data and cached translations. Format 3 reads formats 1 and 2; import adds rather than deletes, and newer notes/translations win. App password, device settings and provider key are excluded. This is a library backup, not a promise to back up document working sessions. A forgotten archive password cannot be recovered. Separately exported files are not encrypted by Peachy.
+A `.peachy` library export uses its **own password**, AES-256-GCM and a PBKDF2-SHA256 key. It includes media/thumbnails, albums, saved manga/pages, histories, tags, manga translation/chapter links and own read marks, notes, browser data and cached translations. Format 4 reads formats 1–3; import adds rather than deletes, merges idempotently without duplicating chapters, and newer notes/translations win. App password, device settings and provider key are excluded. This is a library backup, not a promise to back up document working sessions. A forgotten archive password cannot be recovered. Separately exported files are not encrypted by Peachy.
 
 **Settings → Peachy updates** checks the latest stable GitHub release and downloads its APK on request. Automatic daily checks are **off by default** and run only while Peachy is open and unlocked. The updater checks size, GitHub SHA-256, app identity, versionCode and minimum Android version; Android verifies the signature and asks before installing.
 

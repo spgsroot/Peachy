@@ -10,6 +10,17 @@ Language chips include English, Japanese, Chinese, and Translated. Each cycles t
 
 Tag blacklisting applies only to search cards, not the saved library. Search summaries carry tag IDs only. Fetching gallery details teaches the current catalog ViewModel the lowercase name of each returned tag ID; cards with those IDs can then be hidden by an exact, case-insensitive blocked name. Substrings do not match. Results are refiltered when metadata arrives or the blacklist changes, including restoring cards when a blocked name is removed.
 
+## Works, chapters and translations
+
+Peachy tracks manga locally in three layers — **Work** (stable local `workId`), **Reading unit** (chapter or collection with separate display label and decimal `sortOrder`, e.g. `1.5`, `Prologue`, or `Vol. 2 / Ch. 1`), and **Edition** (the nhentai gallery ID). Metadata is collected passively only from API responses you already open or browse, and only while the NSFW gate is enabled; Peachy never crawls galleries in the background.
+
+- **Reversible auto-groups (display only):** Catalog, author search, Downloads, Favorites, and For You collapse likely translations of the same chapter only when the normalized Japanese original title, full resolved artist set, and non-zero page count match across different languages without conflicting chapter numbers or composite/ongoing markers. Auto-groups can be expanded in place and **never** share read marks automatically.
+- **Confirmed links and manual actions:** On a gallery detail screen (or on an expanded auto-group), you can explicitly confirm **Another translation of this chapter** / **Same chapter**, link **Another chapter of this work** (choosing a chapter label, fractional order, and Chapter vs Collection kind), **Unlink** an edition, or tap **Don't suggest this link** to permanently suppress auto-grouping and suggestions for that pair.
+- **Read status vs. reading position:** An explicit read mark (**Mark as read** / **Remove read mark**) applies to that edition and propagates **Read in another translation** only across confirmed translations of the same reading unit. Reading another chapter does not mark sibling chapters read, and marking a **Collection** read never marks individual chapters read. Every translation keeps its own reading page in `read_history` and `ReaderPositionStore`; confirming or unlinking a translation never overwrites another translation's page or fabricates history entries.
+- **Known-chapters counter:** Linked works show **Read X of Y known chapters** (never claiming the entire series is finished); adding another chapter updates `Y` immediately. Unlinking removes inherited read status immediately while keeping each edition's own read mark and reading page.
+- **History and For You:** History always shows actually opened editions with their real saved pages. For You deduplicates taste signals per confirmed reading unit and excludes already-read confirmed translations.
+- **Migration and `.peachy` backups:** Upgrading from database v16 to v17 preserves all existing data and converts only explicit unknown-length mark-read entries (`page = -1, pageCount = 0`) into read marks; known-length last-page rows remain local previous progress. Vault format 4 exports stable work/unit keys, confirmed links, pair rejections, and own read marks (never computed inherited status or passive search caches), imports formats 1–3 compatibly, and merges repeated imports idempotently without duplicating chapters.
+
 ## Controls
 
 - Swipe horizontally in paged mode or scroll vertically in strip mode.

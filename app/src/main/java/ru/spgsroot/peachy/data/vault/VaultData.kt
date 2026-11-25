@@ -12,6 +12,12 @@ import ru.spgsroot.peachy.data.db.SearchHistoryEntity
 import ru.spgsroot.peachy.data.db.TagBlacklistEntity
 import ru.spgsroot.peachy.data.notes.NoteEntity
 import ru.spgsroot.peachy.data.db.AlbumEntity
+import ru.spgsroot.peachy.data.db.MangaEditionLinkEntity
+import ru.spgsroot.peachy.data.db.MangaReadMarkEntity
+import ru.spgsroot.peachy.data.db.MangaReadingUnitEntity
+import ru.spgsroot.peachy.data.db.MangaRejectedLinkEntity
+import ru.spgsroot.peachy.data.db.MangaWorkEntity
+import ru.spgsroot.peachy.manga.UnitKind
 
 /** A video as the vault describes it; the file itself is a separate entry named by [id] and [extension]. */
 data class VaultVideo(
@@ -56,6 +62,19 @@ data class VaultTranslation(
 )
 
 /**
+ * Durable user manga identity state stored in format 4+ vaults: stable work/chapter keys,
+ * confirmed edition links, rejected suggestions, and own explicit read marks. Computed inherited
+ * statuses and passive search index caches are never exported.
+ */
+data class VaultMangaIdentity(
+    val works: List<MangaWorkEntity> = emptyList(),
+    val units: List<MangaReadingUnitEntity> = emptyList(),
+    val links: List<MangaEditionLinkEntity> = emptyList(),
+    val rejections: List<MangaRejectedLinkEntity> = emptyList(),
+    val readMarks: List<MangaReadMarkEntity> = emptyList()
+)
+
+/**
  * Everything the vault carries besides files, as one JSON document. [entryCount] is the number of
  * file entries after it, so an import can show progress.
  */
@@ -76,7 +95,11 @@ data class VaultData(
     val translations: List<VaultTranslation> = emptyList(),
     /** Optional in format 2, absent in format 1; old libraries contain no photos. */
     val photos: List<VaultPhoto> = emptyList(),
-    val albums: List<AlbumEntity> = emptyList()
+    val albums: List<AlbumEntity> = emptyList(),
+    /** Absent in formats 1..3; old archives restore without manga identity links. */
+    val mangaIdentity: VaultMangaIdentity = VaultMangaIdentity(),
+    /** Format version read from disk; format 1..3 imports still promote legacy (-1, 0) marks. */
+    val sourceFormat: Int = FORMAT
 ) {
     fun toJson(): String = JSONObject()
         .put("format", FORMAT)
@@ -103,6 +126,7 @@ data class VaultData(
                 .put("numPages", it.numPages).put("tags", it.tags).put("uploadedAt", it.uploadedAt ?: JSONObject.NULL)
                 .put("numFavorites", it.numFavorites ?: JSONObject.NULL).put("seenAt", it.seenAt)
                 .put("dismissed", it.dismissed)
+                .put("japaneseTitle", it.japaneseTitle ?: JSONObject.NULL)
         })
         .put("notes", array(notes) {
             JSONObject().put("kind", it.kind).put("ref", it.ref).put("text", it.text).put("updatedAt", it.updatedAt)
@@ -125,17 +149,40 @@ data class VaultData(
                 .put("extension", it.extension).put("hasThumbnail", it.hasThumbnail)
                 .put("albumId", it.albumId ?: JSONObject.NULL)
         })
+        .put(
+            "mangaIdentity",
+            JSONObject()
+                .put("works", array(mangaIdentity.works) {
+                    JSONObject().put("workId", it.workId).put("title", it.title).put("updatedAt", it.updatedAt)
+                })
+                .put("units", array(mangaIdentity.units) {
+                    JSONObject().put("unitId", it.unitId).put("workId", it.workId).put("label", it.label)
+                        .put("sortOrder", it.sortOrder).put("kind", it.kind).put("updatedAt", it.updatedAt)
+                })
+                .put("links", array(mangaIdentity.links) {
+                    JSONObject().put("galleryId", it.galleryId).put("workId", it.workId)
+                        .put("unitId", it.unitId).put("updatedAt", it.updatedAt)
+                })
+                .put("rejections", array(mangaIdentity.rejections) {
+                    JSONObject().put("leftGalleryId", it.leftGalleryId).put("rightGalleryId", it.rightGalleryId)
+                        .put("createdAt", it.createdAt)
+                })
+                .put("readMarks", array(mangaIdentity.readMarks) {
+                    JSONObject().put("galleryId", it.galleryId).put("markedAt", it.markedAt)
+                })
+        )
         .toString()
 
     companion object {
-        const val FORMAT = 3
+        const val FORMAT = 4
 
         /** A document that cannot be understood is a damaged vault; a newer format is reported as such. */
         fun fromJson(raw: String): VaultData {
             try {
                 val root = JSONObject(raw)
-                if (root.getInt("format") !in 1..FORMAT) {
-                    throw VaultException(VaultError.UNSUPPORTED_VERSION, "Vault data format ${root.getInt("format")}")
+                val format = root.getInt("format")
+                if (format !in 1..FORMAT) {
+                    throw VaultException(VaultError.UNSUPPORTED_VERSION, "Vault data format $format")
                 }
                 val albums = if (root.isNull("albums")) emptyList() else list(root, "albums") {
                     AlbumEntity(it.getLong("id"), it.getString("name"), it.getLong("createdAt"))
@@ -177,6 +224,7 @@ data class VaultData(
                 }
                 if (galleries.any { it.id <= 0 } || galleries.map { it.id }.toSet().size != galleries.size)
                     throw VaultException(VaultError.CORRUPT, "Invalid gallery metadata")
+                val mangaIdentity = parseMangaIdentity(root)
                 return VaultData(
                     entryCount = root.getInt("entryCount"),
                     videos = videos,
@@ -195,7 +243,8 @@ data class VaultData(
                             it.getInt("numPages"), it.getString("tags"),
                             if (it.isNull("uploadedAt")) null else it.getLong("uploadedAt"),
                             if (it.isNull("numFavorites")) null else it.getInt("numFavorites"),
-                            it.getLong("seenAt"), it.getBoolean("dismissed")
+                            it.getLong("seenAt"), it.getBoolean("dismissed"),
+                            if (!it.has("japaneseTitle") || it.isNull("japaneseTitle")) null else it.getString("japaneseTitle")
                         )
                     },
                     notes = list(root, "notes") {
@@ -219,7 +268,9 @@ data class VaultData(
                         )
                     },
                     photos = photos,
-                    albums = albums
+                    albums = albums,
+                    mangaIdentity = mangaIdentity,
+                    sourceFormat = format
                 ).also { data ->
                     val ids = albums.map { it.id }.toSet()
                     if (data.videos.any { it.albumId != null && it.albumId !in ids } ||
@@ -229,6 +280,60 @@ data class VaultData(
             } catch (e: JSONException) {
                 throw VaultException(VaultError.CORRUPT, "Vault data is unreadable: ${e.message}")
             }
+        }
+
+        private fun parseMangaIdentity(root: JSONObject): VaultMangaIdentity {
+            if (!root.has("mangaIdentity") || root.isNull("mangaIdentity")) return VaultMangaIdentity()
+            val obj = root.getJSONObject("mangaIdentity")
+            val works = if (obj.isNull("works")) emptyList() else list(obj, "works") {
+                MangaWorkEntity(it.getString("workId"), it.getString("title"), it.getLong("updatedAt"))
+            }
+            val units = if (obj.isNull("units")) emptyList() else list(obj, "units") {
+                MangaReadingUnitEntity(
+                    it.getString("unitId"), it.getString("workId"), it.getString("label"),
+                    it.getDouble("sortOrder"), it.getString("kind"), it.getLong("updatedAt")
+                )
+            }
+            val links = if (obj.isNull("links")) emptyList() else list(obj, "links") {
+                MangaEditionLinkEntity(
+                    it.getInt("galleryId"), it.getString("workId"), it.getString("unitId"), it.getLong("updatedAt")
+                )
+            }
+            val rejections = if (obj.isNull("rejections")) emptyList() else list(obj, "rejections") {
+                MangaRejectedLinkEntity(
+                    it.getInt("leftGalleryId"), it.getInt("rightGalleryId"), it.getLong("createdAt")
+                )
+            }
+            val readMarks = if (obj.isNull("readMarks")) emptyList() else list(obj, "readMarks") {
+                MangaReadMarkEntity(it.getInt("galleryId"), it.getLong("markedAt"))
+            }
+
+            if (works.any { it.workId.isBlank() || it.title.isBlank() } ||
+                works.map { it.workId }.toSet().size != works.size
+            ) throw VaultException(VaultError.CORRUPT, "Invalid manga works metadata")
+
+            val workIds = works.map { it.workId }.toSet()
+            if (units.any {
+                    it.unitId.isBlank() || it.workId !in workIds || it.label.isBlank() ||
+                        !it.sortOrder.isFinite() || UnitKind.fromWire(it.kind) == null
+                } || units.map { it.unitId }.toSet().size != units.size
+            ) throw VaultException(VaultError.CORRUPT, "Invalid manga reading units metadata")
+
+            val unitWorkById = units.associate { it.unitId to it.workId }
+            if (links.any {
+                    it.galleryId <= 0 || unitWorkById[it.unitId] != it.workId
+                } || links.map { it.galleryId }.toSet().size != links.size
+            ) throw VaultException(VaultError.CORRUPT, "Invalid manga edition links metadata")
+
+            if (rejections.any { it.leftGalleryId <= 0 || it.rightGalleryId <= 0 || it.leftGalleryId >= it.rightGalleryId } ||
+                rejections.map { it.leftGalleryId to it.rightGalleryId }.toSet().size != rejections.size
+            ) throw VaultException(VaultError.CORRUPT, "Invalid manga rejected links metadata")
+
+            if (readMarks.any { it.galleryId <= 0 } ||
+                readMarks.map { it.galleryId }.toSet().size != readMarks.size
+            ) throw VaultException(VaultError.CORRUPT, "Invalid manga read marks metadata")
+
+            return VaultMangaIdentity(works, units, links, rejections, readMarks)
         }
 
         private fun <T> array(items: List<T>, encode: (T) -> JSONObject) = JSONArray(items.map(encode))

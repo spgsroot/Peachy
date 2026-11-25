@@ -11,6 +11,7 @@ import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_5_6
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_6_7
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_9_10
 import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_10_11
+import ru.spgsroot.peachy.data.manga.MangaMigrations.MIGRATION_16_17
 import ru.spgsroot.peachy.data.browser.BrowserMigrations.MIGRATION_7_8
 import ru.spgsroot.peachy.data.notes.NoteDao
 import ru.spgsroot.peachy.data.notes.NoteEntity
@@ -26,9 +27,11 @@ import ru.spgsroot.peachy.data.db.DocumentMigrations.MIGRATION_14_15
         ReadHistoryEntity::class, SearchHistoryEntity::class, TagBlacklistEntity::class, GalleryMemoryEntity::class,
         BookmarkEntity::class, BrowserHistoryEntity::class, AllowlistEntity::class, NoteEntity::class,
         SavedPageEntity::class, PageTranslationEntity::class, PhotoEntity::class, AlbumEntity::class,
-        DocumentSessionEntity::class
+        DocumentSessionEntity::class, MangaWorkEntity::class, MangaReadingUnitEntity::class,
+        MangaEditionLinkEntity::class, MangaRejectedLinkEntity::class, MangaReadMarkEntity::class,
+        MangaEditionIndexEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -49,6 +52,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun savedPageDao(): SavedPageDao
     abstract fun pageTranslationDao(): PageTranslationDao
     abstract fun documentSessionDao(): DocumentSessionDao
+    abstract fun mangaIdentityDao(): MangaIdentityDao
 
     companion object {
         internal const val DB_NAME = "peachy.db"
@@ -101,7 +105,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17
                 )
                 .build()
         }

@@ -17,6 +17,7 @@ import ru.spgsroot.peachy.data.db.BrowserHistoryDao
 import ru.spgsroot.peachy.data.db.LibraryGalleryEntity
 import ru.spgsroot.peachy.data.db.GalleryMemoryDao
 import ru.spgsroot.peachy.data.db.LibraryGalleryDao
+import ru.spgsroot.peachy.data.db.MangaReadMarkEntity
 import ru.spgsroot.peachy.data.db.PageTranslationDao
 import ru.spgsroot.peachy.data.db.PageTranslationEntity
 import ru.spgsroot.peachy.data.db.PhotoEntity
@@ -118,6 +119,14 @@ class VaultManager @Inject constructor(
             val entryCount = videos.size + thumbnails.values.count { it != null } + pages.values.sumOf { it.size } +
                 photos.size + photoThumbnails.values.count { it != null }
 
+            val identityDao = database.mangaIdentityDao()
+            val mangaIdentity = VaultMangaIdentity(
+                works = identityDao.getAllWorks(),
+                units = identityDao.getAllUnits(),
+                links = identityDao.getAllLinks(),
+                rejections = identityDao.getAllRejections(),
+                readMarks = identityDao.getAllReadMarks()
+            )
             val data = VaultData(
                 entryCount = entryCount,
                 videos = videos.map { (entity, file) ->
@@ -145,7 +154,8 @@ class VaultManager @Inject constructor(
                         photoExtensionOf(file), photoThumbnails[entity.id] != null, entity.albumId
                     )
                 },
-                albums = albums
+                albums = albums,
+                mangaIdentity = mangaIdentity
             )
 
             val raw = resolver.openOutputStream(target, "wt") ?: throw IOException("Could not open the file")
@@ -431,8 +441,15 @@ class VaultManager @Inject constructor(
                 else if (gallery.favorite && !have.favorite) libraryDao.upsert(have.copy(favorite = true))
             }
             VaultMerge.readHistoryToWrite(readHistoryDao.getAll(), data.readHistory).forEach { readHistoryDao.upsert(it) }
-            val haveMemory = memoryDao.getAll().map { it.galleryId }.toSet()
-            data.memory.filter { it.galleryId !in haveMemory }.forEach { memoryDao.upsert(it) }
+            val haveMemory = memoryDao.getAll().associateBy { it.galleryId }
+            for (row in data.memory) {
+                val existing = haveMemory[row.galleryId]
+                if (existing == null) {
+                    memoryDao.upsert(row)
+                } else if (existing.japaneseTitle.isNullOrBlank() && !row.japaneseTitle.isNullOrBlank()) {
+                    memoryDao.upsert(existing.copy(japaneseTitle = row.japaneseTitle))
+                }
+            }
 
             val searches = VaultMerge.searches(searchHistoryDao.getAll(), data.searches)
             searchHistoryDao.clear()
@@ -455,6 +472,29 @@ class VaultManager @Inject constructor(
             val incoming = data.translations.map { PageTranslationEntity(it.galleryId, it.page, it.lang, it.model, it.json, it.createdAt) }
             val toWrite = VaultMerge.translations(haveTranslations, incoming)
             if (toWrite.isNotEmpty()) pageTranslationDao.upsertAll(toWrite)
+
+            val identityDao = database.mangaIdentityDao()
+            val currentIdentity = VaultMangaIdentity(
+                works = identityDao.getAllWorks(),
+                units = identityDao.getAllUnits(),
+                links = identityDao.getAllLinks(),
+                rejections = identityDao.getAllRejections(),
+                readMarks = identityDao.getAllReadMarks()
+            )
+            val incomingIdentity = if (data.sourceFormat < 4 && data.mangaIdentity.readMarks.isEmpty()) {
+                val legacyMarks = data.readHistory
+                    .filter { it.page == -1 && it.pageCount == 0 }
+                    .map { MangaReadMarkEntity(it.galleryId, it.readAt) }
+                data.mangaIdentity.copy(readMarks = legacyMarks)
+            } else {
+                data.mangaIdentity
+            }
+            val identityToWrite = VaultMerge.mangaIdentityToWrite(currentIdentity, incomingIdentity)
+            if (identityToWrite.works.isNotEmpty()) identityDao.upsertWorks(identityToWrite.works)
+            if (identityToWrite.units.isNotEmpty()) identityDao.upsertUnits(identityToWrite.units)
+            if (identityToWrite.links.isNotEmpty()) identityDao.upsertLinks(identityToWrite.links)
+            if (identityToWrite.rejections.isNotEmpty()) identityDao.upsertRejections(identityToWrite.rejections)
+            if (identityToWrite.readMarks.isNotEmpty()) identityDao.upsertReadMarks(identityToWrite.readMarks)
         }
     }
 

@@ -92,7 +92,9 @@ import ru.spgsroot.peachy.manga.TapZone
 import ru.spgsroot.peachy.manga.centerPage
 import ru.spgsroot.peachy.manga.startPage
 import ru.spgsroot.peachy.manga.tapZone
+import ru.spgsroot.peachy.manga.EditionMetadata
 import ru.spgsroot.peachy.manga.LibraryGallery
+import ru.spgsroot.peachy.manga.MangaIdentityProjector
 import ru.spgsroot.peachy.manga.NhentaiCdn
 
 @Composable
@@ -102,22 +104,85 @@ fun MangaLibraryScreen(
     favoritesOnly: Boolean
 ) {
     val library by viewModel.libraryItems.collectAsStateWithLifecycle()
-    val shown = if (favoritesOnly) library.filter { it.favorite } else library
+    val identitySnapshot by viewModel.identitySnapshot.collectAsStateWithLifecycle()
+    val remembered by viewModel.remembered.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val historyById = remember(history) { history.associateBy { it.galleryId } }
+    val appLanguage = tagLanguage()
+    val preferredLanguages = remember(appLanguage) {
+        MangaIdentityProjector.preferredLanguagesFor(emptyList(), appLanguage)
+    }
+    val shown = remember(library, favoritesOnly) {
+        if (favoritesOnly) library.filter { it.favorite } else library
+    }
+    val projectedGroups = remember(shown, remembered, preferredLanguages, identitySnapshot) {
+        MangaIdentityProjector.projectList(
+            items = shown,
+            idOf = { it.id },
+            metadataOf = { item ->
+                val mem = remembered[item.id]
+                EditionMetadata(
+                    galleryId = item.id,
+                    displayTitle = mem?.title?.ifBlank { item.title } ?: item.title,
+                    japaneseTitle = mem?.japaneseTitle,
+                    thumbnailPath = item.thumbnailPath,
+                    numPages = item.pagePaths.size.takeIf { it > 0 } ?: (mem?.numPages ?: 0),
+                    artistIds = mem?.tags?.filter { it.type == "artist" && it.id > 0 }?.map { it.id }?.distinct().orEmpty(),
+                    language = mem?.tags?.firstOrNull { it.type == "language" && it.name != "translated" }?.name,
+                    tagsComplete = mem != null && mem.tags.isNotEmpty(),
+                    updatedAt = mem?.seenAt ?: 0L
+                )
+            },
+            preferredLanguages = preferredLanguages,
+            snapshot = identitySnapshot
+        )
+    }
+    var expandedGroups by rememberSaveable(favoritesOnly) { mutableStateOf(listOf<String>()) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (shown.isEmpty()) {
+        if (projectedGroups.isEmpty()) {
             item { Text(stringResource(R.string.manga_none), style = MaterialTheme.typography.bodyMedium) }
         }
-        items(shown, key = { it.id }) { item ->
-            LibraryCard(
-                item = item,
-                onOpen = { navController.navigate("manga/${item.id}") },
-                onRemove = { viewModel.remove(item.id) }
-            )
+        items(projectedGroups, key = { it.key }) { group ->
+            val item = group.primary
+            val expanded = group.key in expandedGroups
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LibraryCard(
+                    item = item,
+                    onOpen = { navController.navigate("manga/${item.id}") },
+                    onRemove = { viewModel.remove(item.id) }
+                )
+                ProjectedGroupFooter(
+                    group = group,
+                    idOf = { it.id },
+                    titleOf = { it.title },
+                    languageOf = { member ->
+                        remembered[member.id]?.tags?.firstOrNull { it.type == "language" && it.name != "translated" }?.name
+                            ?: identitySnapshot.editions[member.id]?.language
+                    },
+                    snapshot = identitySnapshot,
+                    expanded = expanded,
+                    onToggleExpand = {
+                        expandedGroups = if (expanded) expandedGroups - group.key else expandedGroups + group.key
+                    },
+                    onOpenEdition = { id -> navController.navigate("manga/$id") },
+                    onConfirmSame = viewModel::confirmSameChapter,
+                    onReject = viewModel::rejectSuggestion,
+                    onRemoveEdition = viewModel::remove,
+                    legacyLastPageOf = { id ->
+                        val row = historyById[id]
+                        row != null && MangaIdentityProjector.isLegacyLastPageOnly(
+                            row.page,
+                            row.pageCount,
+                            MangaIdentityProjector.readStatus(id, identitySnapshot)
+                        )
+                    }
+                )
+            }
         }
     }
 }

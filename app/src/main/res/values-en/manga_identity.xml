@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_identity_section_title">Translations &amp; chapters</string>
+    <string name="manga_identity_read_own">Read</string>
+    <string name="manga_identity_read_inherited">Read in another translation</string>
+    <string name="manga_identity_legacy_last_page">Previous progress: last page</string>
+    <string name="manga_identity_mark_read">Mark as read</string>
+    <string name="manga_identity_unmark_read">Remove read mark</string>
+    <string name="manga_identity_known_chapters">Read %1$d of %2$d known chapters</string>
+    <string name="manga_identity_versions_count">%1$d ver.</string>
+    <string name="manga_identity_versions_expand">Show versions</string>
+    <string name="manga_identity_versions_collapse">Hide versions</string>
+    <string name="manga_identity_autogroup_badge">Auto-group</string>
+    <string name="manga_identity_confirmed_badge">Confirmed</string>
+    <string name="manga_identity_action_same_chapter">Another translation of this chapter</string>
+    <string name="manga_identity_action_another_chapter">Another chapter of this work</string>
+    <string name="manga_identity_action_confirm_same">Same chapter</string>
+    <string name="manga_identity_action_confirm_chapter">Another chapter</string>
+    <string name="manga_identity_action_unlink">Unlink</string>
+    <string name="manga_identity_action_reject">Don\'t suggest this link</string>
+    <string name="manga_identity_confirmed_translations">Other translations of this chapter</string>
+    <string name="manga_identity_work_chapters">Work chapters</string>
+    <string name="manga_identity_work_collections">Collections</string>
+    <string name="manga_identity_suggested_peers">Possible links</string>
+    <string name="manga_identity_kind_chapter">Chapter</string>
+    <string name="manga_identity_kind_collection">Collection</string>
+    <string name="manga_identity_chapter_label_hint">Chapter label (e.g. 1.5, Prologue, Vol. 2 / Ch. 1)</string>
+    <string name="manga_identity_sort_order_hint">Order (number, e.g. 1.5)</string>
+    <string name="manga_identity_work_title_hint">Work title</string>
+    <string name="manga_identity_pick_work">Work</string>
+    <string name="manga_identity_new_work_with_gallery">New work with linked gallery</string>
+    <string name="manga_identity_pick_unit">Chapter or translation</string>
+    <string name="manga_identity_pick_gallery">Choose from known galleries</string>
+    <string name="manga_identity_gallery_id_hint">Gallery ID</string>
+    <string name="manga_identity_no_candidates">No other known galleries yet — open one or enter its ID.</string>
+    <string name="manga_identity_save_link">Link</string>
+    <string name="manga_identity_cancel">Cancel</string>
+    <string name="manga_identity_invalid_input">Check the entered fields</string>
+    <string name="manga_identity_history_page">Page %1$d of %2$d</string>
+    <string name="manga_identity_history_marked">Marked as read</string>
+    <string name="manga_identity_unit_prefix_chapter">Chapter %1$s</string>
+    <string name="manga_identity_unit_prefix_collection">Collection: %1$s</string>
+</resources>

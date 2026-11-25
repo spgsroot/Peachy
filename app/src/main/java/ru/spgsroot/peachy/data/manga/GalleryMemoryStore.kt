@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import ru.spgsroot.peachy.data.db.AppDatabase
 import ru.spgsroot.peachy.data.db.GalleryMemoryEntity
+import ru.spgsroot.peachy.data.db.MangaReadMarkEntity
 import ru.spgsroot.peachy.data.db.ReadHistoryEntity
 import ru.spgsroot.peachy.manga.GalleryDetail
 import ru.spgsroot.peachy.manga.GallerySummary
@@ -32,7 +33,12 @@ class GalleryMemoryStore @Inject constructor(private val database: AppDatabase) 
     /** Hides [gallery] from recommendations for good and teaches the profile to avoid its tags. */
     suspend fun dismiss(gallery: GallerySummary, now: Long = System.currentTimeMillis()) {
         val known = dao.getById(gallery.id)
-        dao.upsert((known ?: gallery.toRemembered(now).toEntity()).copy(dismissed = true, seenAt = now))
+        val merged = (known ?: gallery.toRemembered(now).toEntity()).copy(
+            dismissed = true,
+            seenAt = now,
+            japaneseTitle = known?.japaneseTitle?.takeIf { it.isNotBlank() } ?: gallery.japaneseTitle
+        )
+        dao.upsert(merged)
     }
 
     /**
@@ -53,6 +59,7 @@ class GalleryMemoryStore @Inject constructor(private val database: AppDatabase) 
             val thumbnail = known?.thumbnailPath?.takeIf { it.isNotBlank() }
                 ?: history?.thumbnailPath?.takeIf { it.isNotBlank() }
                 ?: gallery.thumbnailPath
+            val japaneseTitle = known?.japaneseTitle?.takeIf { it.isNotBlank() } ?: gallery.japaneseTitle
             dao.upsert(
                 GalleryMemoryEntity(
                     galleryId = gallery.id,
@@ -63,7 +70,8 @@ class GalleryMemoryStore @Inject constructor(private val database: AppDatabase) 
                     uploadedAt = known?.uploadedAt,
                     numFavorites = known?.numFavorites ?: gallery.numFavorites,
                     seenAt = known?.seenAt ?: now,
-                    dismissed = false
+                    dismissed = false,
+                    japaneseTitle = japaneseTitle
                 )
             )
             historyDao.upsert(
@@ -76,6 +84,7 @@ class GalleryMemoryStore @Inject constructor(private val database: AppDatabase) 
                     readAt = now
                 )
             )
+            database.mangaIdentityDao().upsertReadMark(MangaReadMarkEntity(gallery.id, now))
         }
     }
 }
@@ -89,7 +98,8 @@ private fun GalleryMemoryEntity.toDomain() = RememberedGallery(
     uploadedAt = uploadedAt,
     numFavorites = numFavorites,
     seenAt = seenAt,
-    dismissed = dismissed
+    dismissed = dismissed,
+    japaneseTitle = japaneseTitle
 )
 
 private fun RememberedGallery.toEntity() = GalleryMemoryEntity(
@@ -101,5 +111,6 @@ private fun RememberedGallery.toEntity() = GalleryMemoryEntity(
     uploadedAt = uploadedAt,
     numFavorites = numFavorites,
     seenAt = seenAt,
-    dismissed = dismissed
+    dismissed = dismissed,
+    japaneseTitle = japaneseTitle
 )

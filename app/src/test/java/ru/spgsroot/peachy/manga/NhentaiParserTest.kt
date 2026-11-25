@@ -61,14 +61,21 @@ class NhentaiParserTest {
     @Test
     fun cardFallsBackToJapaneseTitleAndKeepsUnknownFavoritesNull() {
         val cards = NhentaiParser.search(
-            """{"result":[{"id":12,"english_title":"","japanese_title":"日本語","num_favorites":0},{"id":13,"english_title":"English","japanese_title":null}]}"""
+            """{"result":[{"id":12,"english_title":"","japanese_title":"日本語","num_favorites":0},{"id":13,"english_title":"English","japanese_title":null},{"id":14,"english_title":"Star Map","japanese_title":"星図 第1話"}]}"""
         )
 
         assertEquals("日本語", cards[0].title)
+        assertEquals("日本語", cards[0].japaneseTitle)
+        assertEquals(null, cards[0].englishTitle)
         assertEquals(0, cards[0].numFavorites)
         assertEquals("English", cards[1].title)
+        assertEquals("English", cards[1].englishTitle)
+        assertEquals(null, cards[1].japaneseTitle)
         assertEquals(null, cards[1].numFavorites)
         assertEquals(emptyList<GalleryTag>(), cards[1].tags)
+        assertEquals("Star Map", cards[2].title)
+        assertEquals("Star Map", cards[2].englishTitle)
+        assertEquals("星図 第1話", cards[2].japaneseTitle)
     }
 
     @Test

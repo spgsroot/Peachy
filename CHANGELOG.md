@@ -3,6 +3,12 @@
 All notable changes to Peachy Android are recorded here. This file starts with the native
 interface rebrand; earlier entries are not reconstructed.
 
+## 0.9.4
+
+- **Manga.** Expand likely translations in the catalog. Confirm two editions as the same chapter to share a read mark without changing either reading position. Other chapters stay unread; manual links, read marks and rejected suggestions survive library backup and restore.
+- **Manga.** Read and Continue have their own row on the details screen. The section menu scrolls so Random gallery stays reachable on short screens.
+- Opening an artist or tag from gallery details now keeps the gallery and earlier search results in Back history.
+
 ## 0.9.3
 
 - **Settings and lock.** Manga, translation, device control and browser audio capture are opt-in, including after upgrading. Turning them off keeps saved items. Release builds retain screenshot protection.

@@ -10,7 +10,8 @@ data class RememberedGallery(
     val uploadedAt: Long?,
     val numFavorites: Int?,
     val seenAt: Long,
-    val dismissed: Boolean
+    val dismissed: Boolean,
+    val japaneseTitle: String? = null
 )
 
 fun GalleryDetail.toRemembered(seenAt: Long, dismissed: Boolean = false) = RememberedGallery(
@@ -22,7 +23,8 @@ fun GalleryDetail.toRemembered(seenAt: Long, dismissed: Boolean = false) = Remem
     uploadedAt = uploadedAt,
     numFavorites = favoriteCount,
     seenAt = seenAt,
-    dismissed = dismissed
+    dismissed = dismissed,
+    japaneseTitle = japaneseTitle
 )
 
 fun GallerySummary.toRemembered(seenAt: Long, dismissed: Boolean = false) = RememberedGallery(
@@ -34,7 +36,8 @@ fun GallerySummary.toRemembered(seenAt: Long, dismissed: Boolean = false) = Reme
     uploadedAt = null,
     numFavorites = numFavorites,
     seenAt = seenAt,
-    dismissed = dismissed
+    dismissed = dismissed,
+    japaneseTitle = japaneseTitle
 )
 
 /** The language a gallery is written in; `translated` only says it is a translation, not which language. */

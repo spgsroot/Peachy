@@ -64,4 +64,7 @@ object DatabaseModule {
 
     @Provides
     fun provideDocumentSessionDao(database: AppDatabase): DocumentSessionDao = database.documentSessionDao()
+
+    @Provides
+    fun provideMangaIdentityDao(database: AppDatabase): MangaIdentityDao = database.mangaIdentityDao()
 }

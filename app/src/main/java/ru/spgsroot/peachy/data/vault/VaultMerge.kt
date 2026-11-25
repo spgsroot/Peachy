@@ -1,5 +1,10 @@
 package ru.spgsroot.peachy.data.vault
 
+import ru.spgsroot.peachy.data.db.MangaEditionLinkEntity
+import ru.spgsroot.peachy.data.db.MangaReadMarkEntity
+import ru.spgsroot.peachy.data.db.MangaReadingUnitEntity
+import ru.spgsroot.peachy.data.db.MangaRejectedLinkEntity
+import ru.spgsroot.peachy.data.db.MangaWorkEntity
 import ru.spgsroot.peachy.data.db.PageTranslationEntity
 import ru.spgsroot.peachy.data.db.ReadHistoryEntity
 import ru.spgsroot.peachy.data.db.SearchHistoryEntity
@@ -76,5 +81,54 @@ object VaultMerge {
             if (seen == null || row.createdAt > seen.createdAt) newest[key] = row
         }
         return newest.values.toList()
+    }
+
+    /**
+     * Idempotent merge for manga identity records keyed by stable local IDs (`workId`, `unitId`,
+     * `galleryId`, `(leftGalleryId, rightGalleryId)`). Repeated imports never duplicate chapters.
+     */
+    fun mangaIdentityToWrite(
+        current: VaultMangaIdentity,
+        incoming: VaultMangaIdentity
+    ): VaultMangaIdentity {
+        val localWorks = current.works.associateBy { it.workId }
+        val worksToWrite = incoming.works.filter { row ->
+            localWorks[row.workId]?.let { row.updatedAt > it.updatedAt } ?: true
+        }
+        val knownWorkIds = localWorks.keys + worksToWrite.map { it.workId }
+
+        val localUnits = current.units.associateBy { it.unitId }
+        val unitsToWrite = incoming.units.filter { row ->
+            row.workId in knownWorkIds &&
+                (localUnits[row.unitId]?.let { row.updatedAt > it.updatedAt } ?: true)
+        }
+        val mergedUnitWorks = buildMap {
+            current.units.forEach { put(it.unitId, it.workId) }
+            unitsToWrite.forEach { put(it.unitId, it.workId) }
+        }
+
+        val localLinks = current.links.associateBy { it.galleryId }
+        val linksToWrite = incoming.links.filter { row ->
+            mergedUnitWorks[row.unitId] == row.workId &&
+                (localLinks[row.galleryId]?.let { row.updatedAt > it.updatedAt } ?: true)
+        }
+
+        val localRejections = current.rejections.associateBy { it.leftGalleryId to it.rightGalleryId }
+        val rejectionsToWrite = incoming.rejections.filter { row ->
+            localRejections[row.leftGalleryId to row.rightGalleryId]?.let { row.createdAt > it.createdAt } ?: true
+        }
+
+        val localMarks = current.readMarks.associateBy { it.galleryId }
+        val marksToWrite = incoming.readMarks.filter { row ->
+            localMarks[row.galleryId]?.let { row.markedAt > it.markedAt } ?: true
+        }
+
+        return VaultMangaIdentity(
+            works = worksToWrite,
+            units = unitsToWrite,
+            links = linksToWrite,
+            rejections = rejectionsToWrite,
+            readMarks = marksToWrite
+        )
     }
 }

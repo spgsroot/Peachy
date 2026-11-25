@@ -19,11 +19,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.spgsroot.peachy.data.manga.GalleryMemoryStore
+import ru.spgsroot.peachy.data.manga.MangaIdentityStore
 import ru.spgsroot.peachy.data.manga.MangaLibraryRepository
 import ru.spgsroot.peachy.data.manga.MangaCatalogStore
 import ru.spgsroot.peachy.data.manga.NhentaiApi
 import ru.spgsroot.peachy.data.db.ReadHistoryEntity
 import ru.spgsroot.peachy.manga.CatalogQuery
+import ru.spgsroot.peachy.manga.MangaIdentitySnapshot
 import ru.spgsroot.peachy.manga.SearchDestination
 import ru.spgsroot.peachy.manga.searchDestination
 import ru.spgsroot.peachy.manga.toApi
@@ -72,10 +74,14 @@ class MangaViewModel @Inject constructor(
     private val savedPagesRepository: SavedPagesRepository,
     private val exporter: VideoExporter,
     private val tagPreferences: TagPreferences,
-    private val readerPositions: ReaderPositionStore
+    private val readerPositions: ReaderPositionStore,
+    private val identityStore: MangaIdentityStore
 ) : ViewModel() {
     val libraryItems: StateFlow<List<LibraryGallery>> = library.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val identitySnapshot: StateFlow<MangaIdentitySnapshot> = identityStore.snapshot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MangaIdentitySnapshot())
 
     val tagLibrary: StateFlow<TagLibrary> = tagPreferences.library
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TagLibrary())
@@ -100,7 +106,11 @@ class MangaViewModel @Inject constructor(
     private val catalogSearch = CatalogSearch(
         scope = viewModelScope,
         fetch = { query, page ->
-            withContext(Dispatchers.IO) { api.search(query.toSearchQuery(), query.sort.toApi(), page) }
+            withContext(Dispatchers.IO) {
+                api.search(query.toSearchQuery(), query.sort.toApi(), page).also { results ->
+                    identityStore.indexSummaries(results)
+                }
+            }
         },
         rememberQuery = { query ->
             withContext(Dispatchers.IO) { catalogStore.rememberQuery(query.toSearchQuery()) }
@@ -190,11 +200,30 @@ class MangaViewModel @Inject constructor(
                 catalogStore.rememberTags(fetched.tags)
                 refreshVisibleResults()
                 memory.remember(fetched)
+                identityStore.indexDetail(fetched)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (_detail.value == null) _error.value = e.message ?: "Open failed"
             }
+        }
+    }
+
+    fun confirmSameChapter(galleryId: Int, targetGalleryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityStore.confirmSameChapter(galleryId, targetGalleryId)
+        }
+    }
+
+    fun rejectSuggestion(aGalleryId: Int, bGalleryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityStore.rejectSuggestion(aGalleryId, bGalleryId)
+        }
+    }
+
+    fun setReadMark(galleryId: Int, read: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityStore.setReadMark(galleryId, read)
         }
     }
 

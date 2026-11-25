@@ -164,6 +164,34 @@ class MangaMigrationSqlTest {
             statements
         )
     }
+
+    @Test
+    fun migration16To17CreatesIdentityTablesAndOnlyBackfillsUnknownLengthReadMarks() {
+        val statements = mutableListOf<String>()
+        val database = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            check(method.name == "execSQL") { "Unexpected database call: ${method.name}" }
+            statements += args!![0] as String
+            null
+        } as SupportSQLiteDatabase
+
+        val migration = MangaMigrations.MIGRATION_16_17
+        assertEquals(16, migration.startVersion)
+        assertEquals(17, migration.endVersion)
+        migration.migrate(database)
+
+        assertTrue(statements.any { it == "ALTER TABLE gallery_memory ADD COLUMN japaneseTitle TEXT" })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_works") })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_reading_units") })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_edition_links") })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_rejected_links") })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_read_marks") })
+        assertTrue(statements.any { it.startsWith("CREATE TABLE IF NOT EXISTS manga_edition_index") })
+        assertTrue(statements.any { it.contains("WHERE page = -1 AND pageCount = 0") })
+        assertFalse(statements.any { it.contains("DROP TABLE", ignoreCase = true) })
+    }
 }
 
 private class MemorySearchHistoryDao : SearchHistoryDao() {

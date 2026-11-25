@@ -10,7 +10,10 @@ data class GallerySummary(
     val numPages: Int,
     val tagIds: List<Int> = emptyList(),
     val tags: List<GalleryTag> = emptyList(),
-    val numFavorites: Int? = null
+    val numFavorites: Int? = null,
+    val japaneseTitle: String? = null,
+    val englishTitle: String? = null,
+    val tagsComplete: Boolean = true
 )
 
 data class GalleryDetail(
@@ -125,16 +128,20 @@ object NhentaiParser {
     private fun cards(result: JSONArray): List<GallerySummary> = buildList {
         for (index in 0 until result.length()) {
             val item = result.optJSONObject(index) ?: continue
+            val english = item.nullableString("english_title")
+            val japanese = item.nullableString("japanese_title")
             add(
                 GallerySummary(
                     id = item.optInt("id"),
-                    title = item.optString("english_title").ifBlank { item.nullableString("japanese_title").orEmpty() },
+                    title = english?.takeIf { it.isNotBlank() } ?: japanese.orEmpty(),
                     thumbnailPath = item.optString("thumbnail"),
                     numPages = item.optInt("num_pages"),
                     tagIds = item.optJSONArray("tag_ids")?.let { ids ->
                         List(ids.length()) { ids.optInt(it) }
                     } ?: emptyList(),
-                    numFavorites = item.nullableInt("num_favorites")
+                    numFavorites = item.nullableInt("num_favorites"),
+                    japaneseTitle = japanese?.takeIf { it.isNotBlank() },
+                    englishTitle = english?.takeIf { it.isNotBlank() }
                 )
             )
         }

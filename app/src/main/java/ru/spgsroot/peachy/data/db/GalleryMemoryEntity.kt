@@ -17,5 +17,6 @@ data class GalleryMemoryEntity(
     val uploadedAt: Long?,
     val numFavorites: Int?,
     val seenAt: Long,
-    val dismissed: Boolean
+    val dismissed: Boolean,
+    val japaneseTitle: String? = null
 )

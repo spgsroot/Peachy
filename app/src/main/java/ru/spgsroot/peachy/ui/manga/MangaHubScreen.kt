@@ -2,6 +2,7 @@ package ru.spgsroot.peachy.ui.manga
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -10,6 +11,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Bookmark
@@ -42,8 +45,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,7 +71,7 @@ import ru.spgsroot.peachy.manga.TagMode
 import ru.spgsroot.peachy.manga.TagRef
 
 /** Hub sections that live inside the drawer; the tag browser and random gallery open other screens. */
-private enum class HubDestination(val label: Int, val icon: ImageVector) {
+internal enum class HubDestination(val label: Int, val icon: ImageVector) {
     Catalog(R.string.manga_catalog, Icons.Filled.Search),
     ForYou(R.string.manga_for_you, Icons.Filled.Star),
     Downloads(R.string.manga_drawer_downloads, Icons.Filled.Download),
@@ -91,8 +92,10 @@ fun MangaHubScreen(
     onHub: (String) -> Unit = {},
     viewModel: MangaViewModel = hiltViewModel()
 ) {
-    var destination by rememberSaveable { mutableStateOf(hubOf(initialHub)) }
-    var catalogKey by rememberSaveable { mutableIntStateOf(0) }
+    val initialFilters = remember(entry) { decodeFilters(entry.savedStateHandle.get<List<String>>(TAG_FILTERS_KEY).orEmpty()) }
+    var destination by rememberSaveable {
+        mutableStateOf(if (initialFilters.isEmpty()) hubOf(initialHub) else HubDestination.Catalog)
+    }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -109,24 +112,14 @@ fun MangaHubScreen(
     val tagLibrary by viewModel.tagLibrary.collectAsStateWithLifecycle()
     val favoriteTags = remember(tagLibrary) { tagLibrary.favorites.toSet() }
 
-    // Tag filters picked on another screen arrive through this entry's saved state.
-    val handoff by entry.savedStateHandle.getStateFlow<List<String>?>(TAG_FILTERS_KEY, null)
-        .collectAsStateWithLifecycle()
-    LaunchedEffect(handoff) {
-        val raw = handoff ?: return@LaunchedEffect
-        entry.savedStateHandle[TAG_FILTERS_KEY] = null
-        val filters = decodeFilters(raw)
-        if (filters.isNotEmpty()) {
-            viewModel.search(CatalogQuery(tags = filters))
-            catalogKey++
-            destination = HubDestination.Catalog
+    LaunchedEffect(destination, entry) {
+        if (destination == HubDestination.Catalog && !viewModel.catalog.value.searched) {
+            viewModel.search(CatalogQuery(tags = initialFilters))
         }
     }
 
     fun searchTag(tag: GalleryTag) {
-        viewModel.search(CatalogQuery(tags = listOf(TagFilter(tag.type, tag.name, TagMode.Include))))
-        catalogKey++
-        destination = HubDestination.Catalog
+        navController.searchCatalog(listOf(TagFilter(tag.type, tag.name, TagMode.Include)))
     }
 
     fun go(action: () -> Unit) {
@@ -140,44 +133,13 @@ fun MangaHubScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    stringResource(R.string.manga_hub),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp)
-                )
-                HubDestination.entries.forEach { item ->
-                    NavigationDrawerItem(
-                        label = { Text(stringResource(item.label)) },
-                        icon = { Icon(item.icon, null) },
-                        selected = destination == item,
-                        onClick = { go { destination = item } },
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    )
-                }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label = { Text(stringResource(R.string.manga_tags)) },
-                    icon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
-                    selected = false,
-                    onClick = { go { navController.navigate("mangatags/tag") } },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text(stringResource(R.string.manga_drawer_characters)) },
-                    icon = { Icon(Icons.Filled.Person, null) },
-                    selected = false,
-                    onClick = { go { navController.navigate("mangatags/character") } },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text(stringResource(R.string.manga_drawer_random)) },
-                    icon = { Icon(Icons.Filled.Shuffle, null) },
-                    selected = false,
-                    onClick = { go { viewModel.openRandom { navController.navigate("manga/$it") } } },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-            }
+            MangaHubDrawerContent(
+                destination = destination,
+                onDestination = { item -> go { destination = item } },
+                onTags = { go { navController.navigate("mangatags/tag") } },
+                onCharacters = { go { navController.navigate("mangatags/character") } },
+                onRandom = { go { viewModel.openRandom { navController.navigate("manga/$it") } } }
+            )
         }
     ) {
         Scaffold(
@@ -220,16 +182,14 @@ fun MangaHubScreen(
             Box(Modifier.fillMaxSize().padding(padding)) {
                 tabState.SaveableStateProvider(destination.name) {
                     when (destination) {
-                        HubDestination.Catalog -> key(catalogKey) {
-                            CatalogScreen(
-                                viewModel,
-                                onOpen = { navController.navigate("manga/$it") },
-                                showFilters = showFilters,
-                                onFiltersDismiss = { showFilters = false },
-                                text = queryText,
-                                onTextChange = { queryText = it }
-                            )
-                        }
+                        HubDestination.Catalog -> CatalogScreen(
+                            viewModel,
+                            onOpen = { navController.navigate("manga/$it") },
+                            showFilters = showFilters,
+                            onFiltersDismiss = { showFilters = false },
+                            text = queryText,
+                            onTextChange = { queryText = it }
+                        )
                         HubDestination.Downloads -> MangaLibraryScreen(navController, viewModel, favoritesOnly = false)
                         HubDestination.Favorites -> MangaLibraryScreen(navController, viewModel, favoritesOnly = true)
                         HubDestination.SavedPages -> SavedPagesScreen(navController, viewModel, snackbar)
@@ -254,6 +214,56 @@ fun MangaHubScreen(
 }
 
 @Composable
+internal fun MangaHubDrawerContent(
+    destination: HubDestination,
+    onDestination: (HubDestination) -> Unit,
+    onTags: () -> Unit,
+    onCharacters: () -> Unit,
+    onRandom: () -> Unit
+) {
+    ModalDrawerSheet {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            Text(
+                stringResource(R.string.manga_hub),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp)
+            )
+            HubDestination.entries.forEach { item ->
+                NavigationDrawerItem(
+                    label = { Text(stringResource(item.label)) },
+                    icon = { Icon(item.icon, null) },
+                    selected = destination == item,
+                    onClick = { onDestination(item) },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.manga_tags)) },
+                icon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
+                selected = false,
+                onClick = onTags,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.manga_drawer_characters)) },
+                icon = { Icon(Icons.Filled.Person, null) },
+                selected = false,
+                onClick = onCharacters,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.manga_drawer_random)) },
+                icon = { Icon(Icons.Filled.Shuffle, null) },
+                selected = false,
+                onClick = onRandom,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun HistoryScreen(
     viewModel: MangaViewModel,
     onOpen: (Int) -> Unit,
@@ -263,6 +273,7 @@ private fun HistoryScreen(
 ) {
     val history by viewModel.history.collectAsStateWithLifecycle()
     val remembered by viewModel.remembered.collectAsStateWithLifecycle()
+    val identitySnapshot by viewModel.identitySnapshot.collectAsStateWithLifecycle()
     if (history.isEmpty()) {
         Text(stringResource(R.string.manga_history_empty), modifier = Modifier.padding(16.dp))
         return
@@ -276,18 +287,56 @@ private fun HistoryScreen(
     ) {
         items(history, key = { it.galleryId }) { entry ->
             val memory = remembered[entry.galleryId]
-            GalleryGridCard(
-                title = entry.title,
-                thumbnailPath = entry.thumbnailPath,
-                pages = entry.pageCount,
-                tags = memory?.tags.orEmpty(),
-                favorites = memory?.numFavorites,
-                uploadedAt = memory?.uploadedAt,
-                onOpen = { onOpen(entry.galleryId) },
-                onTag = onTag,
-                onTagLong = onTagLong,
-                favoriteTags = favoriteTags
+            val status = ru.spgsroot.peachy.manga.MangaIdentityProjector.readStatus(entry.galleryId, identitySnapshot)
+            val legacyLastPage = ru.spgsroot.peachy.manga.MangaIdentityProjector.isLegacyLastPageOnly(
+                entry.page,
+                entry.pageCount,
+                status
             )
+            val link = identitySnapshot.links[entry.galleryId]
+            val unit = link?.let { identitySnapshot.units[it.unitId] }
+            val workProgress = link?.let {
+                ru.spgsroot.peachy.manga.MangaIdentityProjector.workProgress(it.workId, identitySnapshot)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                GalleryGridCard(
+                    title = entry.title,
+                    thumbnailPath = entry.thumbnailPath,
+                    pages = entry.pageCount,
+                    tags = memory?.tags.orEmpty(),
+                    favorites = memory?.numFavorites,
+                    uploadedAt = memory?.uploadedAt,
+                    onOpen = { onOpen(entry.galleryId) },
+                    onTag = onTag,
+                    onTagLong = onTagLong,
+                    favoriteTags = favoriteTags
+                )
+                val progressLabel = when {
+                    entry.page >= 0 && entry.pageCount > 0 -> stringResource(
+                        R.string.manga_identity_history_page,
+                        entry.page + 1,
+                        entry.pageCount
+                    )
+                    entry.page == -1 && entry.pageCount == 0 -> stringResource(R.string.manga_identity_history_marked)
+                    else -> null
+                }
+                if (progressLabel != null) {
+                    Text(
+                        text = progressLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                ReadStatusPill(status = status, legacyLastPage = legacyLastPage)
+                if (unit != null) {
+                    Text(
+                        text = UnitLabelText(unit.label, unit.kind),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                workProgress?.takeIf { it.knownChapters > 0 }?.let { WorkProgressLine(it) }
+            }
         }
     }
 }

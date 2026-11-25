@@ -7,13 +7,10 @@ import ru.spgsroot.peachy.manga.TagMode
 const val MANGA_HUB_ROUTE = "manga"
 const val TAG_FILTERS_KEY = "tagFilters"
 
-/**
- * Hands tag filters to the manga hub and returns to it. The hub owns the catalog state, so the
- * other screens only leave the filters on its saved state; the hub runs the search.
- */
+/** Give each filtered catalog its own entry, so Back preserves both the source and earlier searches. */
 fun NavController.searchCatalog(filters: List<TagFilter>) {
-    getBackStackEntry(MANGA_HUB_ROUTE).savedStateHandle[TAG_FILTERS_KEY] = ArrayList(filters.map(::encodeFilter))
-    popBackStack(MANGA_HUB_ROUTE, inclusive = false)
+    navigate(MANGA_HUB_ROUTE)
+    checkNotNull(currentBackStackEntry).savedStateHandle[TAG_FILTERS_KEY] = ArrayList(filters.map(::encodeFilter))
 }
 
 internal fun encodeFilter(filter: TagFilter): String = "${filter.mode.name}|${filter.type}|${filter.name}"

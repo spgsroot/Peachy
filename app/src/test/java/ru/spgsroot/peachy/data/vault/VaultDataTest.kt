@@ -125,4 +125,57 @@ class VaultDataTest {
             VaultData.fromJson(orphan.toJson())
         }.error)
     }
+
+    @Test
+    fun mangaIdentityAndJapaneseTitleRoundTripAndLegacyFormatThreeIsAccepted() {
+        val identity = VaultMangaIdentity(
+            works = listOf(ru.spgsroot.peachy.data.db.MangaWorkEntity("w-1", "Atlas", 100L)),
+            units = listOf(
+                ru.spgsroot.peachy.data.db.MangaReadingUnitEntity("u-1", "w-1", "1.5", 1.5, "chapter", 101L),
+                ru.spgsroot.peachy.data.db.MangaReadingUnitEntity("u-col", "w-1", "Omnibus", 1.0, "collection", 102L)
+            ),
+            links = listOf(ru.spgsroot.peachy.data.db.MangaEditionLinkEntity(101, "w-1", "u-1", 103L)),
+            rejections = listOf(ru.spgsroot.peachy.data.db.MangaRejectedLinkEntity(101, 202, 104L)),
+            readMarks = listOf(ru.spgsroot.peachy.data.db.MangaReadMarkEntity(101, 105L))
+        )
+        val data = empty().copy(
+            memory = listOf(
+                ru.spgsroot.peachy.data.db.GalleryMemoryEntity(
+                    101, "Star Map", "t.jpg", 24, "[]", 10L, 5, 20L, false, "星図 第1.5話"
+                )
+            ),
+            mangaIdentity = identity
+        )
+        assertEquals(data, VaultData.fromJson(data.toJson()))
+
+        val legacyV3 = JSONObject(data.toJson()).apply {
+            put("format", 3)
+            remove("mangaIdentity")
+            getJSONArray("memory").getJSONObject(0).remove("japaneseTitle")
+        }
+        val parsedV3 = VaultData.fromJson(legacyV3.toString())
+        assertEquals(3, parsedV3.sourceFormat)
+        assertEquals(VaultMangaIdentity(), parsedV3.mangaIdentity)
+        assertEquals(null, parsedV3.memory.single().japaneseTitle)
+
+        // Broken link pointing to wrong workId must be rejected as corrupt.
+        val badLink = data.copy(
+            mangaIdentity = identity.copy(
+                links = listOf(ru.spgsroot.peachy.data.db.MangaEditionLinkEntity(101, "missing-work", "u-1", 103L))
+            )
+        )
+        assertEquals(VaultError.CORRUPT, org.junit.Assert.assertThrows(VaultException::class.java) {
+            VaultData.fromJson(badLink.toJson())
+        }.error)
+
+        // Non-canonical rejection pair (left >= right) must be rejected as corrupt.
+        val badRejection = data.copy(
+            mangaIdentity = identity.copy(
+                rejections = listOf(ru.spgsroot.peachy.data.db.MangaRejectedLinkEntity(202, 101, 104L))
+            )
+        )
+        assertEquals(VaultError.CORRUPT, org.junit.Assert.assertThrows(VaultException::class.java) {
+            VaultData.fromJson(badRejection.toJson())
+        }.error)
+    }
 }

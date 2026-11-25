@@ -7,18 +7,23 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.spgsroot.peachy.data.manga.GalleryMemoryStore
 import ru.spgsroot.peachy.data.manga.MangaCatalogStore
+import ru.spgsroot.peachy.data.manga.MangaIdentityStore
 import ru.spgsroot.peachy.data.manga.MangaLibraryRepository
 import ru.spgsroot.peachy.data.manga.NhentaiApi
 import ru.spgsroot.peachy.data.manga.TagPreferences
 import ru.spgsroot.peachy.manga.CatalogQuery
 import ru.spgsroot.peachy.manga.GallerySummary
+import ru.spgsroot.peachy.manga.MangaIdentityProjector
+import ru.spgsroot.peachy.manga.MangaIdentitySnapshot
 import ru.spgsroot.peachy.manga.Recommendation
 import ru.spgsroot.peachy.manga.Recommender
 import ru.spgsroot.peachy.manga.SortKey
@@ -50,10 +55,13 @@ class ForYouViewModel @Inject constructor(
     private val memory: GalleryMemoryStore,
     private val catalogStore: MangaCatalogStore,
     private val library: MangaLibraryRepository,
-    private val tagPreferences: TagPreferences
+    private val tagPreferences: TagPreferences,
+    private val identityStore: MangaIdentityStore
 ) : ViewModel() {
     private val _state = MutableStateFlow(ForYouState())
     val state: StateFlow<ForYouState> = _state
+    val identitySnapshot: StateFlow<MangaIdentitySnapshot> = identityStore.snapshot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MangaIdentitySnapshot())
     private var job: Job? = null
 
     /** Builds the list once; [refresh] builds it again. */
@@ -78,17 +86,39 @@ class ForYouViewModel @Inject constructor(
         }
     }
 
-    fun markRead(gallery: GallerySummary) = recordFeedback(gallery.id) { memory.markRead(gallery) }
+    fun markRead(gallery: GallerySummary) = recordFeedback(gallery.id, dropConfirmedSiblings = true) {
+        memory.markRead(gallery)
+    }
 
-    fun notInterested(gallery: GallerySummary) = recordFeedback(gallery.id) { memory.dismiss(gallery) }
+    fun notInterested(gallery: GallerySummary) = recordFeedback(gallery.id, dropConfirmedSiblings = false) {
+        memory.dismiss(gallery)
+    }
 
-    private fun recordFeedback(id: Int, save: suspend () -> Unit) {
+    fun confirmSameChapter(galleryId: Int, targetGalleryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityStore.confirmSameChapter(galleryId, targetGalleryId)
+        }
+    }
+
+    fun rejectSuggestion(aGalleryId: Int, bGalleryId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            identityStore.rejectSuggestion(aGalleryId, bGalleryId)
+        }
+    }
+
+    private fun recordFeedback(id: Int, dropConfirmedSiblings: Boolean, save: suspend () -> Unit) {
         if (_state.value.loading || _state.value.savingFeedback) return
         _state.update { it.copy(savingFeedback = true, feedbackErrorId = null) }
         viewModelScope.launch {
             try {
                 save()
-                _state.update { state -> state.copy(items = state.items.filterNot { it.gallery.id == id }) }
+                val dropIds = if (dropConfirmedSiblings) {
+                    val snapshot = withContext(Dispatchers.IO) { identityStore.snapshot.first() }
+                    MangaIdentityProjector.confirmedTranslations(id, snapshot).toSet() + id
+                } else {
+                    setOf(id)
+                }
+                _state.update { state -> state.copy(items = state.items.filterNot { it.gallery.id in dropIds }) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -105,17 +135,26 @@ class ForYouViewModel @Inject constructor(
         val history = catalogStore.history.first().associateBy { it.galleryId }
         val saved = library.observe().first().associateBy { it.id }
         val tags = tagPreferences.library.first()
+        val snapshot = identityStore.snapshot.first()
 
-        val signals = remembered.map { gallery ->
+        val rawSignals = remembered.map { gallery ->
             val read = history[gallery.id]
+            val explicitRead = snapshot.readMarks[gallery.id]
+            val readFraction = when {
+                explicitRead != null -> 1.0
+                read != null -> read.readFraction
+                else -> 0.0
+            }
+            val readAt = maxOf(read?.readAt ?: 0L, explicitRead?.markedAt ?: 0L).takeIf { it > 0L }
             Recommender.signalFor(
                 gallery = gallery,
-                readFraction = read?.readFraction ?: 0.0,
-                readAt = read?.readAt,
+                readFraction = readFraction,
+                readAt = readAt,
                 saved = saved.containsKey(gallery.id),
                 favorite = saved[gallery.id]?.favorite == true
             )
         }
+        val signals = MangaIdentityProjector.consolidateTasteSignals(rawSignals, snapshot)
         val explicit = HashMap<TagRef, Double>()
         tags.favorites.forEach { explicit.merge(it.lowered(), Recommender.FAVORITE_TAG, Double::plus) }
         tags.collections.flatMap { it.tags }.forEach { explicit.merge(it.lowered(), Recommender.COLLECTION_TAG, Double::plus) }
@@ -149,11 +188,14 @@ class ForYouViewModel @Inject constructor(
         for (id in seeds.relatedIds) attempt { api.related(id) }
         if (requests > 0 && failures == requests) return ForYouState(loaded = true, failed = true, hasTaste = profile.hasTaste)
 
-        val excluded = HashSet<Int>().apply {
-            addAll(history.keys)
-            addAll(saved.keys)
-            remembered.filter { it.dismissed }.mapTo(this) { it.id }
-        }
+        identityStore.indexSummaries(candidates)
+        val latestSnapshot = identityStore.snapshot.first()
+        val excluded = MangaIdentityProjector.excludedGalleryIds(
+            readHistoryIds = history.keys,
+            savedIds = saved.keys,
+            dismissedIds = remembered.filter { it.dismissed }.map { it.id }.toSet(),
+            snapshot = latestSnapshot
+        )
         val visible = filterSearchResults(candidates, emptyMap(), catalogStore::blocks)
         val items = Recommender.rank(visible, profile, excluded, RESULT_LIMIT)
         return ForYouState(loaded = true, hasTaste = profile.hasTaste, items = items)

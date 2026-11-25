@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_identity_section_title">Переводы и главы</string>
+    <string name="manga_identity_read_own">Прочитано</string>
+    <string name="manga_identity_read_inherited">Прочитано в другом переводе</string>
+    <string name="manga_identity_legacy_last_page">Прежний прогресс: последняя страница</string>
+    <string name="manga_identity_mark_read">Отметить прочитанным</string>
+    <string name="manga_identity_unmark_read">Снять отметку «Прочитано»</string>
+    <string name="manga_identity_known_chapters">Прочитано %1$d из %2$d известных глав</string>
+    <string name="manga_identity_versions_count">%1$d вер.</string>
+    <string name="manga_identity_versions_expand">Показать версии</string>
+    <string name="manga_identity_versions_collapse">Скрыть версии</string>
+    <string name="manga_identity_autogroup_badge">Автогруппа</string>
+    <string name="manga_identity_confirmed_badge">Подтверждено</string>
+    <string name="manga_identity_action_same_chapter">Другой перевод этой главы</string>
+    <string name="manga_identity_action_another_chapter">Другая глава этого произведения</string>
+    <string name="manga_identity_action_confirm_same">Та же глава</string>
+    <string name="manga_identity_action_confirm_chapter">Другая глава</string>
+    <string name="manga_identity_action_unlink">Отвязать</string>
+    <string name="manga_identity_action_reject">Не предлагать эту связь</string>
+    <string name="manga_identity_confirmed_translations">Другие переводы этой главы</string>
+    <string name="manga_identity_work_chapters">Главы произведения</string>
+    <string name="manga_identity_work_collections">Сборники</string>
+    <string name="manga_identity_suggested_peers">Возможные связи</string>
+    <string name="manga_identity_kind_chapter">Глава</string>
+    <string name="manga_identity_kind_collection">Сборник</string>
+    <string name="manga_identity_chapter_label_hint">Подпись главы (например, 1.5, Пролог, Том 2 / Глава 1)</string>
+    <string name="manga_identity_sort_order_hint">Порядок (число, например 1.5)</string>
+    <string name="manga_identity_work_title_hint">Название произведения</string>
+    <string name="manga_identity_pick_work">Произведение</string>
+    <string name="manga_identity_new_work_with_gallery">Новое произведение со связанной галереей</string>
+    <string name="manga_identity_pick_unit">Глава или перевод</string>
+    <string name="manga_identity_pick_gallery">Выберите галерею из известных</string>
+    <string name="manga_identity_gallery_id_hint">ID галереи</string>
+    <string name="manga_identity_no_candidates">Пока нет других известных галерей — откройте нужную или введите её ID.</string>
+    <string name="manga_identity_save_link">Связать</string>
+    <string name="manga_identity_cancel">Отмена</string>
+    <string name="manga_identity_invalid_input">Проверьте заполненные поля</string>
+    <string name="manga_identity_history_page">Стр. %1$d из %2$d</string>
+    <string name="manga_identity_history_marked">Отмечено прочитанным</string>
+    <string name="manga_identity_unit_prefix_chapter">Глава %1$s</string>
+    <string name="manga_identity_unit_prefix_collection">Сборник: %1$s</string>
+</resources>

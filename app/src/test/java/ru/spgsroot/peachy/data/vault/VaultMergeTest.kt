@@ -185,4 +185,31 @@ class VaultMergeTest {
         val write = VaultMerge.translations(emptyList(), listOf(tr(1, 0, "ru", "b", 9), tr(1, 0, "ru", "a", 3)))
         assertEquals(listOf(json("b")), write.map { it.json })
     }
+
+    @Test
+    fun mangaIdentityMergeIsIdempotentAndNewerWinsWithoutDuplicatingChapters() {
+        val work = ru.spgsroot.peachy.data.db.MangaWorkEntity("w-1", "Atlas", 100L)
+        val unit = ru.spgsroot.peachy.data.db.MangaReadingUnitEntity("u-1", "w-1", "1.5", 1.5, "chapter", 100L)
+        val link = ru.spgsroot.peachy.data.db.MangaEditionLinkEntity(101, "w-1", "u-1", 100L)
+        val rejection = ru.spgsroot.peachy.data.db.MangaRejectedLinkEntity(101, 202, 100L)
+        val mark = ru.spgsroot.peachy.data.db.MangaReadMarkEntity(101, 100L)
+        val incoming = VaultMangaIdentity(listOf(work), listOf(unit), listOf(link), listOf(rejection), listOf(mark))
+
+        val first = VaultMerge.mangaIdentityToWrite(VaultMangaIdentity(), incoming)
+        assertEquals(incoming, first)
+
+        // Repeating the exact same import writes nothing (idempotent, zero duplicate chapters).
+        val repeat = VaultMerge.mangaIdentityToWrite(first, incoming)
+        assertEquals(VaultMangaIdentity(), repeat)
+
+        // Strictly newer update wins; older update is ignored.
+        val newerUnit = unit.copy(label = "1.5 (fix)", updatedAt = 200L)
+        val olderWork = work.copy(title = "Stale", updatedAt = 50L)
+        val second = VaultMerge.mangaIdentityToWrite(
+            first,
+            VaultMangaIdentity(works = listOf(olderWork), units = listOf(newerUnit))
+        )
+        assertEquals(emptyList<ru.spgsroot.peachy.data.db.MangaWorkEntity>(), second.works)
+        assertEquals(listOf(newerUnit), second.units)
+    }
 }

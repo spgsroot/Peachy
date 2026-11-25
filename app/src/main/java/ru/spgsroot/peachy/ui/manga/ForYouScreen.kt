@@ -20,6 +20,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -29,7 +33,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.spgsroot.peachy.R
 import ru.spgsroot.peachy.manga.GalleryTag
+import ru.spgsroot.peachy.manga.MangaIdentityProjector
 import ru.spgsroot.peachy.manga.TagRef
+import ru.spgsroot.peachy.manga.toEditionMetadata
 
 @Composable
 fun ForYouScreen(
@@ -40,6 +46,21 @@ fun ForYouScreen(
     viewModel: ForYouViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val identitySnapshot by viewModel.identitySnapshot.collectAsStateWithLifecycle()
+    val appLanguage = tagLanguage()
+    val preferredLanguages = remember(appLanguage) {
+        MangaIdentityProjector.preferredLanguagesFor(emptyList(), appLanguage)
+    }
+    val projectedGroups = remember(state.items, preferredLanguages, identitySnapshot) {
+        MangaIdentityProjector.projectList(
+            items = state.items,
+            idOf = { it.gallery.id },
+            metadataOf = { it.gallery.toEditionMetadata() },
+            preferredLanguages = preferredLanguages,
+            snapshot = identitySnapshot
+        )
+    }
+    var expandedGroups by rememberSaveable { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { viewModel.load() }
 
     LazyVerticalGrid(
@@ -72,13 +93,15 @@ fun ForYouScreen(
             state.failed -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(stringResource(R.string.manga_search_error), color = MaterialTheme.colorScheme.error)
             }
-            state.loaded && state.items.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+            state.loaded && projectedGroups.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(stringResource(R.string.manga_for_you_empty))
             }
         }
-        items(state.items, key = { it.gallery.id }) { recommendation ->
+        items(projectedGroups, key = { it.key }) { group ->
+            val recommendation = group.primary
             val gallery = recommendation.gallery
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val expanded = group.key in expandedGroups
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 GalleryGridCard(
                     title = gallery.title,
                     thumbnailPath = gallery.thumbnailPath,
@@ -100,6 +123,22 @@ fun ForYouScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                ProjectedGroupFooter(
+                    group = group,
+                    idOf = { it.gallery.id },
+                    titleOf = { it.gallery.title },
+                    languageOf = { item ->
+                        item.gallery.tags.firstOrNull { it.type == "language" && it.name != "translated" }?.name
+                    },
+                    snapshot = identitySnapshot,
+                    expanded = expanded,
+                    onToggleExpand = {
+                        expandedGroups = if (expanded) expandedGroups - group.key else expandedGroups + group.key
+                    },
+                    onOpenEdition = onOpen,
+                    onConfirmSame = viewModel::confirmSameChapter,
+                    onReject = viewModel::rejectSuggestion
+                )
                 RecommendationActions(
                     enabled = !state.loading && !state.savingFeedback,
                     onRead = { viewModel.markRead(gallery) },

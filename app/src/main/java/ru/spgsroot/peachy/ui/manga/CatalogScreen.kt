@@ -81,6 +81,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import ru.spgsroot.peachy.manga.GallerySummary
 import ru.spgsroot.peachy.manga.GalleryTag
+import ru.spgsroot.peachy.manga.MangaIdentityProjector
 import ru.spgsroot.peachy.manga.NhentaiCdn
 import ru.spgsroot.peachy.manga.SearchDestination
 import ru.spgsroot.peachy.manga.TagRef
@@ -88,6 +89,7 @@ import ru.spgsroot.peachy.manga.cycled
 import ru.spgsroot.peachy.manga.TagMode
 import ru.spgsroot.peachy.manga.nextTagMode
 import ru.spgsroot.peachy.manga.searchDestination
+import ru.spgsroot.peachy.manga.toEditionMetadata
 
 private const val CARD_TAG_LIMIT = 4
 private const val COVER_ASPECT = 0.7f
@@ -109,7 +111,24 @@ fun CatalogScreen(
     val uploadDates by viewModel.uploadDates.collectAsStateWithLifecycle()
     val blockedNames by viewModel.blockedNames.collectAsStateWithLifecycle()
     val tagLibrary by viewModel.tagLibrary.collectAsStateWithLifecycle()
+    val identitySnapshot by viewModel.identitySnapshot.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val historyById = remember(history) { history.associateBy { it.galleryId } }
     val favoriteTags = remember(tagLibrary) { tagLibrary.favorites.toSet() }
+    val appLanguage = tagLanguage()
+    val preferredLanguages = remember(catalog.query.tags, appLanguage) {
+        MangaIdentityProjector.preferredLanguagesFor(catalog.query.tags, appLanguage)
+    }
+    val projectedGroups = remember(catalog.results, preferredLanguages, identitySnapshot) {
+        MangaIdentityProjector.projectList(
+            items = catalog.results,
+            idOf = { it.id },
+            metadataOf = { it.toEditionMetadata() },
+            preferredLanguages = preferredLanguages,
+            snapshot = identitySnapshot
+        )
+    }
+    var expandedGroups by rememberSaveable { mutableStateOf(listOf<String>()) }
     val gridState = rememberLazyGridState()
     // Recent queries start collapsed; only this toggle opens the panel, and the choice survives recreation.
     var recentsOpen by rememberSaveable { mutableStateOf(false) }
@@ -126,11 +145,6 @@ fun CatalogScreen(
             is SearchDestination.OpenGallery -> onOpen(destination.id)
             SearchDestination.RunSearch -> viewModel.search(query)
         }
-    }
-
-    // Opening the catalog shows the newest galleries instead of an empty prompt.
-    LaunchedEffect(Unit) {
-        if (!catalog.searched && !catalog.loading) viewModel.search(catalog.query)
     }
 
     // Scrolling near the end appends the next page. Every state change re-checks, so a page that leaves the list
@@ -258,21 +272,49 @@ fun CatalogScreen(
                 Text(stringResource(if (catalog.searched) R.string.manga_no_results else R.string.manga_catalog_hint))
             }
         }
-        items(catalog.results, key = { it.id }) { gallery ->
-            GalleryGridCard(
-                title = gallery.title,
-                thumbnailPath = gallery.thumbnailPath,
-                pages = gallery.numPages,
-                tags = gallery.tags,
-                favorites = gallery.numFavorites,
-                uploadedAt = uploadDates[gallery.id],
-                onOpen = { onOpen(gallery.id) },
-                onTag = { tag ->
-                    submit(catalog.query.copy(text = text, tags = catalog.query.tags.cycled(tag.type, tag.name)))
-                },
-                onTagLong = { tag -> viewModel.toggleFavoriteTag(TagRef(tag.type, tag.name)) },
-                favoriteTags = favoriteTags
-            )
+        items(projectedGroups, key = { it.key }) { group ->
+            val gallery = group.primary
+            val expanded = group.key in expandedGroups
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                GalleryGridCard(
+                    title = gallery.title,
+                    thumbnailPath = gallery.thumbnailPath,
+                    pages = gallery.numPages,
+                    tags = gallery.tags,
+                    favorites = gallery.numFavorites,
+                    uploadedAt = uploadDates[gallery.id],
+                    onOpen = { onOpen(gallery.id) },
+                    onTag = { tag ->
+                        submit(catalog.query.copy(text = text, tags = catalog.query.tags.cycled(tag.type, tag.name)))
+                    },
+                    onTagLong = { tag -> viewModel.toggleFavoriteTag(TagRef(tag.type, tag.name)) },
+                    favoriteTags = favoriteTags
+                )
+                ProjectedGroupFooter(
+                    group = group,
+                    idOf = { it.id },
+                    titleOf = { it.title },
+                    languageOf = { item ->
+                        item.tags.firstOrNull { it.type == "language" && it.name != "translated" }?.name
+                    },
+                    snapshot = identitySnapshot,
+                    expanded = expanded,
+                    onToggleExpand = {
+                        expandedGroups = if (expanded) expandedGroups - group.key else expandedGroups + group.key
+                    },
+                    onOpenEdition = onOpen,
+                    onConfirmSame = viewModel::confirmSameChapter,
+                    onReject = viewModel::rejectSuggestion,
+                    legacyLastPageOf = { id ->
+                        val row = historyById[id]
+                        row != null && MangaIdentityProjector.isLegacyLastPageOnly(
+                            row.page,
+                            row.pageCount,
+                            MangaIdentityProjector.readStatus(id, identitySnapshot)
+                        )
+                    }
+                )
+            }
         }
         if (catalog.loadingMore) fullWidth {
             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {

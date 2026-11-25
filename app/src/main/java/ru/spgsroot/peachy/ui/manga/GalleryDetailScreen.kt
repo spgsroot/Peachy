@@ -73,6 +73,7 @@ import ru.spgsroot.peachy.manga.NhentaiCdn
 import ru.spgsroot.peachy.manga.ReaderPageJump
 import ru.spgsroot.peachy.manga.TagFilter
 import ru.spgsroot.peachy.manga.TagMode
+import ru.spgsroot.peachy.manga.toEditionMetadata
 import ru.spgsroot.peachy.ui.dialog.NoteDialog
 import java.text.DateFormat
 import java.util.Date
@@ -91,6 +92,8 @@ fun GalleryDetailScreen(
     val library by viewModel.libraryItems.collectAsStateWithLifecycle()
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val identitySnapshot by viewModel.identitySnapshot.collectAsStateWithLifecycle()
+    val readHistoryByGallery by viewModel.readHistoryByGallery.collectAsStateWithLifecycle()
     LaunchedEffect(galleryId) { viewModel.load(galleryId) }
     val saved = library.any { it.id == galleryId }
     val favorite = library.any { it.id == galleryId && it.favorite }
@@ -128,7 +131,7 @@ fun GalleryDetailScreen(
             ) {
                 item { Header(detail) }
                 item {
-                    Actions(
+                    GalleryDetailActions(
                         detail = detail,
                         savedPage = state.savedPage,
                         saved = saved,
@@ -140,6 +143,25 @@ fun GalleryDetailScreen(
                         onFavorite = viewModel::toggleFavorite,
                         hasNote = note != null,
                         onNote = { editingNote = true }
+                    )
+                }
+                item(key = "identity") {
+                    GalleryIdentitySection(
+                        galleryId = detail.id,
+                        liveMetadata = remember(detail) { detail.toEditionMetadata() },
+                        snapshot = identitySnapshot,
+                        historyByGallery = readHistoryByGallery,
+                        onOpenGallery = { targetId -> navController.navigate("manga/$targetId") },
+                        onSetReadMark = { read -> viewModel.setReadMark(detail.id, read) },
+                        onConfirmSameChapter = { targetId -> viewModel.confirmSameChapter(detail.id, targetId) },
+                        onLinkAsTranslationOfUnit = { workId, unitId ->
+                            viewModel.linkAsTranslationOfUnit(detail.id, workId, unitId)
+                        },
+                        onLinkAsAnotherChapter = { workId, anchorId, workTitle, label, order, kind ->
+                            viewModel.linkAsAnotherChapter(detail.id, workId, anchorId, workTitle, label, order, kind)
+                        },
+                        onUnlink = { viewModel.unlink(detail.id) },
+                        onRejectSuggestion = { peerId -> viewModel.rejectSuggestion(detail.id, peerId) }
                     )
                 }
                 actionError?.let { message ->
@@ -281,7 +303,7 @@ private fun Header(detail: GalleryDetail) {
 }
 
 @Composable
-private fun Actions(
+internal fun GalleryDetailActions(
     detail: GalleryDetail,
     savedPage: Int?,
     saved: Boolean,
@@ -294,42 +316,46 @@ private fun Actions(
     hasNote: Boolean,
     onNote: () -> Unit
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onRead, enabled = detail.pagePaths.isNotEmpty(), modifier = Modifier.weight(1f)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onRead, enabled = detail.pagePaths.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
             val resume = resumePage(savedPage, detail.pagePaths.size)
             Text(
                 if (resume == null) stringResource(R.string.manga_detail_read)
-                else stringResource(R.string.manga_detail_continue, resume + 1),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                else stringResource(R.string.manga_detail_continue, resume + 1)
             )
         }
-        OutlinedButton(
-            onClick = if (saved) onDeleteDownload else onDownload,
-            enabled = progress == null && detail.pagePaths.isNotEmpty()
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                when {
-                    progress != null -> stringResource(R.string.manga_detail_downloading, progress)
-                    saved -> stringResource(R.string.manga_detail_delete_download)
-                    else -> stringResource(R.string.manga_detail_download)
-                },
-                maxLines = 1
-            )
-        }
-        IconButton(onClick = onFavorite) {
-            Icon(
-                if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                stringResource(R.string.manga_favorites),
-                tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        IconButton(onClick = onNote) {
-            Icon(
-                if (hasNote) Icons.Filled.StickyNote2 else Icons.Filled.EditNote,
-                stringResource(R.string.content_description_note),
-                tint = if (hasNote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            OutlinedButton(
+                onClick = if (saved) onDeleteDownload else onDownload,
+                enabled = progress == null && detail.pagePaths.isNotEmpty(),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    when {
+                        progress != null -> stringResource(R.string.manga_detail_downloading, progress)
+                        saved -> stringResource(R.string.manga_detail_delete_download)
+                        else -> stringResource(R.string.manga_detail_download)
+                    }
+                )
+            }
+            IconButton(onClick = onFavorite) {
+                Icon(
+                    if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    stringResource(R.string.manga_favorites),
+                    tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onNote) {
+                Icon(
+                    if (hasNote) Icons.Filled.StickyNote2 else Icons.Filled.EditNote,
+                    stringResource(R.string.content_description_note),
+                    tint = if (hasNote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

@@ -93,7 +93,12 @@ class NhentaiApi @Inject constructor() {
             } catch (_: org.json.JSONException) {
             }
         }
-        return cards.map { card -> card.copy(tags = card.tagIds.mapNotNull(tagCache::get)) }
+        return cards.map { card ->
+            card.copy(
+                tags = card.tagIds.mapNotNull(tagCache::get),
+                tagsComplete = card.tagIds.all(tagCache::containsKey)
+            )
+        }
     }
 
     private fun execute(request: NhentaiRequest): String {
