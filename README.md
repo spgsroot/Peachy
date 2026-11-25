@@ -89,6 +89,8 @@ More: [manga reader](docs/manga-reader.md) · [detector runtime and limits](docs
 
 ## Screens and design
 
+[Peachy 0.9.3 Android screenshot catalog](repo/screens-v0.9.3/) with feature coverage, capture conditions and known gaps.
+
 See the [website](https://peachyproject.org/) for the new design and [DESIGN.md](DESIGN.md) for the native design record. Its Library/Player previews and the banner use genuine newer Android captures with sample media; the NASA browser preview was captured in Chromium, **not** in Peachy's browser.
 
 <details>
