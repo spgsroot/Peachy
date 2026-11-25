@@ -40,13 +40,8 @@ class EnginePageTranslator internal constructor(
                     val translations = traced("translate.net") {
                         client.translateBlocks(galleryId, blocks, request.source, request.target)
                     }
-                    val accepted = HashSet<Int>()
-                    val lines = buildList {
-                        for (translation in translations) {
-                            val block = blocks.getOrNull(translation.index) ?: continue
-                            if (!accepted.add(translation.index)) continue
-                            add(block.translated(translation.kind, translation.translation))
-                        }
+                    val lines = translations.map { translation ->
+                        blocks[translation.index].translated(translation.kind, translation.translation)
                     }
                     PageTranslation(source, lines)
                 }

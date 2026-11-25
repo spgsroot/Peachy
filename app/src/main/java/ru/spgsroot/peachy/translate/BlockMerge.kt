@@ -102,10 +102,12 @@ fun mergeBlocks(scan: PageScan): List<OcrBlock> {
         val blocks = indices.map { scan.blocks[it] }
         val bounds = Box(blocks.minOf { it.box.left }, blocks.minOf { it.box.top }, blocks.maxOf { it.box.right }, blocks.maxOf { it.box.bottom })
         if (scan.blocks.any { it !in blocks && blockShare(it.box, bounds) > 0f }) return@forEachIndexed
-        val vertical = region.box.bottom - region.box.top >= 1.5f * (region.box.right - region.box.left) * scan.aspect
+        val separator = joinSeparator(blocks.map { it.text })
+        // A tall balloon does not make its horizontal text into right-to-left columns.
+        val vertical = blocks.count { it.box.bottom - it.box.top >= 1.5f * (it.box.right - it.box.left) * scan.aspect } * 2 > blocks.size
         val ordered = if (vertical) columns(blocks, { it.box.left.toDouble() }, { it.box.top.toDouble() }, { it.box.right.toDouble() })
             else rows(blocks, { it.box.left.toDouble() }, { it.box.top.toDouble() }, { it.box.bottom.toDouble() }).flatten()
-        val unit = OcrBlock(ordered.joinToString(joinSeparator(ordered.map { it.text })) { it.text }, bounds)
+        val unit = OcrBlock(ordered.joinToString(separator) { it.text }, bounds)
         replacements[indices.first()] = unit
         indices.drop(1).forEach { removed[it] = true }
     }

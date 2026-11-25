@@ -21,6 +21,17 @@ class BlockMergeTest {
         assertEquals(listOf(OcrBlock("A B", Box(0.1f, 0.1f, 0.3f, 0.25f))), merge(listOf(a, b), listOf(region)))
     }
 
+    @Test fun centeredEnglishWrapsInATallBalloonStayTopToBottom() {
+        val top = OcrBlock("If Mash returns,", Box(0.10f, 0.10f, 0.34f, 0.15f))
+        val middle = OcrBlock("tell her", Box(0.19f, 0.22f, 0.34f, 0.27f))
+        val bottom = OcrBlock("I'll wait here.", Box(0.13f, 0.35f, 0.34f, 0.40f))
+        val balloon = Region(Box(0.05f, 0.05f, 0.40f, 0.50f), 0.9f)
+        assertEquals(
+            OcrBlock("If Mash returns, tell her I'll wait here.", Box(0.10f, 0.10f, 0.34f, 0.40f)),
+            merge(listOf(bottom, top, middle), listOf(balloon)).single()
+        )
+    }
+
     @Test fun aCoarseDetectorBoxCannotJoinTwoBalloonsOrBridgeAThirdText() {
         val first = a.copy(interior = Box(.08f, .08f, .32f, .16f))
         val second = b.copy(interior = Box(.08f, .19f, .32f, .27f))

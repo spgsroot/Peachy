@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="manga_identity_section_title">Переводы и главы</string>
+    <string name="manga_identity_management_expand">Показать управление переводами и главами</string>
+    <string name="manga_identity_management_collapse">Скрыть управление переводами и главами</string>
+    <string name="manga_identity_management_close">Закрыть управление</string>
     <string name="manga_identity_read_own">Прочитано</string>
     <string name="manga_identity_read_inherited">Прочитано в другом переводе</string>
     <string name="manga_identity_legacy_last_page">Прежний прогресс: последняя страница</string>

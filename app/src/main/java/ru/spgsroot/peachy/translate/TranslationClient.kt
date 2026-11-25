@@ -57,9 +57,10 @@ class TranslationClient(
 
     override suspend fun translate(galleryId: Int, page: Int, request: TranslateRequest, image: suspend () -> ByteArray): PageTranslation {
         val jpeg = image()
-        return complete(galleryId, { pageBody(it, jpeg, request) }, PageTranslation::parse)
+        return complete(galleryId, { provider, prior -> pageBody(provider, jpeg, request, prior) }, PageTranslation::parse)
     }
 
+    /** Returns every supplied block exactly once in input order, or fails rather than losing dialogue. */
     suspend fun translateBlocks(
         galleryId: Int,
         blocks: List<OcrBlock>,
@@ -67,13 +68,13 @@ class TranslationClient(
         target: String
     ): List<IndexedTranslation> = complete(
         galleryId,
-        { chatBody(it, PagePrompt.blocks(target, source), PagePrompt.blocksUser(blocks)) },
-        ::parseBlocks, ocrHttp
+        { provider, prior -> chatBody(provider, PagePrompt.blocks(target, source), withDialogue(prior, PagePrompt.blocksUser(blocks))) },
+        { parseBlocks(it, blocks.size) }, ocrHttp
     )
 
     private suspend fun <T : Any> complete(
         galleryId: Int,
-        bodyFor: (ProviderSettings) -> JSONObject,
+        bodyFor: (ProviderSettings, List<TranslatedLine>) -> JSONObject,
         parse: (String) -> T?,
         client: OkHttpClient = http
     ): T =
@@ -81,8 +82,8 @@ class TranslationClient(
             // Read at send time, so a host changed or consent withdrawn mid-batch stops the next page.
             val provider = settings()
             if (!provider.isConfigured || !provider.consented) throw TranslationException(TranslationError.NotConfigured)
-            val body = bodyFor(provider)
-            // A reply that is not valid JSON is usually a one-off: ask again once.
+            val body = bodyFor(provider, coroutineContext[GalleryTurn]?.previousLinesFor(provider).orEmpty())
+            // Invalid JSON or incomplete indexed coverage: ask again once with the same bounded input.
             repeat(2) {
                 send(client, provider, body, sessionHeader(provider.baseUrl, galleryId), parse)?.let { return@withContext it }
             }
@@ -163,10 +164,19 @@ class TranslationClient(
 
     private fun message(role: String, content: Any) = JSONObject().put("role", role).put("content", content)
 
-    private fun pageBody(provider: ProviderSettings, jpeg: ByteArray, request: TranslateRequest): JSONObject {
+    private fun withDialogue(prior: List<TranslatedLine>, current: String): String {
+        if (prior.isEmpty()) return current
+        val lines = JSONArray()
+        for (i in (prior.size - 6).coerceAtLeast(0) until prior.size) {
+            lines.put(prior[i].translation.take(240))
+        }
+        return "Last lines of the preceding page, already translated (context only; do not repeat):\n$lines\n\n$current"
+    }
+
+    private fun pageBody(provider: ProviderSettings, jpeg: ByteArray, request: TranslateRequest, prior: List<TranslatedLine>): JSONObject {
         val uri = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(jpeg)
         val user = JSONArray()
-            .put(JSONObject().put("type", "text").put("text", PagePrompt.USER))
+            .put(JSONObject().put("type", "text").put("text", withDialogue(prior, PagePrompt.USER)))
             .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", uri)))
         return chatBody(provider, PagePrompt.system(request.target, request.source), user)
             .put("max_tokens", 4096)
@@ -257,24 +267,26 @@ class TranslationClient(
     companion object {
         private val JSON = "application/json".toMediaType()
 
-        private fun parseBlocks(raw: String): List<IndexedTranslation>? {
+        private fun parseBlocks(raw: String, count: Int): List<IndexedTranslation>? {
             val start = raw.indexOf('{')
             val end = raw.lastIndexOf('}')
             if (start < 0 || end <= start) return null
             return try {
                 val items = JSONObject(raw.substring(start, end + 1)).getJSONArray("lines")
-                buildList {
-                    for (i in 0 until items.length()) {
-                        val item = items.optJSONObject(i) ?: continue
-                        // optInt coerces strings and fractions; neither identifies an OCR block.
-                        val value = (item.opt("i") as? Number)?.toDouble() ?: continue
-                        if (!value.isFinite() || value < Int.MIN_VALUE || value > Int.MAX_VALUE) continue
-                        val index = value.toInt()
-                        if (index.toDouble() != value) continue
-                        val translation = item.optString("translation").trim()
-                        if (translation.isEmpty()) continue
-                        add(IndexedTranslation(index, LineKind.fromWire(item.optString("kind")), translation))
-                    }
+                val translations = arrayOfNulls<IndexedTranslation>(count)
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    // optInt coerces strings and fractions; neither identifies an OCR block.
+                    val value = (item.opt("i") as? Number)?.toDouble() ?: continue
+                    if (!value.isFinite() || value < Int.MIN_VALUE || value > Int.MAX_VALUE) continue
+                    val index = value.toInt()
+                    if (index.toDouble() != value || index !in translations.indices || translations[index] != null) continue
+                    val translation = (item.opt("translation") as? String)?.trim().orEmpty()
+                    if (translation.isEmpty()) continue
+                    translations[index] = IndexedTranslation(index, LineKind.fromWire(item.optString("kind")), translation)
+                }
+                buildList(count) {
+                    for (translation in translations) add(translation ?: return null)
                 }
             } catch (e: JSONException) {
                 null

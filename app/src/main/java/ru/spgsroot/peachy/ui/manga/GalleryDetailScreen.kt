@@ -129,7 +129,7 @@ fun GalleryDetailScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item { Header(detail) }
+                item { GalleryDetailHeader(detail) }
                 item {
                     GalleryDetailActions(
                         detail = detail,
@@ -169,7 +169,7 @@ fun GalleryDetailScreen(
                 }
                 groupedTags(detail.tags).forEach { (type, tags) ->
                     item(key = "tags-$type") {
-                        TagGroup(type, tags) { tag ->
+                        GalleryDetailTagGroup(type, tags) { tag ->
                             navController.searchCatalog(listOf(TagFilter(tag.type, tag.name, TagMode.Include)))
                         }
                     }
@@ -276,7 +276,7 @@ private fun LazyListScope.pagePreviewRows(detail: GalleryDetail, onOpenPage: (In
 }
 
 @Composable
-private fun Header(detail: GalleryDetail) {
+internal fun GalleryDetailHeader(detail: GalleryDetail) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         AsyncImage(
             model = NhentaiCdn.thumb(detail.thumbnailPath),
@@ -369,7 +369,7 @@ private fun groupedTags(tags: List<GalleryTag>): List<Pair<String, List<GalleryT
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TagGroup(type: String, tags: List<GalleryTag>, onTag: (GalleryTag) -> Unit) {
+internal fun GalleryDetailTagGroup(type: String, tags: List<GalleryTag>, onTag: (GalleryTag) -> Unit) {
     val label = tagTypes.firstOrNull { it.first == type }?.second?.let { stringResource(it) } ?: type
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

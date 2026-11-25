@@ -187,12 +187,12 @@ class TranslationRunnerTest {
     }
 
     @Test
-    fun batchRunsAtMostTwoAtOnce() = runTest {
+    fun galleryTranslatesInReadingOrderBeforeStartingTheNextPage() = runTest {
         val r = rig()
         r.runner.startBatch(1, 6, "ru", russian)
         advanceUntilIdle()
-        assertEquals(6, r.translator.requested.size)
-        assertEquals(2, r.translator.maxInFlight)
+        assertEquals((0..5).toList(), r.translator.requested)
+        assertEquals(1, r.translator.maxInFlight)
     }
 
     @Test
@@ -277,7 +277,7 @@ class TranslationRunnerTest {
         advanceTimeBy(50)
         r.runner.cancelBatch()
         advanceUntilIdle()
-        assertEquals(listOf(0, 1), r.translator.requested.sorted())
+        assertEquals(listOf(0), r.translator.requested)
         assertNull(r.runner.batch.value)
         assertEquals(0, r.cache.puts)
     }
@@ -307,10 +307,10 @@ class TranslationRunnerTest {
         val r = rig()
         r.runner.startBatch(1, 2, "ru", russian)
         advanceTimeBy(10)
-        val turn = async { r.runner.translate(1, 1, "ru", russian) }
+        val turn = async { r.runner.translate(1, 0, "ru", russian) }
         advanceUntilIdle()
-        assertEquals(PageState.Done(line("p1")), turn.await())
-        assertEquals(1, r.translator.requested.count { it == 1 })
+        assertEquals(PageState.Done(line("p0")), turn.await())
+        assertEquals(1, r.translator.requested.count { it == 0 })
     }
 
     @Test

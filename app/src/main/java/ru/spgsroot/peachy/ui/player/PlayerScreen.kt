@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
@@ -106,18 +107,24 @@ fun PlayerScreen(
             topBar = {
                 // Скрываем TopAppBar в полноэкранном режиме
                 if (!isFullscreen) {
-                    LibraryTopBar(
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onGallery = { navController.navigate("gallery") },
-                        onAdd = { showAddDialog = true },
-                        showLibrary = nsfwOn,
-                        onLibrary = { navController.navigate("manga") },
-                        onDocuments = { navController.navigate("documents") },
-                        onBrowser = {
-                            viewModel.pauseForWebView()
-                            context.startActivity(Intent(context, WebViewActivity::class.java))
-                        },
-                    )
+                    BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(
+                        TopAppBarDefaults.windowInsets.only(WindowInsetsSides.Horizontal)
+                    )) {
+                        LibraryTopBar(
+                            compact = maxWidth < 8.dp + 48.dp * (if (nsfwOn) 7 else 6),
+                            onMenu = { scope.launch { drawerState.open() } },
+                            onGallery = { navController.navigate("gallery") },
+                            onAdd = { showAddDialog = true },
+                            showLibrary = nsfwOn,
+                            onLibrary = { navController.navigate("manga") },
+                            onDocuments = { navController.navigate("documents") },
+                            onBrowser = {
+                                viewModel.pauseForWebView()
+                                context.startActivity(Intent(context, WebViewActivity::class.java))
+                            },
+                            sortAction = { MediaFilterButton(filter) { viewModel.filter.value = it } }
+                        )
+                    }
                 }
             }
         ) { padding ->
@@ -126,12 +133,6 @@ fun PlayerScreen(
                     .fillMaxSize()
                     .padding(if (isFullscreen) PaddingValues(0.dp) else padding)
             ) {
-                // Queue sort lives on this screen, not in the shared navigation bar.
-                if (!isFullscreen) {
-                    Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End) {
-                        MediaFilterButton(filter) { viewModel.filter.value = it }
-                    }
-                }
                 if (uiState == PlayerUiState.Empty || (queue.isEmpty() && currentId == null)) {
                     EmptyState(
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -240,6 +241,7 @@ fun PlayerScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryTopBar(
+    compact: Boolean,
     onMenu: () -> Unit,
     onGallery: () -> Unit,
     onAdd: () -> Unit,
@@ -247,6 +249,7 @@ private fun LibraryTopBar(
     onLibrary: () -> Unit,
     onDocuments: () -> Unit,
     onBrowser: () -> Unit,
+    sortAction: @Composable () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -273,11 +276,27 @@ private fun LibraryTopBar(
                     Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.content_description_library))
                 }
             }
-            IconButton(onClick = onDocuments) {
-                Icon(Icons.Default.Description, stringResource(R.string.documents_title))
-            }
-            IconButton(onClick = onBrowser) {
-                Icon(Icons.Default.Public, stringResource(R.string.browser_open))
+            sortAction()
+            if (compact) {
+                var expanded by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { expanded = true }) {
+                        Icon(Icons.Default.MoreVert, stringResource(R.string.content_description_more))
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.documents_title)) },
+                            onClick = { expanded = false; onDocuments() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.browser_open)) },
+                            onClick = { expanded = false; onBrowser() })
+                    }
+                }
+            } else {
+                IconButton(onClick = onDocuments) {
+                    Icon(Icons.Default.Description, stringResource(R.string.documents_title))
+                }
+                IconButton(onClick = onBrowser) {
+                    Icon(Icons.Default.Public, stringResource(R.string.browser_open))
+                }
             }
         },
     )

@@ -27,7 +27,7 @@ class TranslationClientTest {
         OcrBlock("ハ？", Box(0.1f, 0.2f, 0.4f, 0.5f)),
         OcrBlock("次の行", Box(0.5f, 0.6f, 0.8f, 0.9f))
     )
-    private val blocksReply = """{"lines":[{"i":0,"kind":"speech","translation":"А?"}]}"""
+    private val blocksReply = """{"lines":[{"i":0,"kind":"speech","translation":"А?"},{"i":1,"kind":"speech","translation":"Следующая строка"}]}"""
 
     @Before
     fun start() {
@@ -90,6 +90,28 @@ class TranslationClientTest {
         val parts = messages.getJSONObject(1).getJSONArray("content")
         val image = (0 until parts.length()).map { parts.getJSONObject(it) }.first { it.getString("type") == "image_url" }
         assertTrue(image.getJSONObject("image_url").getString("url").startsWith("data:image/jpeg;base64,"))
+    }
+
+    @Test
+    fun previousDialogueIsBoundedAndDoesNotFollowAnAccountOrModelChange() = runBlocking {
+        val client = client()
+        val prior = PageTranslation("en", (0..7).map {
+            TranslatedLine(LineKind.Speech, "private source $it", "captain-$it")
+        })
+        suspend fun request(previousProvider: ProviderSettings): String {
+            reply(blocksReply)
+            kotlinx.coroutines.withContext(GalleryTurn(previousProvider, prior)) {
+                client.translateBlocks(7, blocks, "ja", "ru")
+            }
+            return server.takeRequest().body.readUtf8()
+        }
+        val body = request(settings)
+        assertTrue(body.contains("captain-7"))
+        assertFalse(body.contains("captain-0"))
+        assertFalse(body.contains("private source"))
+        assertFalse(request(settings.copy(apiKey = "other-account")).contains("captain-"))
+        assertFalse(request(settings.copy(model = "other-model")).contains("captain-"))
+        assertFalse(request(settings.copy(baseUrl = "https://other.invalid/v1")).contains("captain-"))
     }
 
     @Test
@@ -281,7 +303,10 @@ class TranslationClientTest {
     @Test
     fun blocksRequestContainsNumberedTextWithoutAnImageOrFixedOutputCap() {
         reply(blocksReply)
-        assertEquals(listOf(IndexedTranslation(0, LineKind.Speech, "А?")), translateBlocks())
+        assertEquals(listOf(
+            IndexedTranslation(0, LineKind.Speech, "А?"),
+            IndexedTranslation(1, LineKind.Speech, "Следующая строка")
+        ), translateBlocks())
 
         val request = server.takeRequest()
         assertEquals("/v1/chat/completions", request.path)
@@ -326,8 +351,8 @@ class TranslationClientTest {
         )
         assertEquals(
             listOf(
-                IndexedTranslation(1, LineKind.Thought, "один"),
-                IndexedTranslation(0, LineKind.Speech, "ноль")
+                IndexedTranslation(0, LineKind.Speech, "ноль"),
+                IndexedTranslation(1, LineKind.Thought, "один")
             ),
             translateBlocks()
         )
@@ -335,12 +360,30 @@ class TranslationClientTest {
     }
 
     @Test
-    fun blocksFencedReplyAndEmptyLinesAreAccepted() {
+    fun blocksFencedReplyIsAcceptedInInputOrder() {
         reply("```json\n$blocksReply\n```")
-        reply("""{"lines":[]}""")
-        assertEquals("А?", translateBlocks().single().translation)
-        assertTrue(translateBlocks().isEmpty())
-        assertEquals(2, server.requestCount)
+        assertEquals("А?", translateBlocks().first().translation)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun incompleteCoverageRetriesTheSameBlocksOnceThenFails() {
+        val incomplete = listOf(
+            """{"lines":[]}""",
+            """{"lines":[{"i":0,"translation":"А?"}]}""",
+            """{"lines":[{"i":0,"translation":"А?"},{"i":0,"translation":"duplicate"}]}""",
+            """{"lines":[{"i":0,"translation":"А?"},{"i":1,"translation":" "}]}""",
+            """{"lines":[{"i":0,"translation":"А?"},{"i":1,"translation":123}]}"""
+        )
+        for (content in incomplete) {
+            reply(content)
+            reply(content)
+            assertEquals(TranslationError.BadResponse, failureOf { translateBlocks() })
+            val first = server.takeRequest().body.readUtf8()
+            val second = server.takeRequest().body.readUtf8()
+            assertEquals(first, second)
+        }
+        assertEquals(incomplete.size * 2, server.requestCount)
     }
 
     @Test
@@ -413,7 +456,10 @@ class TranslationClientTest {
     fun blocksReturnAValidSecondAttempt() {
         reply("""{"lines":[""")
         reply(blocksReply)
-        assertEquals(listOf(IndexedTranslation(0, LineKind.Speech, "А?")), translateBlocks())
+        assertEquals(listOf(
+            IndexedTranslation(0, LineKind.Speech, "А?"),
+            IndexedTranslation(1, LineKind.Speech, "Следующая строка")
+        ), translateBlocks())
         assertEquals(2, server.requestCount)
     }
 
@@ -454,9 +500,11 @@ class TranslationClientTest {
         assertEquals(TranslationError.OutputLimit, failureOf { request() })
         content = """{"lines":["""
         assertEquals(TranslationError.OutputLimit, failureOf { request() })
+        content = """{"lines":[{"i":0,"translation":"А?"}]}"""
+        assertEquals(TranslationError.OutputLimit, failureOf { request() })
         content = blocksReply
-        assertEquals("А?", request().single().translation)
-        assertEquals(3, calls)
+        assertEquals("А?", request().first().translation)
+        assertEquals(4, calls)
     }
 
     @Test
@@ -470,7 +518,7 @@ class TranslationClientTest {
         }.build()
         val provider = ProviderSettings(baseUrl = "https://opencode.ai/inference/go/v1", apiKey = "k", consented = true)
         val result = runBlocking { TranslationClient(http, { provider }, agent).translateBlocks(7, blocks, "ja", "ru") }
-        assertEquals("А?", result.single().translation)
+        assertEquals("А?", result.first().translation)
         assertEquals("peachy-7", seen)
     }
 

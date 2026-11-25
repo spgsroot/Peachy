@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="manga_identity_section_title">Translations &amp; chapters</string>
+    <string name="manga_identity_management_expand">Show translation and chapter management</string>
+    <string name="manga_identity_management_collapse">Hide translation and chapter management</string>
+    <string name="manga_identity_management_close">Close management</string>
     <string name="manga_identity_read_own">Read</string>
     <string name="manga_identity_read_inherited">Read in another translation</string>
     <string name="manga_identity_legacy_last_page">Previous progress: last page</string>

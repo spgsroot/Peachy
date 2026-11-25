@@ -3,6 +3,8 @@ package ru.spgsroot.peachy.ui.manga
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -24,7 +27,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasStateDescription
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -34,6 +57,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import coil.ImageLoader
+import coil.compose.LocalImageLoader
+import coil.memory.MemoryCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -55,6 +81,7 @@ import ru.spgsroot.peachy.manga.GallerySummary
 import ru.spgsroot.peachy.manga.GalleryTag
 import ru.spgsroot.peachy.manga.MangaIdentityProjector
 import ru.spgsroot.peachy.manga.MangaIdentitySnapshot
+import ru.spgsroot.peachy.manga.NhentaiCdn
 import ru.spgsroot.peachy.manga.ReaderPosition
 import ru.spgsroot.peachy.manga.UnitKind
 import ru.spgsroot.peachy.manga.readerStart
@@ -333,17 +360,18 @@ class MangaIdentityEndToEndTest {
             }
         }
 
-        // Before confirmation: EN is unread, shows its own page 4 (index 3), and suggests RU as peer.
+        // Management stays out of the reading hierarchy until explicitly disclosed.
         val continuePage4 = ctx.getString(R.string.manga_detail_continue, 4)
         val inheritedLabel = ctx.getString(R.string.manga_identity_read_inherited)
         val confirmButtonText = ctx.getString(R.string.manga_identity_action_confirm_same)
         compose.waitUntil(timeoutMillis = 5_000) {
-            compose.onAllNodesWithText(continuePage4).fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithText(confirmButtonText).fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText(continuePage4).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText(continuePage4).assertIsDisplayed()
+        compose.onNodeWithText(confirmButtonText).assertDoesNotExist()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_action_unlink)).assertDoesNotExist()
         assertEquals(0, compose.onAllNodesWithText(inheritedLabel).fetchSemanticsNodes().size)
-
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_section_title)).performScrollTo().performClick()
         // Confirm EN as same chapter as RU via the UI button "Та же глава".
         compose.onNodeWithText(confirmButtonText).performScrollTo().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
@@ -385,12 +413,27 @@ class MangaIdentityEndToEndTest {
         }
         compose.onNodeWithText(counter1of3).performScrollTo().assertIsDisplayed()
 
+        // Explicit EN read marks are independent of inherited status and never change either page.
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_mark_read)).performScrollTo().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText(ctx.getString(R.string.manga_identity_unmark_read)).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(3, runBlocking { db.readHistoryDao().getById(102)!!.page })
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_unmark_read)).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText(inheritedLabel).fetchSemanticsNodes().isNotEmpty()
+        }
+
         // Unlink EN via UI button "Отвязать": inherited read status disappears immediately, RU stays read, EN keeps page 3.
         compose.onNodeWithText(ctx.getString(R.string.manga_identity_action_unlink)).performScrollTo().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodesWithText(inheritedLabel).fetchSemanticsNodes().isEmpty()
         }
         compose.onNodeWithText(continuePage4).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_management_close)).performScrollTo().performClick()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_action_same_chapter)).assertDoesNotExist()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_section_title))
+            .assert(hasStateDescription(ctx.getString(R.string.manga_identity_management_expand)))
 
         // Unmount UI collectors before closing DB to simulate a clean process restart.
         mounted = false
@@ -442,14 +485,231 @@ class MangaIdentityEndToEndTest {
             }
         }
         val density = ctx.resources.displayMetrics.density
+        val disclosure = compose.onNodeWithText(ctx.getString(R.string.manga_identity_section_title))
+        val disclosureBounds = disclosure.fetchSemanticsNode().touchBoundsInRoot
+        assertTrue("Disclosure target height must be >= 48dp", disclosureBounds.height >= 48f * density - 1f)
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_action_same_chapter)).assertDoesNotExist()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_section_title)).performScrollTo().performClick()
         for (resId in listOf(
             R.string.manga_identity_mark_read,
             R.string.manga_identity_action_same_chapter,
-            R.string.manga_identity_action_another_chapter
+            R.string.manga_identity_action_another_chapter,
+            R.string.manga_identity_management_close
         )) {
-            val node = compose.onNodeWithText(ctx.getString(resId)).performScrollTo().assertIsDisplayed()
+            val label = ctx.getString(resId)
+            val node = compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
             val bounds = node.fetchSemanticsNode().touchBoundsInRoot
             assertTrue("Touch target height must be >= 48dp", bounds.height >= 48f * density - 1f)
+            assertTrue("Touch target width must be >= 48dp", bounds.width >= 48f * density - 1f)
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val layout = layouts.single()
+            assertEquals(label.length, layout.getLineEnd(layout.lineCount - 1))
+            repeat(layout.lineCount) { line ->
+                assertTrue("Ellipsized action: $label", !layout.isLineEllipsized(line))
+                assertTrue("Clipped action: $label", layout.getLineRight(line) <= layout.size.width + 1f)
+            }
         }
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_management_close)).performScrollTo().performClick()
+        compose.onNodeWithText(ctx.getString(R.string.manga_identity_action_same_chapter)).assertDoesNotExist()
+    }
+
+    @Test
+    fun detailRejectLeavesIndependentProgressAndReadMarksUntouched() {
+        val (db, store) = openStore()
+        runBlocking {
+            store.indexSummaries(listOf(ruSummary, enSummary))
+            store.setReadMark(101, read = true, now = 100L)
+            db.readHistoryDao().upsert(ReadHistoryEntity(
+                102, enSummary.title, enSummary.thumbnailPath, page = 3, pageCount = 20, readAt = 1L
+            ))
+        }
+        var opened: Int? = null
+        val context = setRussianContent {
+            val snapshot by store.snapshot.collectAsState(initial = MangaIdentitySnapshot())
+            val scope = rememberCoroutineScope()
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                GalleryIdentitySection(
+                    102, enSummary.toEditionMetadata(), snapshot, emptyMap(),
+                    onOpenGallery = { opened = it }, onSetReadMark = {},
+                    onConfirmSameChapter = {}, onLinkAsTranslationOfUnit = { _, _ -> },
+                    onLinkAsAnotherChapter = { _, _, _, _, _, _ -> }, onUnlink = {},
+                    onRejectSuggestion = { peer -> scope.launch(Dispatchers.IO) { store.rejectSuggestion(102, peer) } }
+                )
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.manga_identity_section_title)).performClick()
+        val reject = context.getString(R.string.manga_identity_action_reject)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(reject).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText(ruSummary.title, substring = true) and hasClickAction())
+            .performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(101, opened) }
+        compose.onNodeWithText(reject).performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(reject).fetchSemanticsNodes().isEmpty() }
+        runBlocking {
+            val snapshot = store.snapshot.first()
+            assertTrue((101 to 102) in snapshot.rejections)
+            assertEquals(EditionReadStatus.ReadOwn(100L), MangaIdentityProjector.readStatus(101, snapshot))
+            assertEquals(EditionReadStatus.Unread, MangaIdentityProjector.readStatus(102, snapshot))
+            assertEquals(3, db.readHistoryDao().getById(102)!!.page)
+            assertTrue(snapshot.links.isEmpty())
+        }
+    }
+
+    @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+    @Test
+    fun disclosureKeyboardDraftAndLegacyStatusSurviveRestoreAndClose() {
+        val context = russianContext()
+        val restoration = StateRestorationTester(compose)
+        val metadata = enSummary.toEditionMetadata()
+        val marked = mutableListOf<Boolean>()
+        lateinit var inputMode: InputModeManager
+        restoration.setContent {
+            inputMode = LocalInputModeManager.current
+            CompositionLocalProvider(
+                LocalContext provides context,
+                LocalConfiguration provides context.resources.configuration
+            ) {
+                PeachyTheme {
+                    Surface {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                            GalleryIdentitySection(
+                                galleryId = 102, liveMetadata = metadata, snapshot = MangaIdentitySnapshot(),
+                                historyByGallery = mapOf(102 to ReadHistoryEntity(
+                                    102, enSummary.title, enSummary.thumbnailPath, page = 19, pageCount = 20, readAt = 1L
+                                )),
+                                onOpenGallery = {}, onSetReadMark = { marked += it },
+                                onConfirmSameChapter = {}, onLinkAsTranslationOfUnit = { _, _ -> },
+                                onLinkAsAnotherChapter = { _, _, _, _, _, _ -> },
+                                onUnlink = {}, onRejectSuggestion = {}
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val section = context.getString(R.string.manga_identity_section_title)
+        val sameChapter = context.getString(R.string.manga_identity_action_same_chapter)
+        val legacy = context.getString(R.string.manga_identity_legacy_last_page)
+        compose.onNodeWithText(legacy).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_read_own)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_mark_read)).performClick()
+        compose.runOnIdle { assertEquals(listOf(true), marked) }
+        compose.runOnIdle { assertTrue(inputMode.requestInputMode(InputMode.Keyboard)) }
+        compose.onNodeWithText(section).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithText(section).assertIsFocused().performKeyInput { pressKey(Key.Enter) }
+        compose.onNodeWithText(sameChapter).assertExists()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText(sameChapter).assertDoesNotExist()
+        compose.onNodeWithText(section).performClick()
+        compose.onNodeWithText(sameChapter).performScrollTo().performClick()
+        compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("999")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("999").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_management_close))
+            .performScrollTo().performClick()
+        compose.onNodeWithText(sameChapter).assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText(sameChapter).assertDoesNotExist()
+        compose.onNodeWithText(legacy).assertIsDisplayed()
+    }
+
+    @Test
+    fun detailCardHierarchyVisualProof() {
+        val (db, store) = openStore()
+        val title = "Kimi ni Naru — Interlude 1"
+        val english = enSummary.copy(title = title, englishTitle = title, japaneseTitle = "君になる 幕間 1")
+        val russian = ruSummary.copy(
+            title = "$title (RU)", englishTitle = title, japaneseTitle = english.japaneseTitle
+        )
+        val nextChapter = ch15Summary.copy(
+            title = "Kimi ni Naru — Interlude 1.5",
+            englishTitle = "Kimi ni Naru — Interlude 1.5",
+            japaneseTitle = "君になる 幕間 1.5"
+        )
+        val detail = GalleryDetail(
+            id = 102, title = title, thumbnailPath = english.thumbnailPath,
+            pagePaths = List(20) { "$it.jpg" }, tags = english.tags, japaneseTitle = english.japaneseTitle
+        )
+        runBlocking {
+            store.indexSummaries(listOf(russian, english, nextChapter))
+            store.confirmSameChapter(101, 102)
+            val workId = store.snapshot.first().links.getValue(102).workId
+            store.linkAsAnotherChapter(103, workId, null, null, "1.5", 1.5, UnitKind.Chapter)
+            store.setReadMark(101, read = true)
+            db.readHistoryDao().upsert(ReadHistoryEntity(
+                102, title, english.thumbnailPath, page = 3, pageCount = 20, readAt = 1L
+            ))
+        }
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = target.createConfigurationContext(
+            Configuration(target.resources.configuration).apply { setLocale(Locale.ENGLISH) }
+        )
+        val bitmap = InstrumentationRegistry.getInstrumentation().context.assets
+            .open("manga-fixture/001.png").use { BitmapFactory.decodeStream(it)!! }
+        val cache = MemoryCache.Builder(context).maxSizePercent(0.1).build()
+        cache[MemoryCache.Key(NhentaiCdn.thumb(detail.thumbnailPath)!!)] = MemoryCache.Value(bitmap)
+        val loader = ImageLoader.Builder(context).memoryCache(cache).build()
+        val snapshot = runBlocking { store.snapshot.first() }
+        val history = runBlocking { db.readHistoryDao().getAll().associateBy { it.galleryId } }
+        val opened = mutableListOf<Int>()
+        compose.setContent {
+            CompositionLocalProvider(
+                LocalContext provides context,
+                LocalConfiguration provides context.resources.configuration,
+                LocalImageLoader provides loader
+            ) {
+                PeachyTheme {
+                    Scaffold(
+                        modifier = Modifier.testTag("detail-proof"),
+                        topBar = { GalleryDetailTopBar(detail) {} }
+                    ) { padding ->
+                        Column(
+                            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            GalleryDetailHeader(detail)
+                            GalleryDetailActions(
+                                detail, 3, false, false, null, {}, {}, {}, {}, false, {}
+                            )
+                            GalleryIdentitySection(
+                                102, detail.toEditionMetadata(), snapshot, history,
+                                onOpenGallery = { opened += it }, onSetReadMark = {},
+                                onConfirmSameChapter = {}, onLinkAsTranslationOfUnit = { _, _ -> },
+                                onLinkAsAnotherChapter = { _, _, _, _, _, _ -> }, onUnlink = {}, onRejectSuggestion = {}
+                            )
+                            GalleryDetailTagGroup("artist", listOf(artistTag)) {}
+                            GalleryDetailTagGroup("language", listOf(enTag)) {}
+                        }
+                    }
+                }
+            }
+        }
+        val output = File(target.getExternalFilesDir(null), "detail-hierarchy-proof").apply { mkdirs() }
+        fun capture(name: String) {
+            File(output, "$name.png").outputStream().use {
+                compose.onNodeWithTag("detail-proof").captureToImage().asAndroidBitmap()
+                    .compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.manga_identity_read_inherited)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_action_same_chapter)).assertDoesNotExist()
+        capture("collapsed")
+        compose.onNodeWithText(context.getString(R.string.manga_identity_section_title)).performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_confirmed_translations)).performScrollTo()
+        compose.onNode(hasText(russian.title, substring = true) and hasClickAction())
+            .performScrollTo().performClick()
+        capture("expanded-translations")
+        compose.onNodeWithText(
+            context.getString(R.string.manga_identity_unit_prefix_chapter, "1.5")
+        ).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(listOf(101, 103), opened) }
+        compose.onNodeWithText(context.getString(R.string.manga_identity_management_close)).performScrollTo()
+        capture("expanded-management")
+        compose.onNodeWithText(context.getString(R.string.manga_identity_management_close)).performClick()
+        compose.onNodeWithText(context.getString(R.string.manga_identity_action_same_chapter)).assertDoesNotExist()
+        loader.shutdown()
     }
 }

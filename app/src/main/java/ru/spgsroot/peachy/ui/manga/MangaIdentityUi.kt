@@ -1,5 +1,6 @@
 package ru.spgsroot.peachy.ui.manga
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -29,14 +30,18 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -327,9 +332,13 @@ internal fun GalleryIdentitySection(
         MangaIdentityProjector.suggestedPeers(galleryId, effectiveSnapshot)
     }
 
-    var showSameChapterDialog by remember { mutableStateOf(false) }
-    var chapterDialogAnchorId by remember { mutableStateOf<Int?>(null) }
-    var showAnotherChapterDialog by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable(galleryId) { mutableStateOf(false) }
+    var showSameChapterDialog by rememberSaveable(galleryId) { mutableStateOf(false) }
+    var chapterDialogAnchorId by rememberSaveable(galleryId) { mutableStateOf<Int?>(null) }
+    var showAnotherChapterDialog by rememberSaveable(galleryId) { mutableStateOf(false) }
+    BackHandler(enabled = expanded && !showSameChapterDialog && !showAnotherChapterDialog) {
+        expanded = false
+    }
 
     if (showSameChapterDialog) {
         LinkTranslationDialog(
@@ -366,151 +375,171 @@ internal fun GalleryIdentitySection(
         )
     }
 
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = stringResource(R.string.manga_identity_section_title),
-                style = MaterialTheme.typography.titleMedium
+            ReadStatusPill(
+                status = status,
+                legacyLastPage = legacyLastPage,
+                modifier = Modifier.align(Alignment.CenterVertically)
             )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            TextButton(
+                onClick = { onSetReadMark(!ownRead) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                ReadStatusPill(status = status, legacyLastPage = legacyLastPage)
-                OutlinedButton(
-                    onClick = { onSetReadMark(!ownRead) },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text(
-                        stringResource(
-                            if (ownRead) R.string.manga_identity_unmark_read
-                            else R.string.manga_identity_mark_read
-                        )
+                Text(
+                    stringResource(
+                        if (ownRead) R.string.manga_identity_unmark_read
+                        else R.string.manga_identity_mark_read
                     )
-                }
+                )
             }
-
-            if (currentWork != null && currentUnit != null) {
-                HorizontalDivider()
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        }
+        val disclosureState = stringResource(
+            if (expanded) R.string.manga_identity_management_collapse
+            else R.string.manga_identity_management_expand
+        )
+        Surface(
+            onClick = { expanded = !expanded },
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .semantics { stateDescription = disclosureState }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = currentWork.title,
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        text = UnitLabelText(currentUnit.label, currentUnit.kind),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        stringResource(R.string.manga_identity_section_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     progress?.let { WorkProgressLine(it) }
-
-                    if (confirmedSiblings.isNotEmpty()) {
+                }
+                Icon(
+                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (currentWork != null && currentUnit != null) {
+                    HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = stringResource(R.string.manga_identity_confirmed_translations),
-                            style = MaterialTheme.typography.labelLarge,
+                            text = currentWork.title,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            text = UnitLabelText(currentUnit.label, currentUnit.kind),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        confirmedSiblings.forEach { siblingId ->
-                            val siblingMeta = effectiveSnapshot.editions[siblingId]
-                            val siblingStatus = MangaIdentityProjector.readStatus(siblingId, effectiveSnapshot)
-                            val siblingHistory = historyByGallery[siblingId]
-                            EditionRowItem(
-                                galleryId = siblingId,
-                                meta = siblingMeta,
-                                status = siblingStatus,
-                                history = siblingHistory,
-                                onClick = { onOpenGallery(siblingId) }
-                            )
-                        }
-                    }
 
-                    val chapters = workUnits.filter { it.unit.kind == UnitKind.Chapter }
-                    val collections = workUnits.filter { it.unit.kind == UnitKind.Collection }
-                    if (chapters.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.manga_identity_work_chapters),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        chapters.forEach { summary ->
-                            WorkUnitRow(
-                                summary = summary,
-                                isCurrent = summary.unit.unitId == currentUnit.unitId,
-                                onOpenGallery = onOpenGallery
+                        if (confirmedSiblings.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.manga_identity_confirmed_translations),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            confirmedSiblings.forEach { siblingId ->
+                                val siblingMeta = effectiveSnapshot.editions[siblingId]
+                                val siblingStatus = MangaIdentityProjector.readStatus(siblingId, effectiveSnapshot)
+                                val siblingHistory = historyByGallery[siblingId]
+                                EditionRowItem(
+                                    galleryId = siblingId,
+                                    meta = siblingMeta,
+                                    status = siblingStatus,
+                                    history = siblingHistory,
+                                    onClick = { onOpenGallery(siblingId) }
+                                )
+                            }
                         }
-                    }
-                    if (collections.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.manga_identity_work_collections),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        collections.forEach { summary ->
-                            WorkUnitRow(
-                                summary = summary,
-                                isCurrent = summary.unit.unitId == currentUnit.unitId,
-                                onOpenGallery = onOpenGallery
-                            )
-                        }
-                    }
 
-                    OutlinedButton(
-                        onClick = onUnlink,
+                        val chapters = workUnits.filter { it.unit.kind == UnitKind.Chapter }
+                        val collections = workUnits.filter { it.unit.kind == UnitKind.Collection }
+                        if (chapters.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.manga_identity_work_chapters),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            chapters.forEach { summary ->
+                                WorkUnitRow(
+                                    summary = summary,
+                                    isCurrent = summary.unit.unitId == currentUnit.unitId,
+                                    onOpenGallery = onOpenGallery
+                                )
+                            }
+                        }
+                        if (collections.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.manga_identity_work_collections),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            collections.forEach { summary ->
+                                WorkUnitRow(
+                                    summary = summary,
+                                    isCurrent = summary.unit.unitId == currentUnit.unitId,
+                                    onOpenGallery = onOpenGallery
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = onUnlink,
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text(stringResource(R.string.manga_identity_action_unlink))
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = { showSameChapterDialog = true },
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Text(stringResource(R.string.manga_identity_action_unlink))
+                        Text(stringResource(R.string.manga_identity_action_same_chapter))
+                    }
+                    TextButton(
+                        onClick = {
+                            chapterDialogAnchorId = null
+                            showAnotherChapterDialog = true
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.manga_identity_action_another_chapter))
                     }
                 }
-            }
 
-            HorizontalDivider()
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { showSameChapterDialog = true },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text(stringResource(R.string.manga_identity_action_same_chapter))
-                }
-                OutlinedButton(
-                    onClick = {
-                        chapterDialogAnchorId = null
-                        showAnotherChapterDialog = true
-                    },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text(stringResource(R.string.manga_identity_action_another_chapter))
-                }
-            }
-
-            if (suggestedPeers.isNotEmpty()) {
-                HorizontalDivider()
-                Text(
-                    text = stringResource(R.string.manga_identity_suggested_peers),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                suggestedPeers.forEach { peer ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                if (suggestedPeers.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text(
+                        text = stringResource(R.string.manga_identity_suggested_peers),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    suggestedPeers.forEach { peer ->
                         Column(
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val lang = peer.metadata.language?.let { TagNames.display("language", it, tagLanguage()) }
@@ -524,6 +553,7 @@ internal fun GalleryIdentitySection(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
                                     .clickable { onOpenGallery(peer.metadata.galleryId) }
                             ) {
                                 Text(
@@ -568,6 +598,12 @@ internal fun GalleryIdentitySection(
                             }
                         }
                     }
+                }
+                TextButton(
+                    onClick = { expanded = false },
+                    modifier = Modifier.heightIn(min = 48.dp).align(Alignment.End)
+                ) {
+                    Text(stringResource(R.string.manga_identity_management_close))
                 }
             }
         }
@@ -680,10 +716,10 @@ private fun LinkTranslationDialog(
             .sortedByDescending { it.updatedAt }
             .take(25)
     }
-    var selectedUnitId by remember { mutableStateOf<String?>(null) }
-    var selectedGalleryId by remember { mutableStateOf<Int?>(null) }
-    var manualGalleryId by remember { mutableStateOf("") }
-    var invalid by remember { mutableStateOf(false) }
+    var selectedUnitId by rememberSaveable(galleryId) { mutableStateOf<String?>(null) }
+    var selectedGalleryId by rememberSaveable(galleryId) { mutableStateOf<Int?>(null) }
+    var manualGalleryId by rememberSaveable(galleryId) { mutableStateOf("") }
+    var invalid by rememberSaveable(galleryId) { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -709,6 +745,7 @@ private fun LinkTranslationDialog(
                                 manualGalleryId = ""
                                 invalid = false
                             },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             label = {
                                 Text(
                                     "$workTitle · ${UnitLabelText(unit.label, unit.kind)}",
@@ -735,6 +772,7 @@ private fun LinkTranslationDialog(
                                 manualGalleryId = candidate.galleryId.toString()
                                 invalid = false
                             },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             label = {
                                 Text(
                                     listOfNotNull(lang, candidate.displayTitle.ifBlank { "#${candidate.galleryId}" })
@@ -822,25 +860,25 @@ private fun LinkChapterDialog(
     val suggested = remember(liveMetadata) {
         MangaIdentityMatcher.suggestChapterLabelAndOrder(liveMetadata, fallbackLabel = "2", fallbackOrder = 2.0)
     }
-    var selectedWorkId by remember {
+    var selectedWorkId by rememberSaveable(galleryId) {
         mutableStateOf(initialAnchorWorkId ?: initialWorkId ?: works.firstOrNull()?.workId)
     }
-    var anchorGalleryIdText by remember {
+    var anchorGalleryIdText by rememberSaveable(galleryId) {
         mutableStateOf(initialAnchorGalleryId?.toString().orEmpty())
     }
-    var workTitleText by remember {
+    var workTitleText by rememberSaveable(galleryId) {
         mutableStateOf(
             initialAnchorGalleryId?.let { snapshot.editions[it]?.displayTitle }
                 ?: liveMetadata.displayTitle
         )
     }
-    var unitLabel by remember { mutableStateOf(suggested.first) }
-    var sortOrderText by remember {
+    var unitLabel by rememberSaveable(galleryId) { mutableStateOf(suggested.first) }
+    var sortOrderText by rememberSaveable(galleryId) {
         val raw = suggested.second
         mutableStateOf(if (raw % 1.0 == 0.0) raw.toInt().toString() else raw.toString())
     }
-    var kind by remember { mutableStateOf(UnitKind.Chapter) }
-    var invalid by remember { mutableStateOf(false) }
+    var kind by rememberSaveable(galleryId) { mutableStateOf(UnitKind.Chapter) }
+    var invalid by rememberSaveable(galleryId) { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -862,6 +900,7 @@ private fun LinkChapterDialog(
                                 selectedWorkId = work.workId
                                 invalid = false
                             },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             label = { Text(work.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         )
                     }
@@ -871,6 +910,7 @@ private fun LinkChapterDialog(
                             selectedWorkId = null
                             invalid = false
                         },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text(stringResource(R.string.manga_identity_new_work_with_gallery)) }
                     )
                 }
@@ -889,6 +929,7 @@ private fun LinkChapterDialog(
                                     if (workTitleText.isBlank()) workTitleText = candidate.displayTitle
                                     invalid = false
                                 },
+                                modifier = Modifier.heightIn(min = 48.dp),
                                 label = {
                                     Text(
                                         candidate.displayTitle.ifBlank { "#${candidate.galleryId}" },
@@ -926,11 +967,13 @@ private fun LinkChapterDialog(
                     FilterChip(
                         selected = kind == UnitKind.Chapter,
                         onClick = { kind = UnitKind.Chapter },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text(stringResource(R.string.manga_identity_kind_chapter)) }
                     )
                     FilterChip(
                         selected = kind == UnitKind.Collection,
                         onClick = { kind = UnitKind.Collection },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         label = { Text(stringResource(R.string.manga_identity_kind_collection)) }
                     )
                 }

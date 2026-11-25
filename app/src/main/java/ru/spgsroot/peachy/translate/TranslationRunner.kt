@@ -2,19 +2,19 @@ package ru.spgsroot.peachy.translate
 
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** What the reader shows for one page. A page that is not in [TranslationRunner.pages] is idle. */
 sealed interface PageState {
@@ -27,18 +27,33 @@ sealed interface PageState {
 /** Progress of translating a whole gallery. [stopped] is why the batch gave up, if it did. */
 data class BatchState(val done: Int, val total: Int, val stopped: TranslationError? = null)
 
+/** Exists only inside one whole-gallery page request; cache hits have no known recipient. */
+internal class GalleryTurn(
+    private val previousProvider: ProviderSettings?,
+    private val previousPage: PageTranslation?
+) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<GalleryTurn>
+
+    var sentTo: ProviderSettings? = null
+        private set
+
+    fun previousLinesFor(provider: ProviderSettings): List<TranslatedLine> {
+        sentTo = provider
+        return if (provider == previousProvider) previousPage?.lines.orEmpty() else emptyList()
+    }
+}
+
 /**
  * Translates the pages of one gallery, one request per page: whoever asks first pays, whoever asks
- * while that request runs waits and then reads the cache. A batch reaches the same pages in order,
- * a few at a time, and gives up when the key is rejected or the provider asks it to slow down.
+ * while that request runs waits and then reads the cache. A whole-gallery batch translates in order
+ * so consecutive pages can use the preceding dialogue without fetching or resending images.
  */
 class TranslationRunner(
     private val source: PageSource,
     private val translator: PageTranslator,
     private val cache: TranslationCache,
     private val model: () -> String,
-    private val scope: CoroutineScope,
-    private val parallelism: Int = 2
+    private val scope: CoroutineScope
 ) {
     private val _pages = MutableStateFlow<Map<Int, PageState>>(emptyMap())
     val pages: StateFlow<Map<Int, PageState>> = _pages.asStateFlow()
@@ -98,25 +113,22 @@ class TranslationRunner(
     fun startBatch(galleryId: Int, pageCount: Int, lang: String, request: TranslateRequest) {
         if (batchJob?.isActive == true) return
         batchJob = scope.launch {
-            val self = coroutineContext.job
             val cached = cache.cachedPages(galleryId, lang).filter { it in 0 until pageCount }.toSet()
             _batch.value = BatchState(done = cached.size, total = pageCount)
-            val gate = Semaphore(parallelism)
-            coroutineScope {
-                for (page in 0 until pageCount) {
-                    if (page in cached) continue
-                    gate.acquire()
-                    launch {
-                        try {
-                            val state = translate(galleryId, page, lang, request)
-                            val stop = (state as? PageState.Failed)?.error?.takeIf { it.endsBatch() }
-                            _batch.update { it?.copy(done = it.done + 1, stopped = stop ?: it.stopped) }
-                            if (stop != null) self.cancel()
-                        } finally {
-                            gate.release()
-                        }
-                    }
+            var previous: PageTranslation? = null
+            var previousProvider: ProviderSettings? = null
+            for (page in 0 until pageCount) {
+                if (page in cached) {
+                    previous = null
+                    continue
                 }
+                val turn = GalleryTurn(previousProvider, previous)
+                val state = withContext(turn) { translate(galleryId, page, lang, request) }
+                previousProvider = turn.sentTo
+                previous = (state as? PageState.Done)?.translation
+                val stop = (state as? PageState.Failed)?.error?.takeIf { it.endsBatch() }
+                _batch.update { it?.copy(done = it.done + 1, stopped = stop) }
+                if (stop != null) return@launch
             }
             _batch.value = null
         }
